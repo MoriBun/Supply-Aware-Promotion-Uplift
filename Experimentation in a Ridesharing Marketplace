@@ -1,0 +1,291 @@
+Experimentation in a Ridesharing Marketplace 
+
+Nicholas Chamandy 
+
+Nicholas Chamandy 
+
+Follow 
+
+9 min read 
+
+· 
+
+Sep 3, 2016 
+
+659 
+
+9 
+
+Part 1 of 3: Interference Across a Network 
+
+Technology companies strive to make data-driven product decisions — and Lyft is no exception. Because of that, online experimentation, or A/B testing, has become ubiquitous. The way it’s bandied about, you’d be excused for thinking that online experimentation is a completely solved problem. In this post, we’ll illustrate why that’s far from the case for systems — like a ridesharing marketplace — that evolve according to network dynamics. As we’ll see, naively partitioning users into treatment and control groups can bias the effect estimates you care about. 
+
+To consult the [data scientist] after an experiment is finished is often merely to ask [her] to conduct a post mortem examination. [She] can perhaps say what the experiment died of. 
+
+— paraphrasing R. A. Fisher, 1938\. 
+
+What Fisher was getting at, simply put, is that experiment design matters. So much so that a careless experiment design can sometimes result in data that’s useless for answering the question of interest. 
+
+Example: Subsidized Prime Time 
+
+Imagine that the entire Lyft network is encapsulated by the tiny square region illustrated below. When users A and B open the Lyft app (at approximately the same time), there is only one driver available nearby. We call such a scenario undersupply. 
+
+Press enter or click to view image in full size 
+
+Figure 1\. A typical undersupply scenario: two passengers and a single available driver. In this example, both passengers might experience Prime Time pricing. 
+
+In such cases, Lyft sometimes applies Prime Time pricing in order to maintain driver availability. Prime Time is a price surcharge expressed in percentage terms, and can take on different values depending on the extent of undersupply (+25%, +50%, etc). For simplicity, in this example we assume that Prime Time is binary — there either is Prime Time (at some fixed value) or there is not. We also assume that the supply effects of Prime Time happen at a slower timescale than the demand effects, and therefore we can ignore them. In other words, that passengers react more quickly to Prime Time than drivers do. 
+
+Suppose that we want to estimate the effect of Lyft subsidizing Prime Time — i.e. paying Prime Time on behalf of the passenger, without ever even displaying it to the passenger. We’ll use a green marker in subsequent pictures to denote a passenger who got the subsidy. 
+
+Get Nicholas Chamandy’s stories in your inbox 
+
+Join Medium for free to get updates from this writer. 
+
+Enter your email 
+
+Subscribe 
+
+Remember me for faster sign in 
+
+A fun metaphor here is that of two parallel universes. We are interested in the difference between the factual universe, where users get Prime Time when there is undersupply, and a counterfactual one, where Lyft subsidizes Prime Time. These two universes are illustrated in the picture below. Note that without any intervention, we would only observe the top universe, which we call the global control. The global treatment, on the other hand, corresponds to treating all passengers with the Prime Time subsidy. 
+
+Press enter or click to view image in full size 
+
+Press enter or click to view image in full size 
+
+Figure 2\. Factual and counterfactual universes. In real life (top box), both users experience Prime Time. This scenario is also known as the global control. In the bottom picture, both users get a Prime Time subsidy — the global treatment. We cannot observe both of these parallel realities, and would observe the global control without some intervention. 
+
+Suppose that the metric of interest is the total number of rides completed on average (or in expectation). We would like to know how this number changes between the two parallel universes. Let’s assume a simple probability model to make this example easy. Specifically: 
+
+When there is no Prime Time, a passenger who opens the app and sees a driver available always requests a ride 
+
+When there is Prime Time, the same passenger has a 50% chance of requesting a ride 
+
+Neither drivers nor passengers ever cancel — every request leads to a completed ride 
+
+Under the global control scenario, the average number of rides taken by passengers A and B is 0.75\. To see why, assume without loss of generality that passenger A opens the app a few seconds before passenger B. Half the time, user A will take the ride despite seeing Prime Time, and the number of rides is 1\. A quarter of the time, User A will choose not to request, and User B will take the single ride instead. Otherwise, both users decline the Prime Time, and n0 rides are taken. By symmetry, the same is true if B opens first. The expectation is therefore 
+
+Press enter or click to view image in full size 
+
+Under the global treatment, neither passenger sees Prime Time and the situation is much simpler. The first user to open the app automatically takes a ride, and the second is out of luck. Since a single ride is always taken, 1 is also the expectation. Comparing these two universes, we see that the global average treatment effect, i.e. the ground truth we would like to estimate, is given by 
+
+Subsidizing Prime Time results in a 1/3 increase in rides in our simple model. This treatment effect is of course unobservable in real life. So we must find some way to estimate it. 
+
+Randomizing passengers 
+
+The standard way to A/B test an intervention like subsidized Prime Time is to pseudo-randomly assign users (in this case passengers) to either the treatment or control group, for instance by hashing their user IDs into buckets. In our example, the average result of such a randomization is that one user sees Prime Time while the other doesn’t — as illustrated by the following picture. This scenario corresponds to yet a third (mutually exclusive) parallel universe! 
+
+Press enter or click to view image in full size 
+
+Figure 3\. One realization of the random-user experiment. In this example, User A ended up in the control (got Prime Time), and User B in the treatment (Prime Time subsidy). 
+
+In order to estimate the effect of the treatment on a metric of interest for a random-user experiment like this one, one typically does the following: 
+
+Estimate the global control metric value by restricting to users in the control group 
+
+Estimate the global treatment metric value by restricting to users in the treatment group 
+
+Compute the relative difference between the estimates from 1 and 2 
+
+Let’s see what happens when we apply this logic to our simple example. Remember that each user has a 50% chance of opening the app first. Let’s first consider user B, who happens to be in the treatment group (subsidized Prime Time). In our simple model, she is guaranteed to request and complete exactly one ride if she opens the app first. On the other hand, if she opens the app second, she will complete one ride if and only if user A decided not to request. That event also happens with a 50% probability, so given that user A opens the app first, user B expects to take half a ride. Combining all this, the expected number of rides for user B is 
+
+The situation for user A is even easier. User A cannot take a ride if user B opens the app first — so the expected value is 0 in that case. And we know that user A, who sees Prime Time, will request a ride half of the time given driver availability. So the expected number of rides completed by A is 
+
+Now let’s compute an estimate of the percent change in our metric due to the Prime Time subsidy. 
+
+Obviously, this is much bigger than the ground truth effect size of 33% that we calculated above — we overestimated the effect of the Prime Time subsidy by a factor of 6! Admittedly, two users is not very many, so you might think that this fictional A/B test is suffering from small sample size problems. Surely, a user cannot actually take 0.25 rides. But imagine that the real Lyft network is composed of copies of this 2-passenger sandbox, all evolving independently over time, replenishing drivers and passengers at a constant rate. We can construct a much larger scale example, with many such boxes, where all of the above calculations still hold. 
+
+Statistical interference 
+
+What happened in the above example is due to a statistical phenomenon known as interference (not to be confused with inference). To properly define it, we first have to introduce the notion of a potential outcome. The idea behind potential outcomes is simple: every experimental unit (e.g. user) walks around with two pieces of paper, one in each back pocket. On one of these papers is written that subject’s inevitable outcome should she happen to be assigned to the control group. On the other, her outcome given assignment to the treatment. Together, the two pieces of paper are a unit’s potential outcomes — the set of things that could potentially happen to her if she participates in the experiment. Typically, these outcomes are considered fixed and deterministic — the only thing that is random is the unit’s assignment to an experiment group. 
+
+A key assumption of causal inference is that what’s written on those two pieces of paper is unaffected by the experimental assignment that the unit happens to get, and by the assignments of every other unit in the experiment. Interference occurs when the group assignment of unit A changes any of the potential outcomes of unit B. This is precisely what we saw in the toy example above, with the outcome of interest being whether or not a ride is completed. When user A’s Prime Time is subsidized, user B is less likely to be able to complete a ride (regardless of whether or not user B’s Prime Time is also subsidized). 
+
+In medical statistics, the notion of interference arose in the study of vaccines for infectious diseases. The effectiveness of a vaccine on one subject’s outcomes depends on how many others in his social circle also received the immunization. In other words, one subject’s treatment can offer protective benefit to other, possibly untreated subjects. The result is that the measured difference between treated and untreated subjects (the benefit attributed to the vaccine) will shrink. Above, user A’s Prime Time was “protective” for user B’s propensity to successfully complete a Lyft ride — which in this case led to an exaggeration of the true effect size. In general, interference bias can occur in either direction. 
+
+Lyft is not the only technology company trying to mitigate statistical interference in A/B testing. Researchers from Google and eBay have observed the same phenomenon in applications where advertisers or users interact within online auctions. Coarser randomization, say at the auction level, can help (but not completely) mitigate the bias. The eBay example is particularly germane to our toy example as the authors characterize interference bias in relation to supply and demand elasticity. The interference problem also occurs in experiments for social networks, where a user’s response to treatment may contaminate adjacent nodes in the graph. Some progress has been made on this problem for relatively static networks, with graph clustering playing a central role. Complicating things in our world is the fact that the Lyft network is both two-sided (passengers and drivers) and has a graph structure which is incredibly dynamic. Thus interference is difficult to model explicitly. 
+
+Alternative experiment designs 
+
+Randomizing users is certainly not the only way to construct online experiments in a ridesharing marketplace. One can alternatively randomize app sessions, spatial units ranging from square blocks to entire cities, or even time intervals. The coarser these experimental units, the stronger the protection against interference bias in your effect estimates. However, the cost is increased variance in your estimators, because coarse units are naturally less numerous than fine units (variance scales as one over the sample size) — and sometimes just as heterogeneous. This cost can be substantial. Nevertheless, alternating time intervals between global control and global treatment configurations was a successful strategy for the Lyft Marketplace team in the early days of experimentation. The table below positions these various randomization schemes on the continuum of bias-variance tradeoffs. 
+
+Table 1\. Different choices of experimental units correspond to different points on the bias-variance tradeoff spectrum. In the context of network experiments, bias comes from interference effects; variance comes from decreasing unit set cardinality, and from between-unit heterogeneity. 
+
+To rigorously quantify these tradeoffs, however, requires a careful simulation study. Before we can embark on that adventure, we need to describe the elaborate simulation framework designed and built by the Lyft Data Science team. Luckily, that is precisely the subject of our next installment of this blog post, Part 2: Simulating a ridesharing marketplace. Stay tuned! 
+
+Interested in experiment design, marketplace optimization, or Data Science in general? Lyft is hiring! Drop me an email at chamandy@lyft.com.
+
+
+
+
+
+
+Bài viết 2:
+Experimentation in a Ridesharing Marketplace 
+
+Nicholas Chamandy 
+
+Nicholas Chamandy 
+
+Follow 
+
+11 min read 
+
+· 
+
+Dec 16, 2016 
+
+321 
+
+Part 3 of 3: Bias and Variance 
+
+This is the final installment in a three-part story on strategies for A/B testing in Lyft’s unique two-sided marketplace. In Part 1 we introduced interference bias, explained why experimentation is non-trivial when so-called network effects are present, and qualitatively explored bias-variance tradeoffs. Part 2 described the Lyft Data Science team’s simulation infrastructure, an indispensable tool in understanding market dynamics and sanity-testing new algorithms. If you have already read those posts — welcome back! If not, and you find yourself wondering What is the point of all this?, we suggest going back to give them a quick read. 
+
+We have two main goals with this post. The first is to use the simulation methodology from Part 2 to quantify the phenomena outlined in Part 1\. Second, we will borrow arguments from causal inference to motivate a two-stage experiment design and some ideas for how to construct interference-free treatment effect estimators. 
+
+Quantifying the Bias-Variance Tradeoff 
+
+We simulated a 4-week experiment using historical demand and supply in one of Lyft’s medium-sized markets. Specifically, we applied the simple experimental manipulation described in Part 1: we subsidized Prime Time pricing (PT) for all passengers in the treatment group. Such a treatment is known to have strong network effects, as subsidizing PT for user A can mean that user B is less likely to have a driver nearby when she opens the Lyft app. This happens because during times of undersupply, users who see a cheaper price will tend to snap up the available drivers. 
+
+First we ran our simulator over the entire period both with and without the PT subsidy, in order to take measurements in the global treatment and global control configurations. This gives us a ground truth comparison for each metric. Next, we simulated experiments under the following designs: (a) alternating time intervals (one hour), (b) randomized coarse and fine spatial units (geohashes at granularities 5 and 6, respectively), (c) randomized user sessions. See Figure 1 for an illustration of the two different spatial randomizations in an arbitrarily chosen Lyft market. 
+
+Press enter or click to view image in full size 
+
+Press enter or click to view image in full size 
+
+Figure 1\. Spatial randomization at the geohash-5 (top) and geohash-6 (bottom) levels, for a randomly chosen Lyft market (Denver, CO). In this realization of the designs, pink cells might be given the hypothetical treatment while remaining cells would get the control. 
+
+We focus on three key metrics for this simulation study. The first is availability, defined as the proportion of user app opens for which there is an available Lyft driver within some context-dependent radius. 
+
+The second metric is the average (across user sessions) estimated time of arrival (ETA) of the nearest available driver. ETA is one measure of the quality of Lyft’s service levels. 
+
+Third, we consider the number of completed Lyft rides, normalized by group size. Rides is our most important top-line business metric, but in a simulation setting is somewhat dependent on our models of passenger and driver behavior. 
+
+In all cases we measure percent changes in the metric in the treatment group relative to the control group. When we compare the global Prime Time subsidy simulation to the global control simulation, we measure a decrease in availability, an increase in ETAs, and an increase in total rides. These changes are in line with the example in Part 1, and reflect the fact that passengers are more likely to request a ride when PT is subsidized, potentially worsening undersupply situations. 
+
+Figure 2 illustrates the claim made in Part 1 that different randomization schemes inhabit a spectrum of bias-variance tradeoffs. The hourly scheme is almost unbiased for all metrics, but can have large variance, e.g. for the ETA metric. This is because hour-to-hour variability in Lyft supply and demand is substantial, having components which are non-cyclical at the week level — including weather, traffic, special events and Lyft promotions. Broadly speaking, bias increases and variance decreases as the experimental units become finer. 
+
+Press enter or click to view image in full size 
+
+Figure 2\. Bias, standard deviation and root-mean squared error (all on % change scale) for treatment effect estimators of three key metrics, based on four randomization schemes: alternating hourly time intervals; coarse (geohash-5) and fine (geohash-6) spatial units; random user-sessions. (Y-axis is obscured for confidentiality reasons.) Spatial units were re-randomized every hour. Bias was computed with reference to the ground truth treatment effect obtained by comparing the simulated global treatment to the simulated global control. Dashed lines show the absolute value of the ground truth treatment effect for each metric, to give a sense for the relative magnitude of errors. The base of all bars is at zero. 
+
+Interestingly, a different randomization scheme minimizes root-mean squared error (RMSE) for each metric. However, even having the smallest RMSE is not sufficient. For example, if we blindly applied a random-session design, we would wrongly conclude that subsidizing Prime Time has no effect on driver availability — with a tight confidence interval! The session design is most susceptible to network interference bias, since two users standing right next to each other, and thus sharing an identical pool of candidate drivers and Lyft Line matches, may well end up in different treatment groups. 
+
+The hourly experiment did well at estimating the change in rides resulting from a Prime Time subsidy. However, because the alternating hour design has only two possible random treatment allocations (corresponding to the assignment of the first hour), a generic and accurate variance estimator does not exist to our knowledge. This is a major flaw in the alternating interval methodology. Moreover, that design failed badly on the task of estimating the change in ETA, a metric that is more sensitive to hourly fluctuations. In a sense, alternating time interval experiments perform well if the effect size is very large or we just happen to get lucky with temporal fluctuations — something that’s difficult if not impossible to know in practice. Spatial designs represent a nice compromise. But in this case they may have led to a bad product decision, by systematically underestimating the negative impact of the PT subsidy on Lyft service levels. 
+
+Interference bias is clearly a problem when it comes to estimating the network-wide changes in our metrics of interest. And naive attempts to design our way out of this problem can indeed eliminate the bias, but bring in unwanted variance. The remainder of this post presents a useful way of decomposing and understanding experimental effects contaminated by interference. First, let’s take a step back and ask a pretty fundamental question: What treatment effect do we wish to estimate? 
+
+Direct and Indirect Causal Effects 
+
+There are three important types of treatment effects in the context of interference: direct, indirect, and total effects (see this excellent article by Hudgens and Halloran). In a nutshell, the total effect is what we care about. It’s a sum of 
+
+direct effects: how does a unit’s treatment assignment affect its outcome? 
+
+indirect effects: how do the treatment assignments of other units affect a unit’s outcome? 
+
+An experiment assignment mechanism is a rule for randomizing the population of units to either treatment or control. A direct causal effect is a function of one such rule, while an indirect effect is a function of a pair of rules. For simplicity, we assume simple random sampling and identify the assignment mechanism with the proportion of units that will be randomly selected for the treatment. (In general, assignment can be a much more complicated random function.) A unit here could mean different things: user, user session, geohash, etc. — more on that later. 
+
+To be more precise, we need some mathematical notation. Feel free to skip ahead if that’s not your thing. Let Y\_i (Z; p) denote the response of unit i exposed to Z (= 0 for control or 1 for treatment) assuming that a proportion p of the N units are assigned to the treatment. Recall that these responses are potential outcomes, as discussed in Part 1 of this post. They are not all observable in the same experiment — a unit i only gets one condition assigned in reality. But they are nonetheless well-defined. We have: 
+
+Direct causal effect of the assignment mechanism p: 
+
+Press enter or click to view image in full size 
+
+Indirect causal effects of the assignment mechanism p vs. mechanism q (there are two such effects, corresponding to units in the control or treatment): 
+
+Press enter or click to view image in full size 
+
+Press enter or click to view image in full size 
+
+Total causal effect of the assignment mechanism p vs. mechanism q: 
+
+Press enter or click to view image in full size 
+
+The total effect can be decomposed as a sum of direct and indirect effects in two different ways: 
+
+Press enter or click to view image in full size 
+
+Note that when the assignment mechanism is held fixed (p = q), the total effect is the same as the direct effect, because both indirect effects are zero. Although we work with absolute-scale causal effects for simplicity, relative-scale effects can be defined analogously. 
+
+Get Nicholas Chamandy’s stories in your inbox 
+
+Join Medium for free to get updates from this writer. 
+
+Enter your email 
+
+Subscribe 
+
+Remember me for faster sign in 
+
+Now let’s go back to our subsidized PT example. The direct and indirect effect functions may be interesting in their own right. But as discussed in Part 1, the treatment effect that’s most critical is the difference between our usual PT algorithm applied throughout the network, and subsidizing every user’s PT. In the above notation, this is just T(1, 0). But the decomposition of T(1, 0) into direct and indirect effects doesn’t quite make sense, because neither Y(1; 0) nor Y(0; 1) is well-defined! Nevertheless, we can make a continuity assumption and assert the existence of a limiting total treatment effect 
+
+Press enter or click to view image in full size 
+
+This decomposition provides some pretty intriguing estimands — functions and scalars that we’d like to estimate. But how do we do it? 
+
+Two-Stage Randomization 
+
+One idea is to use a 2-stage experiment design motivated by the above formulas. In the first stage of randomization, we can divide the units into J independent, non-interfering groups. Say group j contains N\_j units. Next we can draw a random sequence of group treatment proportions p\_j for j = 1, …, J from some distribution on the unit interval. At the second stage, we can randomly assign p\_j N\_j units in group j to the treatment (and the rest to the control) for each j. In the Prime Time example, we might choose to use disjoint time intervals as groups, since they are approximately non-interfering. One could also make an argument for very coarse spatial groups. In defining within-group units we have a number of options, including fine spatial cells, users or user sessions. 
+
+We simulated a two-stage design in the same region and four-week period as above, using hourly groups, user sessions as units, and a uniform distribution over treatment proportions. This design allows us to ‘observe’ a large number of different treatment assignment mechanisms acting on the network. From that spectrum of assignments, we can build up some fairly simple effect estimates. 
+
+Direct and Indirect Estimators 
+
+The most obvious way to estimate our decomposed causal effects in this 2-stage setting is by first discretizing the p’s into some number of bins. Let z and y denote, respectively, the realized binary treatment assignment and observed response for a given unit in a given group. 
+
+We can estimate the direct treatment effect at treatment proportion p as 
+
+Press enter or click to view image in full size 
+
+and the indirect treatment effects of p vs. q as 
+
+Press enter or click to view image in full size 
+
+Press enter or click to view image in full size 
+
+(It will often make sense to replace these sums with weighted sums, for example when the units are of different sizes.) 
+
+This gives us a vector of direct effect estimates and two matrices of indirect effect estimates. In practice these may be quite noisy, but we can smooth them. Smoothing should be done with care, as we wish to extrapolate the estimates to p, q in {0, 1}. In our simulation study we’ve obtained smooth estimates of the direct effect curve and the indirect effect surfaces using R’s loess package. See Figures 3 and 4 for visualizations of our estimates of causal effects on the rides metric. The raw effects were indeed quite noisy for these data, as can be seen in the plots. 
+
+Press enter or click to view image in full size 
+
+Figure 3\. Direct treatment effect of subsidized PT as a function of treatment proportion (bins of size 0.1) for the rides metric. Bin-level effect estimates shown as points (x-coord at bin midpoint); smooth function estimate (from loess) in pink; dashed horizontal line at zero. Y-axis is again obscured for confidentiality. 
+
+Press enter or click to view image in full size 
+
+Figure 4\. Indirect treatment effects for the control (I\_0(p, q); top row) and treatment (I\_1(p, q); bottom row) of subsidized PT for the rides metric (with bins of size 0.1; p is along the vertical axis and q along the horizontal axis). Raw estimates are shown in the leftmost column, fitted values from the loess fit in the middle column, and the full prediction surface on the unit square is shown in the rightmost column. The colormap is pink at high values and purple at low values. By definition, indirect effects are zero along p = q. 
+
+Let a tilde (\~) denote a smoothed functional estimate. We can estimate the global treatment effect of interest by 
+
+Press enter or click to view image in full size 
+
+Alternatively, we could directly smooth the 2-d total effects matrix (not shown here). 
+
+In our simulation study, this procedure led to essentially unbiased estimates for the rides and ETA metrics (about as unbiased as the alternating hour design). It did not perform as well for the availability metric, however. This may be partly explained by the smaller baseline effect size for that metric — availability is very close to 100% in this market. Given its binary nature, availability may also vary less smoothly as a function of p. 
+
+A Promising Direction 
+
+The idea outlined above is nice for three main reasons: 
+
+It has the potential to reduce or eliminate interference bias. 
+
+It allows us to estimate a continuum of direct and indirect effects, which is useful in problems where the global treatment effect is not the only thing of interest. For example, Lyft may want to provide coupons to a subset of passengers, and understand the effect on system-wide ETAs as a function of subset size. 
+
+Because 2-stage randomization allocates fine units (within coarse units), there are natural resampling-based variance estimators for these statistics. 
+
+Disaggregating the total treatment effect into direct and indirect components is a useful way to think about the network interference problem. However, it is not a silver bullet, and there are some caveats worth mentioning. The 2-stage estimator did not manage to decrease variance in the above example — in fact, the variance was higher than for the alternating hour design for all three metrics. This is probably not a surprise after looking at the raw estimates in Figures 3 and 4\. And because fitting a smooth curve to noisy points is itself a noisy process — especially when extrapolating to the edges of the data. 
+
+Nevertheless, there are some obvious improvements that can help reduce variance, including 
+
+Sampling treatment proportions from a more U-shaped distribution 
+
+Imposing negative correlation between treatment proportions in adjacent groups 
+
+Stratification or pairing of groups and units within groups 
+
+The Lyft Data Science team is excitedly exploring these and other directions in our quest for the perfect experiment! 
+
+In this three-part journey we encountered a nonstandard data science challenge stemming from Lyft’s unique two-sided market dynamics. In order to shed light on it, we leveraged two very different technologies: scalable, high-fidelity simulation, and causal inference. In the process we illustrated two things that Lyft’s Data Science team members do on a regular basis: build cool machinery and think deeply about data! 
+
+If you’re interested in developing experimentation methodology, or in building the underlying algorithms that we pit head-to-head in these A/B tests, then join us — Lyft Data Science is hiring! Send me an email at chamandy@lyft.com.
