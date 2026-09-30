@@ -324,6 +324,21 @@ def to_dict(cfg: Config) -> dict[str, Any]:
     return _plain(dataclasses.asdict(cfg))
 
 
+def eval_window_min(cfg: Config) -> int:
+    """Length of the evaluation window in minutes (spec §4.0, decisions T-05).
+
+    ``time.window_min`` if set, otherwise ``days_per_run * 1440``. Use this instead of
+    reading either key directly (decisions H-03).
+    """
+    t = cfg.time
+    return t.window_min if t.window_min is not None else t.days_per_run * 1440
+
+
+def budget_period_min(cfg: Config) -> int:
+    """Length of one budget period in minutes: ``min(1440, window)`` (spec §4.3, decisions T-03)."""
+    return min(1440, eval_window_min(cfg))
+
+
 def config_hash(cfg: Config) -> str:
     """sha1 of the normalized config, first 12 hex chars (spec §9).
 
@@ -509,6 +524,10 @@ def _check_ranges(cfg: Config) -> None:
         # Evaluation window must be a whole number of slots (decisions T-05).
         need(t.window_min > 0 and t.slot_min > 0 and t.window_min % t.slot_min == 0, "time.window_min",
              f"must be a positive multiple of time.slot_min ({t.slot_min}) or null, got {t.window_min}")
+        # Budget periods have length min(1440, window) (decisions T-03); a longer window that is
+        # not whole days would end in a short period that still gets a full B (decisions H-02).
+        need(t.window_min <= 1440 or t.window_min % 1440 == 0, "time.window_min",
+             f"must be <= 1440 or a multiple of 1440, got {t.window_min}")
     nonneg("time.warmup_min", t.warmup_min)
     nonneg("time.cooldown_max_min", t.cooldown_max_min)
 
@@ -592,6 +611,11 @@ def _check_ranges(cfg: Config) -> None:
          f"must be a positive multiple of time.slot_min ({t.slot_min}), got {e.block_min}")
     need(0 <= e.burnin_min < e.block_min, "experiment.burnin_min",
          f"need 0 <= burnin_min < block_min, got {e.burnin_min}")
+    # Blocks count from the start of the run (decisions T-15), so the evaluation window
+    # starts on a block boundary only if warm-up is whole blocks (decisions H-01).
+    if e.block_min > 0:
+        need(t.warmup_min % e.block_min == 0, "time.warmup_min",
+             f"must be a multiple of experiment.block_min ({e.block_min}), got {t.warmup_min}")
     prob("experiment.p_on", e.p_on)
 
     positive("monitor.slack_cap", cfg.monitor.slack_cap)
