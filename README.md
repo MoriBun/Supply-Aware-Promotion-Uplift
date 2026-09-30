@@ -35,6 +35,7 @@ Các mode: `generate`, `evaluate`, `sweep_theta`, `gte`, `calibrate_budget`, `th
 | `docs/schema.md` | định dạng dữ liệu đầu ra |
 | `docs/tests.md` | kiểm thử và tiêu chí đạt |
 | `docs/plan.md` | các mốc P0–P8 |
+| `docs/phan_cong.md` | phân công theo sprint cho Tình và Hoàng: ai làm gì, sở hữu file, điểm bàn giao |
 | `docs/decisions.md` | nhật ký quyết định và **câu hỏi mở** |
 | `docs/problem_statement.md`, `docs/survey.md` | đề bài gốc, khảo sát tài liệu (nền, không phải nguồn sự thật cho code) |
 
@@ -50,4 +51,4 @@ runs/       output (không commit)
 
 ## Trạng thái
 
-Mốc hiện tại: **P0**, khung dự án: config, RNG có khóa (CRN), CLI rỗng. Xem `docs/plan.md`.
+P0 đã xong: config, RNG có khóa (CRN), CLI rỗng. Sprint hiện tại: **S0**, chốt hợp đồng giao diện giữa hai luồng. Xem `docs/phan_cong.md`.

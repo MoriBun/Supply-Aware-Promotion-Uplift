@@ -18,8 +18,9 @@ Chỉ tiêu chính là **N(π) = số chuyến hoàn thành** dưới cùng ngâ
 3. `config/default.yaml`: mọi tham số.
 4. `docs/schema.md`: định dạng dữ liệu đầu ra.
 5. `docs/tests.md`: kiểm thử và tiêu chí đạt.
-6. `docs/plan.md`: các mốc. **Chỉ làm mốc hiện tại.**
-7. `docs/decisions.md`: nhật ký quyết định, mọi lệch khỏi spec và mục **Câu hỏi mở**.
+6. `docs/plan.md`: các mốc.
+7. `docs/phan_cong.md`: phân công theo sprint cho Tình và Hoàng, sở hữu file, điểm bàn giao. **Chỉ làm task hiện tại của mình.**
+8. `docs/decisions.md`: nhật ký quyết định, mọi lệch khỏi spec và mục **Câu hỏi mở**.
 
 Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_statement.md` (đề bài gốc), `docs/survey.md` (khảo sát; bản export bị lỗi định dạng), `docs/BaoCao_*.pdf`.
 
@@ -50,13 +51,18 @@ Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_st
    - Không lặp qua toàn bộ đội xe mỗi tick.
    - Mục tiêu ≤ 30 giây / ngày mô phỏng.
 8. **Ngân sách.** Bất biến `spent + committed + reserved ≤ B` phải luôn đúng khi `budget.enforce = true`.
-9. **Không thêm tính năng ngoài spec** (surge pricing, pooling, học mô hình uplift…).
+9. **Không thêm tính năng ngoài spec** (surge pricing, pooling, học mô hình uplift…). Học mô hình uplift chỉ làm trong `analysis/` (tuần 5), không bao giờ trong `sim/`.
 
 ## Cách làm việc
 
 - Đọc mục tương ứng trong `spec.md` và `tests.md` trước khi code một module.
 - Viết test trước hoặc cùng lúc với code. Mốc chỉ xong khi các test của mốc pass.
-- Mỗi mốc là một nhánh và một PR nhỏ. Trong mô tả PR ghi: test nào pass, lệch spec ở đâu.
+- Mỗi task là một nhánh (`tinh/<task>` hoặc `hoang/<task>`) và một PR nhỏ vào `develop1`; người kia review. Trong mô tả PR ghi: test nào pass, lệch spec ở đâu.
+- **Hai người làm song song** theo `docs/phan_cong.md`:
+  - chỉ sửa file mình sở hữu (mục 2 của file đó);
+  - cần sửa file của người kia thì mở PR nhỏ để chủ file review;
+  - file chung chỉ sửa qua PR có cả hai duyệt;
+  - trước khi dùng thứ người kia bàn giao, chạy đúng phần "Người nhận kiểm tra" trong bảng bàn giao.
 - **Khi spec mơ hồ hoặc mâu thuẫn:** dừng lại, ghi câu hỏi vào `docs/decisions.md` mục "Câu hỏi mở", và hỏi người. Không tự chọn một cách rồi đi tiếp.
 - **Khi test nghiệm thu không đạt** (đặc biệt A1, đường throughput): báo cáo số liệu. Không nới tiêu chí đạt, không sửa test cho pass.
 - Code comment và docstring bằng tiếng Anh; tài liệu trong `docs/` bằng tiếng Việt.
@@ -68,11 +74,15 @@ Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_st
 sim/            # mã nguồn (spec §3)
 tests/          # pytest; fixtures/tiny.yaml cho test nhanh
 config/         # default.yaml
-docs/           # thiết kế, spec, schema, tests, plan, decisions
+docs/           # thiết kế, spec, schema, tests, plan, phan_cong, decisions
+analysis/       # phân tích tuần 5 (tạo khi cần; sim/ không import từ đây)
 runs/           # output (không commit)
 ```
 
 ## Trạng thái hiện tại
 
-- Mốc đang làm: **P0** (xem `docs/plan.md`).
+- Sprint đang làm: **S0**, làm chung: PR hợp đồng giao diện + khung chạy được (xem `docs/phan_cong.md`).
+  - 1. Tình: S0; tiếp theo T1.1–T1.5.
+  - 2. Hoàng: S0; tiếp theo H1.1–H1.4.
+- Mốc P0 đã xong trên `develop1`, chờ Hoàng review (gate P0).
 - Quyết định đang chờ mentor: D3, D4, D5 trong `spec.md` §1. Code phải để các lựa chọn này đổi được bằng config.

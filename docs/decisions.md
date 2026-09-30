@@ -22,12 +22,15 @@ Quy ước:
 | 2026-09-30 | L8 | Thêm `sim/__main__.py` (không có trong spec §3) để chạy được `python -m sim`. | Spec §7 dùng lệnh `python -m sim run`. | chờ duyệt |
 | 2026-09-30 | L9 | Test tĩnh (`tests/test_rng.py`) cấm trong `sim/`: `import random`, `numpy.random.<hàm>` toàn cục và `default_rng`. Chỉ cho phép `np.random.Generator` (type hint) và `np.random.Philox` (chỉ trong `rng.py`). | Quy tắc cứng 4 (CRN). | chờ duyệt |
 | 2026-09-30 | L10 | Đổi tên `docs/Supply-Aware Promotion Uplift.md` thành `docs/problem_statement.md`, file Survey thành `docs/survey.md`. | Tên có dấu cách, gạch dài và dấu cách trước `.md` gây lỗi khi gõ lệnh và tạo link. | chờ duyệt |
+| 2026-09-30 | L11 | `BudgetLedger` đặt trong file riêng `sim/budget.py` và được re-export từ `sim/state.py`; spec §3 xếp nó trong `state.py`. | `state.py` (Hoàng) và ledger (Tình) có chủ khác nhau; file riêng tránh hai người sửa chung một file. | chờ duyệt |
+| 2026-09-30 | L12 | Bước 5 có **một** lớp voucher trong `pricing.py`: gọi `cell_state` khi đổi slot, gọi `offer`, giữ ngân sách theo thứ tự `session_id`, điền trường thí nghiệm. Ngân sách áp ở một chỗ cho mọi chính sách, kể cả all_on có ngân sách. **Lệch spec §6**, vốn truyền ledger vào `offer`. | Một điểm nối duy nhất giữa lõi (Hoàng) và chính sách (Tình); ngân sách áp giống nhau cho mọi chính sách. | chờ duyệt |
+| 2026-09-30 | L13 | Hai người làm song song theo `docs/phan_cong.md`: mỗi file một chủ, hợp đồng giao diện chốt ở Sprint 0, gate P2/P3/P6 chặn tích hợp và sinh dữ liệu. `plan.md` và CLAUDE.md sửa theo. ID mới trong file này dùng tiền tố `H-`/`T-`. | Làm tuần tự từng mốc không kịp lịch 5 tuần. | chờ duyệt |
 
 ---
 
 ## Câu hỏi mở
 
-Xếp theo mốc bị chặn. Không câu nào chặn P0.
+Xếp theo mốc bị chặn. Không câu nào chặn P0. Hạn chốt theo sprint và người chịu ảnh hưởng: xem `docs/phan_cong.md` mục 6.
 
 ### Q1. Simulator chính là ABM theo spec hay `marketplace_sim.py`? (ảnh hưởng toàn bộ kế hoạch)
 - `docs/BaoCao_MaNguon.pdf` (29/09) kết luận: simulator chính là `marketplace_sim.py`; ABM 13 module chỉ là "bản rút gọn, tùy chọn, để kiểm tra ngoài". `docs/problem_statement.md` cũng dựa trên `marketplace_sim.py` (`--selfcheck`, các cột `util_lag`, `realized_*`).
@@ -84,6 +87,31 @@ Xếp theo mốc bị chặn. Không câu nào chặn P0.
 
 ### Q12. A2(b): `all_on` có áp ngân sách không? (chặn P6)
 - So sánh π1 = all_on với π2 = threshold θ = 0,3 (có ngân sách). Nếu all_on không áp ngân sách, hai chính sách không cùng B.
+
+### Q13. Thư viện và chỗ đặt code phân tích tuần 5 (chặn S4 trong `phan_cong.md`)
+- Phân tích cần scikit-learn và LightGBM; có thể thêm causalml hoặc scikit-uplift (theo `BaoCao_MaNguon.pdf` Bảng 8). CLAUDE.md cấm thêm thư viện nếu chưa hỏi, và quy tắc 9 cấm học mô hình uplift trong simulator.
+- **Đề xuất:**
+  - code phân tích đặt trong `analysis/`; `sim/` không import từ đó;
+  - thư viện khai báo ở extras riêng `[analysis]` trong `pyproject.toml`, không vào dependency của `sim`;
+  - dữ liệu `hidden/` chỉ dùng để đánh giá, không nối vào dữ liệu huấn luyện.
+
+### Q14. Bản NYC (P7) thiếu dữ liệu và công cụ; đề xuất làm sau P8
+- Hợp đồng spec §10 chưa có file lân cận/khoảng cách giữa ô H3, cũng chưa có cụm 7 ô cho M10 trên NYC.
+- Dựng các file đó cần thư viện `h3`, chưa được phép.
+- `demand.py` theo spec không có chiều thứ trong tuần, trong khi `demand_rate.parquet` có cột `dow`.
+- Tiêu chí nghiệm thu của đề bài (§8) không cần bản NYC; report ghi thí nghiệm chính chạy trên bản tổng hợp.
+- **Đề xuất:** làm P7 sau P8 nếu còn thời gian. Nếu vẫn làm, bổ sung hợp đồng (file lân cận, cụm, `dow`) và cho phép dùng `h3` trong công cụ dữ liệu, ngoài `sim/`.
+
+### Q15. Định nghĩa bộ đếm theo slot và chỉ số tổng hợp (chặn hợp đồng giao diện ở Sprint 0)
+- `n_completed`, `voucher_spent_usd` của `slot_snapshots` tính vào slot nào (slot đặt hay slot hoàn thành) và ô nào?
+- `mean_slack` của A1 tính thế nào khi slack = inf (E = 0)? Ví dụ: tỷ số của trung bình I/E trên cả cửa sổ, hay trung bình chỉ trên các giá trị hữu hạn.
+- Mẫu số của `abandon_rate`, `cancel_rate` trong `results/throughput_curve` là gì?
+- `block` tính từ đầu cửa sổ, nên warm-up có `block < 0`, trùng giá trị −1 mà schema dùng cho "không phải thí nghiệm".
+- **Đề xuất:** đội chốt ở Sprint 0 và ghi vào đây trước khi viết `monitor.py` và `runner.py`.
+
+### Q16. P8 thiếu bộ dữ liệu `rider_ab` (chặn S4)
+- RQ3 và tiêu chí đề bài §8.4 cần độ chệch của A/B theo rider so với GTE. P8 hiện chỉ sinh dữ liệu legacy và switchback.
+- **Đề xuất:** thêm `generate` 28 ngày với `experiment.design = rider_ab`; `plan.md` P8 đã ghi đề xuất này.
 
 ---
 

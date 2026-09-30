@@ -1,11 +1,14 @@
 # Kế hoạch triển khai simulator
 
 Nguyên tắc:
-- Làm **theo mốc**. Mỗi mốc kết thúc bằng test pass và một lần review của người (Hoàng hoặc Tình). Agent không bắt đầu mốc sau khi mốc trước chưa được duyệt.
-- Mỗi mốc là một nhánh git và một PR nhỏ. Mỗi PR có mô tả: làm gì, test nào pass, lệch khỏi spec chỗ nào (nếu có).
+- Làm **theo mốc**. Mỗi mốc kết thúc bằng test pass và một lần review của người (Hoàng hoặc Tình).
+- Hai người làm **song song** theo `docs/phan_cong.md` (sprint, sở hữu file, điểm bàn giao).
+  - Các review gate (P2, P3, P6) chặn **tích hợp và sinh dữ liệu** của mốc sau.
+  - Module độc lập của mốc sau được viết trước trên nhánh riêng và test bằng đồ giả.
+- Mỗi task là một nhánh git và một PR nhỏ vào `develop1`. Mỗi PR có mô tả: làm gì, test nào pass, lệch khỏi spec chỗ nào (nếu có).
 - Mọi lệch khỏi `docs/spec.md` hoặc thay đổi tham số đều phải ghi vào `docs/decisions.md` (ngày, nội dung, lý do, người duyệt).
 
-Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **tuần 4** gồm P5–P8, **tuần 5** dành cho phân tích và nghiệm thu (ngoài phạm vi file này).
+Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **tuần 4** gồm P5–P8, **tuần 5** dành cho phân tích và nghiệm thu (ngoài phạm vi file này). Lịch chi tiết theo sprint và theo người, gồm cả tuần 5, ở `docs/phan_cong.md`.
 
 ---
 
@@ -88,6 +91,8 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 
 ## P7. Bản NYC (song song với Tình, 1–2 ngày)
 
+> Đề xuất hạ ưu tiên: làm sau P8 nếu còn thời gian (chờ mentor, Q14 trong `docs/decisions.md`).
+
 - **Làm:** nạp dữ liệu theo spec §10, luật T gần/xa, vùng đệm, lấy mẫu 5–10%.
 - **Xong khi:** chạy 1 ngày NYC không lỗi; A5 vẫn đạt với mức lấy mẫu đã chọn; so sánh vài chỉ số (số chuyến theo giờ, thời gian chuyến) với dữ liệu thật.
 
@@ -96,6 +101,7 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 - **Làm:**
   - `generate` 28 ngày với chính sách cũ (dữ liệu quan sát có confounding).
   - `generate` 28 ngày với `cluster_switchback` ở cụm cấp 1, 7 và all.
+  - `generate` 28 ngày với `rider_ab` (cần để đo độ chệch A/B theo rider, RQ3; đề xuất thêm, Q16).
   - `gte` và `sweep_theta` với chính sách tham chiếu.
 - **Xong khi:** thư mục `runs/` có đủ dữ liệu; `docs/datasets.md` mô tả từng bộ (config_hash, số ngày, chính sách, dung lượng).
 
