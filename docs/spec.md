@@ -37,9 +37,9 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
 |---|---|---|---|
 | D1 | Chỉ tiêu chính là N(π); V(π) là phụ; mọi chính sách chịu cùng ngân sách B | Accepted | Voucher 20% ≈ phần nền tảng giữ lại, nên V(π) luôn giảm [report §1] |
 | D2 | θ\* = argmax_θ N(π_θ), tìm bằng quét θ; không rẽ nhánh từng (ô, slot) | Accepted | [report §1, M13] |
-| D3 | π_θ hai tầng: cắt ô theo chỉ số căng cung, phát voucher cho rider theo điểm τ̂ trong ngân sách | **Pending mentor** | [report M3] |
-| D4 | Chỉ số căng cung mặc định là slack = I/E (xe rảnh / xe đang đi đón) | **Pending mentor** | Castillo et al. 2025 |
-| D5 | `max_pickup_eta` = 30 phút; tìm xe theo vành mở rộng dần | **Pending mentor** | Giới hạn thấp làm mất WGC [report M5] |
+| D3 | π_θ hai tầng: cắt ô theo chỉ số căng cung, phát voucher cho rider theo điểm τ̂ trong ngân sách | Tạm chốt (T-17), mentor có thể đổi qua config | [report M3] |
+| D4 | Chỉ số căng cung mặc định là slack = I/E (xe rảnh / xe đang đi đón) | Tạm chốt (T-10, T-17); đổi qua `policy.threshold.indicator` | Castillo et al. 2025 |
+| D5 | `max_pickup_eta` = 30 phút; tìm xe theo vành mở rộng dần | Tạm chốt (T-17); đổi qua `matching.max_pickup_eta_min` | Giới hạn thấp làm mất WGC [report M5] |
 | D6 | Lưới mặc định bán kính 3 (37 ô), torus | Accepted | [report Bảng 2]. thời gian đón tối đa (qua 3 vành) ≈ 17 phút giờ thường, ≈ 23 phút giờ cao điểm; 19 ô chỉ ≈ 11–15 phút, có thể không đủ cho WGC |
 | D7 | Cung độc lập với chính sách: rời sớm theo thu nhập tắt; repositioning theo quy tắc tĩnh | Accepted | [report M8, M9] |
 | D8 | Code dạng struct-of-arrays (numpy); không tạo object Python cho mỗi xe/khách trong vòng lặp nóng | Accepted | Mục tiêu ≤ 30 giây / ngày mô phỏng |
@@ -61,7 +61,7 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
   - `slot_of_day = (t % 86400) // (slot_min*60)`, từ 0 đến 95.
 - **ID ô:** số nguyên 0..N-1, sắp theo `(q, r)` tăng dần. Bảng `cell_q`, `cell_r` lưu tọa độ trục.
 - **ID ổn định cho CRN:**
-  - `session_id` là số nguyên 64-bit tạo từ `(day, tick_of_day, cell, k)`, với `k` là thứ tự session trong (ô, tick). Công thức: `((day*1440 + tick_of_day)*N + cell)*1000 + k`, trong đó `k < 1000`; nếu vượt thì raise lỗi.
+  - `session_id` là số nguyên 64-bit tạo từ `(day, tick_of_day, cell, k)`, với `k` là thứ tự session trong (ô, tick). Công thức: `((day*ticks_per_day + tick_of_day)*N + cell)*1000 + k`, với `ticks_per_day = 86400 // tick_s` (T-06), trong đó `k < 1000`; nếu vượt thì raise lỗi.
   - `order_id = session_id`, vì mỗi session có tối đa 1 order.
   - `driver_id` là 0..fleet_size-1.
 - **Chỉ đọc quá khứ:** quyết định trong slot k chỉ dùng snapshot đã công bố của các slot < k.
@@ -124,7 +124,7 @@ for tick in range(n_ticks_total):          # gồm warm-up + cửa sổ + cool-d
     10. monitor.accumulate(t)    # M11; nếu hết slot -> publish snapshot; M12 ghi log
 ```
 
-- **Cửa sổ đánh giá** là `[warmup_min, warmup_min + days_per_run*1440)` phút. Session chỉ được sinh đến hết cửa sổ.
+- **Cửa sổ đánh giá** là `[warmup_min, warmup_min + window_min)` phút, với `window_min = time.window_min` nếu đặt, ngược lại `days_per_run*1440` (T-05). Session chỉ được sinh đến hết cửa sổ.
 - **Cool-down:** sau cửa sổ, tiếp tục vòng lặp (bỏ qua bước 4) đến khi mọi order được tạo trong cửa sổ đã kết thúc, hoặc chạm `cooldown_max_min`. Order chưa kết thúc khi chạm giới hạn được ghi `status = Truncated`.
 - **Đánh giá:** N(π) và V(π) chỉ tính các order có `request_time` nằm trong cửa sổ đánh giá [report §3.2].
 
@@ -176,7 +176,10 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
   - `u_book`: Uniform, dùng cho quyết định đặt xe (M4);
   - `u_target`, `u_explore`, `u_explore_arm`: Uniform, dùng cho chính sách cũ (M3);
   - `trip_noise`: LogNormal(0, trip_time_noise_sigma);
-  - `e_cancel`: Exponential(1), ngưỡng hazard tích lũy cho hủy (M7).
+  - `e_cancel`: Exponential(1), ngưỡng hazard tích lũy cho hủy (M7);
+  - `u_score`: Uniform, dùng cho `score_fn = random` (T-07).
+
+  Thứ tự rút là cố định (rider, đích, `u_book`, `u_target`, `u_explore`, `u_explore_arm`, `trip_noise`, `e_cancel`, `u_score`) và **luôn rút đủ**, bất kể chính sách. Chính sách không được tự rút từ luồng SESSION; các số này đi vào `SessionBatch` (§6) và được ghi ở `hidden/` (T-11).
 
 **Sinh rider** (`population.py`, theo `world_seed`):
 - `home_cell`: rút theo phân phối `w_z / Σw`.
@@ -205,11 +208,12 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 - `spent`: chuyển từ committed khi order Completed.
 - Chỉ phát voucher khi `spent + committed + reserved + v_s ≤ B`. Nếu không đủ thì session ghi `budget_blocked = True`.
 - Bất biến: `spent + committed + reserved ≤ B` tại mọi thời điểm.
-- Ngân sách tính theo **ngày**, reset lúc 00:00 của mỗi ngày mô phỏng.
+- **Kỳ ngân sách** (T-03): dài `P = min(1440, window_min)` phút, neo theo cửa sổ đánh giá: kỳ d là `[window_start + d*P, window_start + (d+1)*P)`. Mỗi kỳ có bộ đếm `spent/committed/reserved` riêng và cùng mức B. Một reservation thuộc kỳ của `open_time` session và giữ nguyên kỳ đó khi order kết thúc trong cool-down; bất biến giữ theo từng kỳ. Warm-up là kỳ −1 với ngân sách `B * warmup_min / P`, để trạng thái đầu cửa sổ phản ánh chính sách; chi tiêu warm-up không tính vào đánh giá.
+- Ledger khóa theo `session_id`, tiền tính bằng **cent nguyên** để bất biến chính xác.
 
 **Tính B khi `mode = fraction_of_all_on`:**
 1. Chạy pilot `all_on` với seed `pilot_seed_offset`, không áp ngân sách.
-2. `B = fraction * chi tiêu voucher trung bình mỗi ngày` của lượt pilot.
+2. `B = fraction * chi tiêu voucher trung bình mỗi kỳ ngân sách` của lượt pilot, tính trên các kỳ trong cửa sổ (bỏ warm-up).
 
 B được tính một lần cho mỗi cấu hình thế giới và dùng chung cho mọi chính sách, θ và seed.
 
@@ -287,7 +291,8 @@ Mỗi tài xế sinh một lần theo `world_seed`:
 - **Ca làm:** chọn thành phần hỗn hợp theo trọng số, rồi `shift_start ~ Uniform(from, to)` (giờ).
 - **Độ dài ca:** `len ~ N(mean, sd)`, cắt trong `clip`.
 - **Ô xuất phát:** rút theo `w_z`.
-- **Chạy nhiều ngày:** mỗi ngày dùng cùng lịch ca (đơn giản hóa; ghi rõ trong log metadata).
+- **Ca làm tuần hoàn** (T-02): tài xế trong ca khi `((t/3600 − shift_start) mod 24) < shift_len`; mỗi ngày dùng cùng lịch ca (ghi rõ trong log metadata). Lúc t = 0, xe nào đang trong ca theo quy tắc này thì khởi tạo `idle` tại ô xuất phát với `shift_end = shift_start + shift_len − 24` (giờ), để không có khởi động lạnh.
+- **`shift_mode`** (T-08): `schedule` là mặc định; `always_on` cho mọi xe online suốt lượt chạy tại ô xuất phát, chỉ dùng cho `throughput_curve`.
 - **Vào ca:** chuyển `offline → idle` tại ô xuất phát.
 - **Hết ca:** chỉ rời khi đang `idle`; nếu đang bận thì rời ngay sau khi trả khách.
 - **`early_exit_enabled = false`:** bỏ qua `reservation_wage` hoàn toàn. Nếu bật: xe rảnh ở thời điểm ≥ 2 giờ vào ca mà `earnings_today / giờ_đã_làm < reservation_wage` thì rời. Chỉ dùng cho phân tích độ nhạy.
@@ -311,7 +316,7 @@ Mỗi tài xế sinh một lần theo `world_seed`:
   - mỗi ô gán vào tâm gần nhất theo khoảng cách torus; hòa thì lấy `cell_id` nhỏ.
   - kích thước cụm với R = 3 là [3, 3, 4, 6, 7, 7, 7].
 
-**Block:** `block = floor((t - t_window_start) / (block_min*60))`.
+**Block:** `block = floor(t / (block_min*60))`, tính từ **đầu lượt chạy** (T-15), nên warm-up cũng có block không âm và `-1` chỉ dành cho lượt không thí nghiệm. Với `warmup_min` là bội của `block_min`, cửa sổ bắt đầu đúng biên block.
 
 **Gán trạng thái:**
 - `cluster_switchback`: `on(cluster, block) = Uniform < p_on`, luồng CELLSLOT khóa `(cluster_level, cluster_id, block)`.
@@ -332,8 +337,8 @@ Trong mỗi slot, sau bước 9 của **mỗi tick**, cộng dồn cho từng ô
 
 Cuối slot, lấy trung bình theo số tick để có `I, E, O, W`, rồi tính:
 - `slack = I / E`; nếu E = 0 thì `+inf` [Castillo et al. 2025].
-- `utilization = (E + O) / (I + E + O)`; nếu mẫu số = 0 thì NaN.
-- Đếm trong slot: `n_sessions`, `n_offers`, `n_requests`, `n_matched`, `n_completed` (theo ô đón), `n_abandoned`, `n_cancelled`, `mean_pickup_eta_min` (các order được ghép trong slot), `voucher_spent_usd`.
+- `utilization = (E + O) / (I + E + O)`; nếu mẫu số = 0 thì NaN. Xe `repositioning` và `offline` không tính (T-09).
+- Đếm trong slot theo **thời điểm sự kiện** và **ô đón** (T-15): `n_sessions`, `n_offers`, `n_requests` theo `open_time`; `n_matched` và `mean_pickup_eta_min` theo `matched_time`; `n_abandoned`, `n_cancelled` theo thời điểm hủy; `n_completed`, `voucher_spent_usd` theo `dropoff_time`.
 - Giá trị trễ để làm feature: `slack_lag_slot` (slot k-1) và `slack_lag_day` (slot k-96; NaN nếu chưa có).
 
 Snapshot của slot k được **công bố** sau khi slot k kết thúc. Chính sách ở slot k+1 chỉ thấy các snapshot ≤ k. Cài đặt như một hàng đợi, và có assert kiểm tra thứ tự này.
@@ -362,7 +367,7 @@ def rng_for(stream: Stream, *key: int) -> np.random.Generator:
 |---|---|---|
 | WORLD | `(world_seed, …)` | trọng số ô, rider, tài xế. **Không** phụ thuộc `run_seed` |
 | DEMAND | `(day, tick_of_day, cell)` | số session Poisson |
-| SESSION | `(session_id)` | rider, ô đích, `u_book`, `u_target`, `u_explore`, `u_explore_arm`, `trip_noise`, `e_cancel` |
+| SESSION | `(session_id)` | rider, ô đích, `u_book`, `u_target`, `u_explore`, `u_explore_arm`, `trip_noise`, `e_cancel`, `u_score` (thứ tự cố định, §4.2) |
 | CELLSLOT | `(kind, cell_or_cluster, slot_or_block)` | ε của chính sách cũ, switchback |
 | RIDER | `(rider_id)` | arm của A/B theo rider |
 | DRIVER | `(driver_id, counter)` | repositioning |
@@ -384,7 +389,9 @@ class Policy(Protocol):
         """Gọi ở bước 5. Trả về offer[n] (bool), propensity[n] (float|NaN), mechanism[n], score[n]."""
 ```
 
-`SnapshotView` chỉ trả về snapshot đã công bố. `SessionBatch` chỉ chứa **cột quan sát được**: `x_freq`, `x_tenure`, `x_segment`, ô, giờ, giá, ETA báo. **Không** có `u_latent`, alpha, beta, delta, hay max_wait. Riêng `LegacyPolicy` được dùng `u_latent` để tạo confounding, qua một view riêng `LegacyHiddenView`, và kết quả propensity thật chỉ ghi vào bảng ẩn.
+`SnapshotView` chỉ trả về snapshot đã công bố. `SessionBatch` chỉ chứa **cột quan sát được**: `session_id`, `rider_id`, `x_freq`, `x_tenure`, `x_segment`, ô, giờ, giá, ETA báo, cùng các số rút sẵn dành cho chính sách `u_target`, `u_explore`, `u_explore_arm`, `u_score` (T-07). **Không** có `u_latent`, alpha, beta, delta, hay max_wait. Chính sách không được gọi `rng_for(SESSION, …)`.
+
+Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này gọi `cell_state` khi đổi slot, gọi `offer`, rồi giữ ngân sách theo thứ tự `session_id` cho mọi chính sách; `offer` vẫn nhận `ledger` chỉ để đọc số dư. Riêng `LegacyPolicy` được dùng `u_latent` để tạo confounding, qua một view riêng `LegacyHiddenView`, và kết quả propensity thật chỉ ghi vào bảng ẩn.
 
 **LegacyPolicy** [report M3]:
 - **Cấp ô:** `rule_on = slack_lag_slot ≥ slack_on`. Với xác suất ε (luồng CELLSLOT), thay bằng coin(`epsilon_p_on`).
@@ -406,7 +413,7 @@ class Policy(Protocol):
   - `score = score_fn(SessionBatch, ŝ)`;
   - offer nếu `promo_on[cell]` **và** `score ≥ κ` **và** ngân sách còn đủ.
 - **Hàm điểm có sẵn:**
-  - `random`: Uniform từ luồng SESSION;
+  - `random`: trả về `u_score` đã rút sẵn (T-07);
   - `heuristic_low_freq`: `-x_freq`;
   - chuỗi `"module:function"`: import động, chữ ký `f(batch, s_hat) -> np.ndarray[float]`.
 - **κ = auto:**
@@ -438,10 +445,10 @@ python -m sim run --mode <mode> --config config/default.yaml [--set a.b=c ...] [
 | `sweep_theta` | mỗi θ trong `theta_grid` × `n_seeds`, cùng B | results; bảng `theta_sweep` |
 | `gte` | all_on và all_off × `n_seeds`, không ngân sách | results |
 | `calibrate_budget` | pilot all_on để tính B | meta |
-| `throughput_curve` | quét `demand_scale` ở cố định fleet, all_off; `hour_profile` và `speed_factor_by_hour` đặt hằng số (mức giờ cao điểm) để đo trạng thái ổn định | results (bảng A1) |
+| `throughput_curve` | quét `throughput.demand_scale_grid` × `throughput.n_seeds`, all_off, `supply.shift_mode = always_on` (mọi xe online suốt lượt); `hour_profile` và `speed_factor_by_hour` đặt hằng số bằng giá trị tại `throughput.reference_hour`. Đo trên toàn cửa sổ sau warm-up: `completed_per_h = N_completed / giờ cửa sổ`; `mean_slack` = tổng (xe rảnh × tick) / tổng (xe đi đón × tick); `abandon_rate`, `cancel_rate` chia cho `n_requests` (T-08, T-15) | results (bảng A1) |
 
 - `evaluate`, `sweep_theta` và `gte` mặc định **không** ghi bảng session hay order, để nhanh. Bật bằng `--log-level full`.
-- Chạy song song các seed bằng `multiprocessing`. Mỗi tiến trình một seed.
+- Chạy song song các seed bằng `multiprocessing`, `runner.n_procs` tiến trình (null = số lõi). Mỗi tiến trình một seed. Windows khởi động tiến trình con bằng spawn, nên engine và hàm điểm được truyền dạng `"module:function"` và phải import được trong tiến trình con.
 
 ---
 
@@ -461,12 +468,13 @@ python -m sim run --mode <mode> --config config/default.yaml [--set a.b=c ...] [
 - `config.py` đọc YAML thành dataclass lồng nhau, **kiểm tra khóa lạ** (raise lỗi) và kiểm tra kiểu cùng khoảng giá trị cơ bản.
 - `--set policy.threshold.theta=0.4` ghi đè; giá trị parse theo YAML.
 - `config_hash = sha1(json.dumps(config, sort_keys=True))[:12]`, ghi vào mọi output.
+- Khóa thêm ngày 30/09 (T-18): `time.window_min`, `supply.shift_mode`, `throughput.demand_scale_grid`, `throughput.n_seeds`, `throughput.reference_hour`, `runner.n_procs`. Ý nghĩa ghi trong `default.yaml`.
 
 ---
 
-## 10. Bản NYC (làm sau, mốc P7)
+## 10. Bản NYC (làm sau P8 nếu còn thời gian, T-14)
 
-Chỉ cần đạt hợp đồng dữ liệu; phần lõi giữ nguyên. Nhóm dữ liệu (Tình) cung cấp:
+Chỉ cần đạt hợp đồng dữ liệu; phần lõi giữ nguyên. Nhóm dữ liệu (Tình) cung cấp các file dưới đây cùng hai file bổ sung: `nyc/neighbors.parquet` (`cell_id, neighbor_id`) và `nyc/clusters.parquet` (`cell_id, cluster_id`, cụm ~7 ô). Pipeline dữ liệu nằm ngoài `sim/` và được dùng `h3`. `demand_rate` gộp theo giờ (trung bình các ngày trong tuần); simulator không có chiều `dow`.
 
 | File | Cột | Ghi chú |
 |---|---|---|
@@ -486,7 +494,9 @@ Chỉ cần đạt hợp đồng dữ liệu; phần lõi giữ nguyên. Nhóm d
 
 ## 11. Câu hỏi mở (không tự quyết trong code)
 
-1. D3, D4, D5 đang chờ mentor xác nhận. Code phải cho phép đổi bằng config mà không sửa code.
-2. Chính sách cũ có áp ngân sách B không? Hiện tại **có**, để dữ liệu quan sát giống thực tế.
-3. Mức B (`fraction = 0.3`) và `explore_frac` cần mentor đồng ý.
-4. Mọi giá trị gắn `[assume]` trong YAML sẽ được hiệu chỉnh ở mốc P3. Kết quả hiệu chỉnh ghi vào `docs/decisions.md`.
+Các câu hỏi Q1–Q16 đã chốt ngày 30/09/2026, xem `docs/decisions.md` (T-01…T-18). Còn lại:
+
+1. D3, D4, D5, mức B (`fraction = 0.3`) và `explore_frac` tạm chốt theo YAML (T-17); mentor có thể đổi bằng config mà không sửa code.
+2. Chính sách cũ **có** áp ngân sách B, để dữ liệu quan sát giống thực tế.
+3. Mọi giá trị gắn `[assume]` trong YAML sẽ được hiệu chỉnh ở mốc P3. Kết quả hiệu chỉnh ghi vào `docs/decisions.md`.
+4. Câu hỏi mới: ghi vào `docs/decisions.md` mục "Câu hỏi mở" và dừng lại hỏi người.

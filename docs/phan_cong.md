@@ -55,8 +55,8 @@ Quy ước ký hiệu:
 
 **Việc chung:**
 - Hoàng review P0 trên `develop1`; gộp `develop1 → main` (gate P0); xóa nhánh trống `p0-skeleton`.
-- Đội tự chốt Q4, Q5, Q6, Q7, Q9, Q11, Q15 và ghi vào `decisions.md`.
-- Hoàng gửi mentor: Q1 (gấp), Q2, Q3, Q8, Q10, Q12, Q13, Q14, Q16, cùng các mục D3–D5, B, `explore_frac` trong `plan.md`.
+- ~~Đội tự chốt Q4, Q5, Q6, Q7, Q9, Q11, Q15~~ **Đã chốt toàn bộ Q1–Q16 ngày 30/09** (`decisions.md` T-01…T-18). Hoàng đọc và phản đối trong S0 nếu không đồng ý điểm nào.
+- Hoàng gửi mentor bản tóm tắt T-01…T-18 để xác nhận, nhấn mạnh T-03 (kỳ ngân sách), T-12 (all_on có ngân sách), T-14 (hạ ưu tiên NYC) và T-17 (D3–D5, B, `explore_frac`).
 
 **PR "hợp đồng + khung chạy được"** (làm cặp, chỉ chữ ký, dataclass và stub):
 1. **`state.py`:**
@@ -65,8 +65,8 @@ Quy ước ký hiệu:
    - mảng DriverState (spec §8);
    - bộ đếm theo ô `idle/enroute/ontrip/waiting_count[N]` và `SlotCounters`.
 2. **`rng.py`:**
-   - thứ tự rút số cố định của luồng SESSION, kết thúc bằng `u_score`;
-   - `session_id` tính theo `ticks_per_day`;
+   - thứ tự rút số cố định của luồng SESSION, kết thúc bằng `u_score` (T-07);
+   - `session_id` tính theo `ticks_per_day` (T-06);
    - mã `kind` số nguyên cho CELLSLOT (`cluster_level: all` là chuỗi, `rng_for` sẽ từ chối).
 3. **`World`:**
    - các trường: N, `cell_q/r`, D, T, diện tích ô, `w`, rider kèm `zf`, lịch ca, cửa sổ đánh giá, mặt nạ ô tính vào N(π);
@@ -77,13 +77,13 @@ Quy ước ký hiệu:
    - `SnapshotView`: trả NaN trước lần công bố đầu, báo lỗi khi đọc slot ≥ k.
 5. **`budget.py`:**
    - API theo `session_id`, tiền tính bằng cent nguyên;
-   - `on_tick(t)` tự reset theo ngày ngân sách, nên đáp án Q3 chỉ ảnh hưởng code của Tình.
+   - sổ riêng cho từng kỳ ngân sách neo theo cửa sổ, warm-up là kỳ −1 (T-03); engine chỉ báo `open_time` của session, phần còn lại là việc của ledger.
 6. **`engine.run(cfg, world, policy, rng, log_level, profile) -> RunResult`:**
    - RunResult đủ trường cho mọi mode: `mean_slack`, `promo_on` theo (ô, slot), chi tiêu theo ngày ngân sách, `(score, v, completed)` của mỗi session được phát (cho κ auto);
    - N(π), V(π) chỉ tính ở engine.
 7. **Stub chạy được:** ledger nhánh `enforce=false`, `pricing.quote` nhánh all_off, monitor rỗng.
 8. **Config:**
-   - thêm luôn mọi khóa mới đã thấy trước: `time.window_min` (Q5), mốc ngày ngân sách (Q3), chế độ "luôn online" của supply (Q8), lưới `demand_scale` và seed cho `throughput_curve`, số tiến trình runner. Về sau chỉ đổi giá trị YAML, không phải sửa `config.py`;
+   - ~~thêm khóa mới~~ đã thêm ngày 30/09 (T-18): `time.window_min`, `supply.shift_mode`, `throughput.*`, `runner.n_procs`. Về sau chỉ đổi giá trị YAML, không phải sửa `config.py`;
    - bỏ các assert giá trị sẽ còn hiệu chỉnh (ví dụ `grid_radius == 3`) khỏi `test_config.py`.
 
 ### Sprint 1 (ngày 2–4)
@@ -93,8 +93,8 @@ Quy ước ký hiệu:
 | T1.1 `budget.py` đầy đủ (enforce, bất biến, reset ngày) + test ledger trong `test_pricing.py` | H1.1 `space.py` + `test_space.py` → **PR sớm** (B1) |
 | T1.2 `monitor.py`: công bố snapshot theo slot, lag slot/ngày, assert không nhìn trước + `test_monitor.py` với bộ đếm giả | H1.2 `population.py`, `demand.py` + `test_demand.py`. Đo chi phí `rng_for` cho từng session ngay; nếu chậm thì dùng SESSION_BATCH từ đầu, vì đổi về sau sẽ đổi mọi số ngẫu nhiên |
 | T1.3 `tests/fakes.py`, `policies/scores.py` + test | H1.3 `state.py` (SoA, tăng gấp đôi, bộ đếm theo ô), `choice.py` + `test_choice.py` |
-| T1.4 `runner.py` khung: `run_id`, chạy nhiều seed (engine truyền dạng `"module:function"` vì Windows dùng spawn), ghi `policy_results`, mode `throughput_curve` trên engine giả; nối `cli.py` (B4) | H1.4 `supply.py`: lịch ca, chỉ rời khi rảnh, chế độ luôn online, khởi động lạnh theo Q2 + phần M8 của `test_supply.py`; in bảng tóm tắt thế giới |
-| T1.5 Chốt hợp đồng dữ liệu NYC, ghi thiếu sót vào Q14 | |
+| T1.4 `runner.py` khung: `run_id`, chạy nhiều seed (engine truyền dạng `"module:function"` vì Windows dùng spawn), ghi `policy_results`, mode `throughput_curve` trên engine giả; nối `cli.py` (B4) | H1.4 `supply.py`: ca làm tuần hoàn và khởi tạo t = 0 (T-02), chỉ rời khi rảnh, `shift_mode = always_on` (T-08) + phần M8 của `test_supply.py`; in bảng tóm tắt thế giới |
+| T1.5 (bỏ, NYC hạ ưu tiên theo T-14; dùng thời gian này cho T1.4) | |
 
 ### Sprint 2 (ngày 5–8)
 
@@ -136,14 +136,14 @@ Chung: chốt định nghĩa ŝ và chỉ số căng cung dùng cho cả θ̂ v�
 | T5.2 Tìm ví dụ Qini cao hơn mà N(π) thấp hơn | H5.2 DR-learner trên `completed` (legacy + lát explore) → τ̂(x); τ̂(x, s) với `slack_lag_*` |
 | T5.3 Interference: GTE vs `rider_ab` vs switchback cụm 1/7/all; độ nhạy theo `u_latent` | H5.3 Confounding: ước lượng naive vs explore/switchback; θ̂ vs θ\* |
 
-Code phân tích đặt trong `analysis/`, không trong `sim/`. Không bao giờ nối (join) dữ liệu `hidden/` vào dữ liệu huấn luyện. Thư viện phân tích chờ chốt Q13.
+Code phân tích đặt trong `analysis/`, không trong `sim/`. Không bao giờ nối (join) dữ liệu `hidden/` vào dữ liệu huấn luyện. Thư viện: extras `[analysis]` gồm scikit-learn, lightgbm, scikit-uplift, matplotlib; DR-learner tự viết, không dùng causalml (T-13).
 
 ### Sprint 6: Báo cáo và seminar (ngày 14–15)
 - Tình: simulator và kiểm định (A1–A5, CAL, dữ liệu), đánh giá chính sách, Qini vs N(π), interference.
 - Hoàng: ước lượng, θ̂ vs θ\*, confounding.
 - Cả hai: bảng ba nguồn sai số, slides 30 phút, review chéo, dọn code.
 
-### Nếu còn thời gian: P7 NYC (chờ mentor, Q14)
+### Nếu còn thời gian: P7 NYC (làm sau P8, T-14)
 - Tình: 5 file theo spec §10 + script kiểm tra hợp đồng.
 - Hoàng: nạp dữ liệu NYC, luật T gần/xa, vùng đệm, lấy mẫu 5–10%, A5 trên NYC.
 
@@ -188,15 +188,15 @@ Người nhận **kiểm tra trước khi dùng**. Khi giao xong, người giao 
 
 ## 6. Câu hỏi cần chốt, theo hạn
 
-Chi tiết từng câu trong `docs/decisions.md`, mục "Câu hỏi mở".
+Q1–Q16 đã chốt ngày 30/09 (`docs/decisions.md`, T-01…T-18). Bảng dưới ghi ai bị ảnh hưởng và mentor cần xác nhận trước khi nào.
 
-| Hạn | Câu hỏi |
-|---|---|
-| Trước S1 | Q1 (mentor, gấp); đội tự chốt Q4, Q5, Q6, Q7, Q9, Q11, Q15 |
-| Trước S2 | Q2 (khởi động lạnh, ảnh hưởng Hoàng), Q8 (thiết lập `throughput_curve`), Q10 (slack) |
-| Trước S3 | Q3 (ngày ngân sách, ảnh hưởng Tình), Q12 |
-| Trước S4 | D3–D5, mức B, `explore_frac` (`plan.md`), Q13 (thư viện phân tích), Q16 |
-| Bất kỳ lúc nào | Q14 (NYC) |
+| Hạn | Quyết định | Ảnh hưởng |
+|---|---|---|
+| Trước S1 | T-06, T-07 (session_id, `u_score`), T-11 (cột ẩn), T-15 (bộ đếm) | hợp đồng S0, `demand.py`, `monitor.py` |
+| Trước S2 | T-02 (ca tuần hoàn), T-08 (`throughput_curve`), T-09/T-10 (utilization, slack) | `supply.py`, `runner.py`, `monitor.py` |
+| Trước S3 | T-03 (kỳ ngân sách), T-12 (A2(b)) | `budget.py`, `pricing.py`, `test_acceptance` |
+| Trước S4 (mentor xác nhận) | T-17 (D3–D5, B, `explore_frac`), T-13 (thư viện), T-16 (`rider_ab`) | P6, P8, tuần 5 |
+| Bất kỳ lúc nào | T-14 (NYC làm sau P8) | P7 |
 
 ---
 

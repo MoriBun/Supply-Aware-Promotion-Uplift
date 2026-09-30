@@ -25,10 +25,21 @@ def test_default_yaml_loads(default_yaml):
     assert cfg.supply.shift_start_mixture[0] == (6.0, 8.5, 0.30)
 
 
+def test_new_keys_load(default_yaml):
+    # Keys added by decisions T-18.
+    cfg = load_config(default_yaml)
+    assert cfg.time.window_min is None
+    assert cfg.supply.shift_mode == "schedule"
+    assert len(cfg.throughput.demand_scale_grid) == 16
+    assert cfg.throughput.reference_hour == 18
+    assert cfg.runner.n_procs is None
+
+
 def test_tiny_overlay(tiny_cfg, default_yaml):
     default = load_config(default_yaml)
     assert tiny_cfg.space.grid_radius == 1
     assert tiny_cfg.supply.fleet_size == 10
+    assert tiny_cfg.time.window_min == 120
     # Keys the overlay does not mention keep their default values.
     assert tiny_cfg.space.edge_km == default.space.edge_km
     assert tiny_cfg.supply.shift_len_mean_h == default.supply.shift_len_mean_h
@@ -79,6 +90,9 @@ def test_duplicate_key_raises(tmp_path):
         ("policy.threshold.kappa=0.25", lambda c: c.policy.threshold.kappa, 0.25),
         ("policy.name=all_off", lambda c: c.policy.name, "all_off"),
         ("sweep.theta_grid=[0.0, 0.5]", lambda c: c.sweep.theta_grid, (0.0, 0.5)),
+        ("time.window_min=120", lambda c: c.time.window_min, 120),
+        ("supply.shift_mode=always_on", lambda c: c.supply.shift_mode, "always_on"),
+        ("runner.n_procs=4", lambda c: c.runner.n_procs, 4),
     ],
 )
 def test_set_override_types(default_yaml, assignment, getter, expected):
@@ -116,6 +130,7 @@ def test_set_bad_key_raises(default_yaml, assignment):
         "policy.name=surge",              # not an allowed choice
         "experiment.cluster_level=3",     # not 1 / 7 / all
         "policy.threshold.kappa=manual",  # neither 'auto' nor a number
+        "supply.shift_mode=on",           # not schedule / always_on
         "matching.max_ring=[1]",          # list into Optional[int]
         "supply.shift_len_clip_h=[4.0]",  # wrong tuple length
     ],
@@ -137,6 +152,10 @@ def test_set_wrong_type_raises(default_yaml, assignment):
         "space.speed_factor_by_hour=[1.0, 1.0]",
         "budget.mode=fixed",                   # fixed_usd is null
         "calibration_targets.mean_gross_fare_usd=[21.0, 17.2]",
+        "time.window_min=100",                 # not a multiple of slot_min (15)
+        "time.window_min=0",
+        "throughput.reference_hour=24",
+        "runner.n_procs=0",
     ],
 )
 def test_out_of_range_raises(default_yaml, assignment):

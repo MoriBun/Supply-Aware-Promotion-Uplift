@@ -20,8 +20,9 @@ runs/<run_name>/
 
 - `observed/` và `market/` là dữ liệu mà mô hình uplift và chính sách **được phép** đọc.
 - `hidden/` là ground truth. **Chỉ** dùng để đánh giá và debug; tuyệt đối không nối (join) vào dữ liệu huấn luyện.
-- Test `test_no_hidden_leak` kiểm tra rằng không cột nào trong danh sách ẩn xuất hiện trong `observed/` hoặc `market/`. Danh sách ẩn gồm:
-  `u_latent, alpha, beta_price, beta_eta, delta_promo, max_wait_min, propensity_true, p_request_treat, p_request_control, direct_request_effect_fixed_market, e_cancel, u_book`.
+- Test `test_no_hidden_leak` kiểm tra rằng không cột nào trong danh sách ẩn xuất hiện trong `observed/` hoặc `market/`. **Danh sách này là chuẩn** (T-11); CLAUDE.md quy tắc 3 trỏ về đây. Danh sách ẩn gồm:
+  `u_latent, alpha, beta_price, beta_eta, delta_promo, max_wait_min, propensity_true, p_request_treat, p_request_control, direct_request_effect_fixed_market, u_book, u_target, u_explore, u_explore_arm, u_score, trip_noise, e_cancel`.
+- `score` là đầu ra của chính sách nên là cột quan sát, kể cả khi `score_fn = random` cho `score = u_score`. Test rò rỉ kiểm theo tên cột.
 - Mọi bảng có cột `run_id` (string) và `seed` (int32).
 
 Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `string`, `timestamp` không dùng. Thời gian lưu bằng **giây kể từ đầu lượt chạy** (`float64`).
@@ -78,9 +79,10 @@ Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `st
 | propensity | float32 | NaN nếu không biết (chính sách cũ nhắm rider) |
 | cell_propensity | float32 | NaN nếu không biết |
 | cluster_id | int16 | −1 nếu không phải thí nghiệm |
-| block | int32 | −1 nếu không phải thí nghiệm |
+| block | int32 | tính từ đầu lượt chạy (T-15); −1 nếu không phải thí nghiệm |
 | in_burnin | bool | |
 | budget_blocked | bool | muốn phát nhưng hết ngân sách |
+| budget_period | int16 | kỳ ngân sách của session (T-03); −1 = warm-up |
 | score | float32 | điểm tầng rider; NaN nếu không dùng |
 | slack_hat | float32 | ŝ dùng ra quyết định; NaN nếu không dùng |
 | requested | bool | kết quả M4 |
@@ -125,8 +127,8 @@ Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `st
 | slack | float64 | I/E; `inf` nếu E = 0 |
 | utilization | float32 | (E+O)/(I+E+O) |
 | mean_pickup_eta_min | float32 | NaN nếu không có ghép |
-| n_sessions, n_offers, n_requests, n_matched, n_completed, n_abandoned, n_cancelled | int32 | |
-| voucher_spent_usd | float32 | |
+| n_sessions, n_offers, n_requests, n_matched, n_completed, n_abandoned, n_cancelled | int32 | đếm theo thời điểm sự kiện và ô đón (T-15): `n_sessions/n_offers/n_requests` theo open_time; `n_matched` theo matched_time; `n_abandoned/n_cancelled` theo thời điểm hủy; `n_completed` theo dropoff_time |
+| voucher_spent_usd | float32 | voucher của order hoàn thành trong slot, theo ô đón |
 | promo_on | bool | trạng thái trong slot này |
 | cell_propensity | float32 | |
 | assign_mechanism_cell | string | |
@@ -152,8 +154,8 @@ Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `st
 | p_request_treat | float32 | P(đặt) nếu có voucher, cùng bối cảnh |
 | p_request_control | float32 | P(đặt) nếu không voucher |
 | direct_request_effect_fixed_market | float32 | treat − control. **Không phải uplift thật; không dùng để chấm mô hình** |
-| u_book | float32 | để tái lập |
-| e_cancel | float32 | để tái lập |
+| u_book, u_target, u_explore, u_explore_arm, u_score | float32 | số rút sẵn của session, để tái lập (T-11) |
+| trip_noise, e_cancel | float32 | để tái lập |
 
 ## results/policy_results (một dòng mỗi lượt chạy)
 
@@ -183,8 +185,11 @@ Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `st
 
 ## results/throughput_curve
 
-| Cột | Kiểu |
-|---|---|
-| demand_scale, fleet_size | float64 / int32 |
-| seed | int32 |
-| completed_per_h, requests_per_h, mean_pickup_eta_min, mean_slack, abandon_rate, cancel_rate | float64 |
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| demand_scale, fleet_size | float64 / int32 | |
+| seed | int32 | |
+| completed_per_h, requests_per_h | float64 | order tạo trong cửa sổ / giờ cửa sổ |
+| mean_pickup_eta_min | float64 | trên order được ghép, tạo trong cửa sổ |
+| mean_slack | float64 | tổng (xe rảnh × tick) / tổng (xe đi đón × tick) trên cửa sổ; `inf` nếu mẫu số 0 (T-15) |
+| abandon_rate, cancel_rate | float64 | `n_abandoned / n_requests`, `n_cancelled / n_requests` trên order tạo trong cửa sổ |

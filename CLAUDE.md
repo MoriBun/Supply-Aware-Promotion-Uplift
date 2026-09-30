@@ -38,8 +38,8 @@ Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_st
 1. **Không hard-code tham số.** Mọi hằng số lấy từ `config/default.yaml`. Cần tham số mới thì thêm vào YAML kèm chú thích nguồn và ghi `docs/decisions.md`.
 2. **Không nhìn trước.** Quyết định ở slot k chỉ dùng snapshot của các slot < k, qua `SnapshotView`.
 3. **Không rò biến ẩn.**
-   - Chính sách và dữ liệu `observed/`, `market/` không được chứa `u_latent`, alpha, beta, delta, max_wait, propensity_true, p_request_*, direct_request_effect_fixed_market.
-   - Riêng `LegacyPolicy` được dùng `u_latent` qua `LegacyHiddenView`.
+   - Chính sách và dữ liệu `observed/`, `market/` không được chứa cột nào trong **danh sách ẩn của `docs/schema.md`** (`u_latent`, alpha, beta_price, beta_eta, delta_promo, max_wait_min, propensity_true, p_request_*, direct_request_effect_fixed_market, và mọi số rút sẵn của session).
+   - Riêng `LegacyPolicy` được dùng `u_latent` qua `LegacyHiddenView`. Các số rút sẵn `u_target`, `u_explore`, `u_explore_arm`, `u_score` được đưa vào `SessionBatch` cho chính sách dùng; chính sách không tự rút số.
 4. **CRN.**
    - Mọi số ngẫu nhiên lấy qua `rng.rng_for(stream, *key)` với khóa ổn định (session_id, cell, tick, driver_id…).
    - Không dùng `np.random.*` toàn cục, không dùng `random`.
@@ -85,4 +85,4 @@ runs/           # output (không commit)
   - 1. Tình: S0; tiếp theo T1.1–T1.5.
   - 2. Hoàng: S0; tiếp theo H1.1–H1.4.
 - Mốc P0 đã xong trên `develop1`, chờ Hoàng review (gate P0).
-- Quyết định đang chờ mentor: D3, D4, D5 trong `spec.md` §1. Code phải để các lựa chọn này đổi được bằng config.
+- Câu hỏi Q1–Q16 đã chốt ngày 30/09 (`decisions.md` T-01…T-18). D3, D4, D5, mức B và `explore_frac` tạm chốt theo YAML; mentor có thể đổi bằng config, không sửa code.

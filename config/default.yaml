@@ -47,6 +47,8 @@ time:
   tick_s: 60                  # [report]
   slot_min: 15                # 15 tick / slot [report]
   days_per_run: 1             # số ngày đánh giá trong 1 lượt chạy
+  window_min: null            # độ dài cửa sổ đánh giá (phút); null = days_per_run*1440.
+                              # Nếu đặt: bội của slot_min, days_per_run bị bỏ qua [decisions T-05]
   warmup_min: 60              # bỏ khỏi đánh giá [report]
   cooldown_max_min: 120       # chạy tiếp sau cửa sổ đến khi hết đơn tạo trong cửa sổ,
                               # tối đa chừng này phút [report]
@@ -161,7 +163,9 @@ cancel:
 # ---------------------------------------------------------------------
 supply:
   fleet_size: 120                 # núm hiệu chỉnh chính [assume]
-  # ca làm: (giờ bắt đầu từ, đến, trọng số) — bắt đầu đều trong khoảng [assume]
+  shift_mode: schedule            # schedule | always_on (mọi xe online suốt lượt; chỉ cho
+                                  # throughput_curve) [decisions T-02, T-08]
+  # ca làm tuần hoàn theo ngày: (giờ bắt đầu từ, đến, trọng số) — bắt đầu đều trong khoảng [assume]
   shift_start_mixture:
     - [6.0, 8.5, 0.30]
     - [10.0, 14.0, 0.20]
@@ -208,6 +212,14 @@ generate:
   days: 28                        # số ngày dữ liệu cho mô hình [assume]
 gte:
   n_seeds: 10
+throughput:                       # mode throughput_curve, test A1 [decisions T-08]
+  demand_scale_grid: [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0,
+                      2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0]
+  n_seeds: 3
+  reference_hour: 18              # hour_profile và speed_factor_by_hour lấy hằng số tại giờ này
+                                  # (đỉnh cầu 1,85; tốc độ thấp nhất 0,75)
+runner:
+  n_procs: null                   # số tiến trình chạy song song theo seed; null = số lõi CPU
 
 # ---------------------------------------------------------------------
 # Mục tiêu hiệu chỉnh (được kiểm ở mốc P3, docs/tests.md T-CAL)

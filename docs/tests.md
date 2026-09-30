@@ -2,7 +2,7 @@
 
 Chạy toàn bộ kiểm thử: `pytest -q`. Kiểm thử chậm (đánh dấu `@pytest.mark.slow`): `pytest -q -m slow`.
 Mỗi mốc trong `docs/plan.md` chỉ được coi là xong khi các test của mốc đó **pass**.
-Test dùng cấu hình nhỏ `tests/fixtures/tiny.yaml` (bán kính 1, fleet 10, 2 giờ mô phỏng) trừ khi ghi khác.
+Test dùng cấu hình nhỏ `tests/fixtures/tiny.yaml` (lớp phủ lên `default.yaml`: bán kính 1, fleet 10, cửa sổ 2 giờ qua `time.window_min: 120`) trừ khi ghi khác.
 
 Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [report] (5 kiểm thử bắt buộc), **[CAL]** hiệu chỉnh.
 
@@ -15,7 +15,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [U] Torus: mọi ô có **đúng 6** ô kề phân biệt; quan hệ kề đối xứng.
 - [U] Khoảng cách torus đối xứng, bằng 0 trên đường chéo, thỏa bất đẳng thức tam giác, tối đa bằng R.
 - [U] `T[a,b,h] > 0`, đối xứng theo a, b; `T[a,a,h] < T[a,b,h]` với mọi b ≠ a.
-- [U] `ETA_in(I)` giảm ngặt theo I, không nhỏ hơn `eta_floor_min`, và với I = 1 nhỏ hơn T tới ô kề.
+- [U] `ETA_in(I)` không tăng theo I; giảm ngặt trong miền còn trên `eta_floor_min`; không nhỏ hơn `eta_floor_min`; và với I = 1 nhỏ hơn T tới ô kề (T-04).
 - [U] Tắt torus: ô biên có < 6 ô kề (kiểm chế độ không torus vẫn chạy được).
 
 ### M2 Demand (`tests/test_demand.py`)
@@ -26,9 +26,9 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 
 ### M3 Pricing / ngân sách (`tests/test_pricing.py`)
 - [U] `p_s = a_f + b_f*T`; `v_s = 0,2*p_s`; `net = p − v`.
-- [U] **Bất biến ngân sách:** trong mọi tick, `spent + committed + reserved ≤ B` (chạy 1 ngày, policy all_on, có ngân sách).
+- [U] **Bất biến ngân sách:** trong mọi tick và với mọi kỳ ngân sách, `spent + committed + reserved ≤ B` (chạy 1 ngày, policy all_on, có ngân sách).
 - [U] Rider không đặt thì reserved được nhả; order Abandoned hoặc Cancelled thì committed được nhả.
-- [U] Ngân sách reset lúc 00:00 mỗi ngày.
+- [U] Kỳ ngân sách neo theo cửa sổ (T-03): session mở ở kỳ d ghi vào sổ kỳ d, kể cả khi order kết thúc trong kỳ d+1 hoặc cool-down; warm-up có ngân sách `B*warmup_min/P` riêng.
 
 ### M4 Choice (`tests/test_choice.py`)
 - [U] P tính đúng công thức logit (so với cài đặt tham chiếu trên 1.000 bộ tham số ngẫu nhiên, sai số < 1e-9).
@@ -96,7 +96,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 ## 3. Nghiệm thu bắt buộc (5 kiểm thử của [report])
 
 ### A1. Đường throughput (quan trọng nhất) — `@slow`
-- **Cách chạy:** `mode throughput_curve`, policy all_off, fleet cố định (`fleet_size`), quét `demand_scale ∈ {0,25; 0,5; …; 4,0}` (16 mức), 3 seed, **một giờ cao điểm ổn định** (dùng `hour_profile` hằng số).
+- **Cách chạy:** `mode throughput_curve`, policy all_off, fleet cố định (`fleet_size`, `supply.shift_mode = always_on`), quét `throughput.demand_scale_grid` (16 mức 0,25…4,0), `throughput.n_seeds = 3`, **một giờ cao điểm ổn định** (`hour_profile` và `speed_factor_by_hour` hằng số tại `throughput.reference_hour`). `mean_slack` = tổng (xe rảnh × tick) / tổng (xe đi đón × tick) trên cửa sổ (T-08, T-15). Số liệu báo cáo chạy cửa sổ đủ 1 ngày; khi debug có thể rút ngắn bằng `time.window_min`.
 - **Đạt khi:**
   1. `completed_per_h` tăng rồi đạt đỉnh ở mức cầu nào đó.
   2. Tại mức cầu lớn nhất, `completed_per_h ≤ 0,95 × đỉnh`, tức **có đoạn giảm**.
@@ -106,7 +106,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 
 ### A2. Số ngẫu nhiên chung (CRN)
 - (a) Cùng chính sách, cùng seed chạy hai lần cho N, V **giống hệt** (so sánh bằng `==`).
-- (b) Với 20 seed, `Var(N(π1) − N(π2))` khi dùng CRN ≤ **0,5 ×** khi dùng seed độc lập, với π1 = all_on và π2 = threshold θ = 0,3 (có ngân sách).
+- (b) Với 20 seed, `Var(N(π1) − N(π2))` khi dùng CRN ≤ **0,5 ×** khi dùng seed độc lập, với π1 = all_on **có ngân sách** (phát đến khi hết B mỗi kỳ) và π2 = threshold θ = 0,3 có ngân sách; cả hai cùng B (T-12).
 - (c) Hai chính sách khác nhau cho cùng tập `session_id`, cùng `rider_id`, `do_cell`, `u_book` cho mỗi session.
 
 ### A3. Dao động của π_θ

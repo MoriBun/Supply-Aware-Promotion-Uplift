@@ -4,7 +4,8 @@ File này ghi lại: mọi lệch khỏi `docs/spec.md`, mọi tham số đượ
 
 Quy ước:
 - Mỗi mục ghi ngày, nội dung, lý do và người duyệt.
-- Khi một câu hỏi mở được trả lời, chuyển nó sang phần Nhật ký, ghi câu trả lời và người trả lời, rồi sửa spec, tests hoặc YAML tương ứng.
+- ID: `L..` là quyết định về khung dự án (P0); `T-..` do Tình chốt, `H-..` do Hoàng chốt. Thêm dòng ở cuối bảng.
+- Khi một câu hỏi mở được trả lời: thêm dòng vào Nhật ký, chuyển câu hỏi sang "Câu hỏi đã chốt" kèm quyết định, rồi sửa spec, tests, schema hoặc YAML tương ứng.
 
 ---
 
@@ -24,94 +25,88 @@ Quy ước:
 | 2026-09-30 | L10 | Đổi tên `docs/Supply-Aware Promotion Uplift.md` thành `docs/problem_statement.md`, file Survey thành `docs/survey.md`. | Tên có dấu cách, gạch dài và dấu cách trước `.md` gây lỗi khi gõ lệnh và tạo link. | chờ duyệt |
 | 2026-09-30 | L11 | `BudgetLedger` đặt trong file riêng `sim/budget.py` và được re-export từ `sim/state.py`; spec §3 xếp nó trong `state.py`. | `state.py` (Hoàng) và ledger (Tình) có chủ khác nhau; file riêng tránh hai người sửa chung một file. | chờ duyệt |
 | 2026-09-30 | L12 | Bước 5 có **một** lớp voucher trong `pricing.py`: gọi `cell_state` khi đổi slot, gọi `offer`, giữ ngân sách theo thứ tự `session_id`, điền trường thí nghiệm. Ngân sách áp ở một chỗ cho mọi chính sách, kể cả all_on có ngân sách. **Lệch spec §6**, vốn truyền ledger vào `offer`. | Một điểm nối duy nhất giữa lõi (Hoàng) và chính sách (Tình); ngân sách áp giống nhau cho mọi chính sách. | chờ duyệt |
-| 2026-09-30 | L13 | Hai người làm song song theo `docs/phan_cong.md`: mỗi file một chủ, hợp đồng giao diện chốt ở Sprint 0, gate P2/P3/P6 chặn tích hợp và sinh dữ liệu. `plan.md` và CLAUDE.md sửa theo. ID mới trong file này dùng tiền tố `H-`/`T-`. | Làm tuần tự từng mốc không kịp lịch 5 tuần. | chờ duyệt |
+| 2026-09-30 | L13 | Hai người làm song song theo `docs/phan_cong.md`: mỗi file một chủ, hợp đồng giao diện chốt ở Sprint 0, gate P2/P3/P6 chặn tích hợp và sinh dữ liệu. `plan.md` và CLAUDE.md sửa theo. | Làm tuần tự từng mốc không kịp lịch 5 tuần. | chờ duyệt |
+| 2026-09-30 | T-01 | **Simulator chính là ABM theo `docs/spec.md`.** `marketplace_sim.py` không tồn tại và không được cung cấp. Kết luận "simulator chính là `marketplace_sim.py`" trong `docs/BaoCao_MaNguon.pdf` coi như đã cũ. M9 repositioning giữ bật mặc định với quy tắc tĩnh (Q1). | Không có mã nào khác để dùng; report M9 bật repositioning tĩnh, còn "ngoài phạm vi" trong đề bài là repositioning **theo cầu**. | Tình |
+| 2026-09-30 | T-02 | **Ca làm tuần hoàn.** Tài xế online khi `((t/3600 − shift_start) mod 24) < shift_len`. Lúc t = 0, xe nào đang trong ca theo quy tắc này thì khởi tạo `idle` tại ô xuất phát, `shift_end = shift_start + shift_len − 24` (giờ ngày 0). Warm-up giữ 60 phút (Q2). | Không có ca nào bắt đầu trước 6:00, nên khởi động lạnh làm 00:00–06:00 ngày đầu không có xe. Quy tắc tuần hoàn cho trạng thái dừng ngay từ t = 0 và khớp "mỗi ngày dùng cùng lịch ca" (spec §4.8). | Tình |
+| 2026-09-30 | T-03 | **Kỳ ngân sách neo theo cửa sổ đánh giá**, dài `min(1440, window_min)` phút, kỳ d = `[window_start + d·P, window_start + (d+1)·P)`. Mỗi kỳ có sổ riêng; mỗi reservation thuộc kỳ của `open_time` session và giữ nguyên kỳ đó qua cool-down. Warm-up là kỳ −1 với ngân sách `B × warmup_min / P`, không tính vào đánh giá. Bất biến `spent + committed + reserved ≤ B` giữ theo từng kỳ. Pilot tính B: `fraction × chi tiêu trung bình mỗi kỳ` trong cửa sổ. κ auto: chi tiêu trung bình mỗi kỳ ≤ B (Q3). | Reset lúc 00:00 lệch cửa sổ 01:00–01:00: warm-up tiêu ngân sách ngày 0 và giờ cuối cửa sổ nhận thêm B mới. Neo theo cửa sổ làm chi tiêu của một cửa sổ 1 ngày đúng bằng ≤ B. Warm-up vẫn phát voucher để trạng thái đầu cửa sổ phản ánh chính sách. | Tình |
+| 2026-09-30 | T-04 | **Sửa test M1:** `ETA_in(I)` không tăng theo I; giảm ngặt trong miền còn trên sàn; không nhỏ hơn `eta_floor_min`; với I = 1 nhỏ hơn T tới ô kề (Q4). | Với tham số mặc định ETA chạm sàn từ I ≥ 5 (đêm) hoặc I ≥ 13 (cao điểm), nên "giảm ngặt" toàn miền không thể pass. Giữ sàn vì ETA 0 phút không thực tế. | Tình |
+| 2026-09-30 | T-05 | Thêm `time.window_min: null`. null = `days_per_run × 1440`; nếu đặt thì là độ dài cửa sổ đánh giá (phút), phải là bội của `slot_min`, và `days_per_run` bị bỏ qua. `tiny.yaml` đặt 120 (Q5). | tests.md yêu cầu fixture 2 giờ; cửa sổ ngắn còn dùng để chạy nhanh khi debug. | Tình |
+| 2026-09-30 | T-06 | `session_id = ((day·ticks_per_day + tick_of_day)·N + cell)·1000 + k` với `ticks_per_day = 86400 // tick_s` (Q6). | Hằng 1440 chỉ đúng khi `tick_s = 60`. Với cấu hình mặc định giá trị không đổi. | Tình |
+| 2026-09-30 | T-07 | **Rút sẵn `u_score`** ở cuối danh sách số ngẫu nhiên của mỗi session, sau `e_cancel`. `SessionBatch` mang `u_target`, `u_explore`, `u_explore_arm`, `u_score`; chính sách **không** được gọi `rng_for(SESSION, …)`. `scores.random` trả về `u_score` (Q7). | Nếu chỉ rút khi cần, thứ tự rút trong luồng SESSION phụ thuộc chính sách, phá CRN. | Tình |
+| 2026-09-30 | T-08 | **`throughput_curve`:** `supply.shift_mode = always_on` (mọi xe online suốt lượt, xuất phát tại ô gốc); `hour_profile` và `speed_factor_by_hour` lấy hằng số tại `throughput.reference_hour` (mặc định 18); quét `throughput.demand_scale_grid` (16 mức 0,25…4,0) × `throughput.n_seeds` (3). Đo trên toàn cửa sổ sau warm-up: `completed_per_h = N_completed / giờ cửa sổ` (Q8). | A1 cần "fleet cố định, trạng thái ổn định"; lịch ca làm số xe đổi theo giờ. Giờ 18 là đỉnh cầu (1,85) và tốc độ thấp nhất (0,75). | Tình |
+| 2026-09-30 | T-09 | `utilization = (E + O) / (I + E + O)`; xe `repositioning` và `offline` không tính (Q9). | Giữ công thức spec. Công thức report `(L − I)/L` gộp xe repositioning vào "bận", làm chỉ số phụ thuộc M9. | Tình |
+| 2026-09-30 | T-10 | `slack = I / E` (xe rảnh / xe đang đi đón), như spec và report. Câu chữ "(xe − đang chở) / đang đón" trong `BaoCao_MaNguon.pdf` Bảng 7 là lỗi diễn đạt, không dùng (Q10). | Ngưỡng WGC 0,25–0,45 của Castillo và `theta_grid` chỉ có nghĩa với I/E. D4 vẫn đổi được qua `policy.threshold.indicator`. | Tình |
+| 2026-09-30 | T-11 | **`schema.md` là danh sách cột ẩn chuẩn.** Mọi số rút sẵn của session (`u_book, u_target, u_explore, u_explore_arm, u_score, trip_noise, e_cancel`) đều là cột ẩn và được ghi vào `hidden/sessions_hidden` để tái lập. CLAUDE.md quy tắc 3 trỏ về schema (Q11). | Hai danh sách khác tên (`beta` vs `beta_price`) gây lọt lưới; ghi đủ số rút sẵn cho phép tái lập từng session. | Tình |
+| 2026-09-30 | T-12 | A2(b): π1 = `all_on` **có ngân sách** (FixedPolicy qua lớp voucher, phát đến khi hết B mỗi kỳ), π2 = threshold θ = 0,3 có ngân sách. Chỉ lượt GTE mới chạy all_on không ngân sách (Q12). | Hai chính sách phải cùng B thì phương sai hiệu mới có nghĩa. | Tình |
+| 2026-09-30 | T-13 | Code phân tích tuần 5 đặt trong `analysis/`; `sim/` không import từ đó. Thư viện khai báo ở extras `[analysis]`: scikit-learn, lightgbm, scikit-uplift, matplotlib. DR-learner tự viết theo Kennedy (2023) trên sklearn/LightGBM; Qini kiểm chéo bằng scikit-uplift; **không** dùng causalml. Đồ thị gate (throughput, N(π_θ)) cũng vẽ bằng script trong `analysis/` (Q13). | Đề bài: LightGBM/sklearn là đủ. causalml nặng và hay lỗi cài trên Windows; DR-learner chỉ vài chục dòng. | Tình |
+| 2026-09-30 | T-14 | **P7 (NYC) làm sau P8, nếu còn thời gian.** Khi làm: pipeline dữ liệu (ngoài `sim/`, được dùng `h3`) sinh thêm `nyc/neighbors.parquet` (`cell_id, neighbor_id`) và `nyc/clusters.parquet` (`cell_id, cluster_id`); `demand_rate` gộp theo giờ (trung bình các ngày trong tuần), simulator không có chiều `dow` (Q14). | Tiêu chí nghiệm thu (đề bài §8) không cần NYC; report chạy thí nghiệm chính trên bản tổng hợp. Hợp đồng §10 thiếu lân cận và cụm. | Tình |
+| 2026-09-30 | T-15 | **Định nghĩa bộ đếm và chỉ số:** (a) bộ đếm trong `slot_snapshots` tính theo **thời điểm sự kiện** và **ô đón**: `n_sessions, n_offers, n_requests` theo `open_time`; `n_matched`, `mean_pickup_eta_min` theo `matched_time`; `n_abandoned, n_cancelled` theo thời điểm hủy; `n_completed, voucher_spent_usd` theo `dropoff_time`. (b) `mean_slack` của `throughput_curve` = tổng (xe rảnh × tick) / tổng (xe đi đón × tick) trên cửa sổ, `inf` nếu mẫu số 0. (c) `abandon_rate = n_abandoned / n_requests`, `cancel_rate = n_cancelled / n_requests`, tính trên order tạo trong cửa sổ. (d) `block = floor(t / (block_min·60))` tính từ **đầu lượt chạy**; `−1` chỉ dành cho lượt không thí nghiệm (Q15). | Cần định nghĩa duy nhất trước khi viết `monitor.py` và `runner.py`. Tính từ đầu lượt tránh block âm trong warm-up trùng mã −1. Warm-up 60 = block 60 nên cửa sổ vẫn bắt đầu đúng biên block. | Tình |
+| 2026-09-30 | T-16 | P8 thêm bộ `generate` 28 ngày với `experiment.design = rider_ab` (Q16). | RQ3 và tiêu chí §8.4 cần độ chệch A/B theo rider so với GTE. | Tình |
+| 2026-09-30 | T-17 | **Tạm chốt các mục chờ mentor:** D3 (π_θ hai tầng), D4 (slack là chỉ số mặc định), D5 (`max_pickup_eta_min = 30`), `budget.fraction = 0,3`, `explore_frac = 0,05` giữ như YAML hiện tại. Mentor có thể đổi bằng config, không cần sửa code. | Không thể chờ đến P4 mới bắt đầu; mọi lựa chọn đều là tham số. | Tình (mentor xác nhận sau) |
+| 2026-09-30 | T-18 | Khóa YAML mới (kèm `config.py`): `time.window_min`, `supply.shift_mode`, `throughput.{demand_scale_grid, n_seeds, reference_hour}`, `runner.n_procs`. Chi tiết ở `default.yaml`. | Theo T-05, T-08 và runner nhiều tiến trình. Thêm ngay để Sprint 0 không phải sửa `config.py` (file chung) lần nữa. | Tình |
+
+---
+
+## Câu hỏi đã chốt (giữ lý do chi tiết)
+
+### Q1. Simulator chính là ABM theo spec hay `marketplace_sim.py`?
+- `docs/BaoCao_MaNguon.pdf` (29/09) kết luận: simulator chính là `marketplace_sim.py`; ABM 13 module chỉ là "bản rút gọn, tùy chọn". `docs/problem_statement.md` cũng dựa trên `marketplace_sim.py`.
+- CLAUDE.md, spec và plan (30/09) coi ABM là sản phẩm chính, và `marketplace_sim.py` không có trong repo.
+- **Quyết định (T-01):** ABM theo spec là simulator chính, vì `marketplace_sim.py` không tồn tại và không được cung cấp. M9 giữ bật với quy tắc tĩnh.
+
+### Q2. Đội xe khởi động lạnh lúc t = 0
+- t = 0 là 00:00. Ca sớm nhất bắt đầu lúc 6:00, nên từ 00:00 đến 6:00 ngày đầu không có xe nào online. Ở trạng thái dừng, Monte Carlo trên `shift_start_mixture` cho tỷ lệ đội xe online: 00:00 ≈ 40%, 03:00 ≈ 18%, 05:00 ≈ 8%.
+- **Quyết định (T-02):** ca làm tuần hoàn theo ngày; lúc t = 0 xe nào đang trong ca thì `idle` tại ô xuất phát. Không có ca nào chồng lên ca kế tiếp của cùng tài xế vì `shift_len ≤ 11 < 24`.
+
+### Q3. Cửa sổ đánh giá lệch ngày lịch, ảnh hưởng ngân sách "theo ngày"
+- Cửa sổ là [01:00 ngày 0, 01:00 ngày 1), nhưng spec reset ngân sách lúc 00:00: warm-up tiêu ngân sách ngày 0, và giờ cuối cửa sổ nhận thêm một B mới.
+- **Quyết định (T-03):** kỳ ngân sách neo theo cửa sổ; mỗi reservation thuộc kỳ của session; warm-up có ngân sách pro-rata riêng. Cách này cũng cho cửa sổ ngắn hơn 1 ngày (T-05) một kỳ duy nhất.
+
+### Q4. Test M1 "`ETA_in(I)` giảm ngặt theo I" mâu thuẫn với sàn `eta_floor_min`
+- **Quyết định (T-04):** sửa `tests.md`: không tăng theo I, giảm ngặt khi còn trên sàn.
+
+### Q5. `tiny.yaml` cần "2 giờ mô phỏng" nhưng chưa có khóa để biểu diễn
+- **Quyết định (T-05):** thêm `time.window_min`. Cửa sổ < 1 ngày thì `slack_lag_day` luôn NaN và kỳ ngân sách bằng cả cửa sổ.
+
+### Q6. Hằng 1440 trong công thức `session_id`
+- **Quyết định (T-06):** dùng `ticks_per_day`. Với N = 37, 28 ngày, ID lớn nhất ≈ 1,5·10⁹, còn rất xa giới hạn int64.
+
+### Q7. Số ngẫu nhiên cho `score_fn = random`
+- **Quyết định (T-07):** luôn rút sẵn `u_score`. Danh sách rút sẵn cố định: `rider, dest, u_book, u_target, u_explore, u_explore_arm, trip_noise, e_cancel, u_score`. Đây là một phần của hợp đồng CRN: đổi thứ tự sẽ đổi mọi số ngẫu nhiên.
+
+### Q8. A1: đội xe trong `throughput_curve`
+- Report đo "giữ cầu, giảm xe"; tests.md A1 giữ xe, quét cầu. Cả hai hợp lệ; spec thắng.
+- **Quyết định (T-08):** mọi xe online suốt lượt; hằng số theo `reference_hour`; đo trên toàn cửa sổ sau warm-up. Test có thể rút ngắn cửa sổ bằng `window_min` để chạy nhanh, nhưng số liệu A1 báo cáo phải chạy cửa sổ đủ 1 ngày.
+
+### Q9. Định nghĩa utilization
+- **Quyết định (T-09):** giữ công thức spec; xe repositioning không tính.
+
+### Q10. Định nghĩa slack không thống nhất giữa các tài liệu
+- **Quyết định (T-10):** `slack = I/E`. Báo cáo mã nguồn là PDF, không sửa được; ghi nhận ở đây.
+
+### Q11. Danh sách cột ẩn: CLAUDE.md và schema.md khác nhau
+- **Quyết định (T-11):** schema.md là chuẩn; mọi số rút sẵn của session là cột ẩn. `score` (đầu ra của chính sách) vẫn là cột quan sát, kể cả khi `score_fn = random` cho `score = u_score`: test rò rỉ kiểm theo tên cột, không theo giá trị.
+
+### Q12. A2(b): `all_on` có áp ngân sách không?
+- **Quyết định (T-12):** có. Chỉ lượt GTE mới không ngân sách (D10).
+
+### Q13. Thư viện và chỗ đặt code phân tích tuần 5
+- **Quyết định (T-13):** `analysis/` + extras `[analysis]`; không dùng causalml. Dữ liệu `hidden/` chỉ dùng để đánh giá, không nối vào dữ liệu huấn luyện.
+
+### Q14. Bản NYC (P7) thiếu dữ liệu và công cụ
+- **Quyết định (T-14):** làm sau P8 nếu còn thời gian; bổ sung hợp đồng khi làm.
+
+### Q15. Định nghĩa bộ đếm theo slot và chỉ số tổng hợp
+- **Quyết định (T-15):** xem dòng T-15. Bộ đếm theo thời điểm sự kiện vì `slot_snapshots` mô tả trạng thái thị trường theo thời gian thực; hiệu ứng theo slot đặt xe thì tính lại từ `sessions` và `orders`.
+
+### Q16. P8 thiếu bộ dữ liệu `rider_ab`
+- **Quyết định (T-16):** thêm.
 
 ---
 
 ## Câu hỏi mở
 
-Xếp theo mốc bị chặn. Không câu nào chặn P0. Hạn chốt theo sprint và người chịu ảnh hưởng: xem `docs/phan_cong.md` mục 6.
-
-### Q1. Simulator chính là ABM theo spec hay `marketplace_sim.py`? (ảnh hưởng toàn bộ kế hoạch)
-- `docs/BaoCao_MaNguon.pdf` (29/09) kết luận: simulator chính là `marketplace_sim.py`; ABM 13 module chỉ là "bản rút gọn, tùy chọn, để kiểm tra ngoài". `docs/problem_statement.md` cũng dựa trên `marketplace_sim.py` (`--selfcheck`, các cột `util_lag`, `realized_*`).
-- Trong khi đó CLAUDE.md, spec và plan (30/09) coi ABM là sản phẩm chính, và `marketplace_sim.py` không có trong repo.
-- Liên quan: đề bài xếp repositioning vào "ngoài phạm vi", nhưng `reposition.enabled: true` là mặc định (quy tắc tĩnh).
-- **Đề xuất:** xác nhận ABM là hướng hiện tại và ghi chú trong báo cáo mã nguồn rằng kết luận đó đã cũ. Nếu còn dùng `marketplace_sim.py` để đối chiếu thì đưa nó vào repo. Mentor xác nhận việc bật M9 mặc định.
-
-### Q2. Đội xe khởi động lạnh lúc t = 0 (chặn P2)
-- t = 0 là 00:00 (spec §2: `hour = (t % 86400) // 3600`). Ca sớm nhất bắt đầu lúc 6:00, nên **từ 00:00 đến 6:00 ngày đầu không có xe nào online**.
-- Ở trạng thái dừng (mỗi ngày lặp cùng lịch ca), các ca bắt đầu 15–23 giờ kéo qua nửa đêm. Monte Carlo trên `shift_start_mixture` mặc định cho tỷ lệ đội xe online: 00:00 ≈ 40%, 01:00 ≈ 32%, 03:00 ≈ 18%, 05:00 ≈ 8%.
-- Hệ quả: warm-up 60 phút không đưa hệ về trạng thái dừng. Với `days_per_run = 1`, khoảng 01:00–06:00 (5/24 cửa sổ đánh giá) gần như không có cung.
-- **Đề xuất:** lúc t = 0, xe nào có ca "hôm trước" (theo lịch lặp) còn phủ t = 0 thì đặt `idle` tại ô xuất phát, `shift_end` theo lịch. Cách khác: dời t = 0 sang giờ khác, hoặc kéo dài warm-up.
-
-### Q3. Cửa sổ đánh giá lệch ngày lịch, ảnh hưởng ngân sách "theo ngày" (chặn P4)
-- Cửa sổ là [01:00 ngày 0, 01:00 ngày 1), nhưng ngân sách reset lúc 00:00 (t = 86400). Như vậy:
-  - (a) warm-up 00:00–01:00 tiêu ngân sách của ngày 0;
-  - (b) giờ cuối cửa sổ (00:00–01:00 ngày 1) nhận thêm một B mới, nên chi tiêu trong một cửa sổ 1 ngày có thể vượt B.
-- Cùng vấn đề với "chi tiêu voucher trung bình mỗi ngày" của pilot (để tính B) và với κ auto (chi tiêu ≤ B tính trên khoảng nào).
-- **Đề xuất:** ngày ngân sách d là [window_start + d·86400, window_start + (d+1)·86400). Trong warm-up thì chọn một trong hai: (i) không phát voucher; (ii) có ngân sách riêng, không tính vào B.
-
-### Q4. Test M1 "`ETA_in(I)` giảm ngặt theo I" mâu thuẫn với sàn `eta_floor_min` (chặn P1)
-- Với default, `ETA_in` chạm sàn 1 phút từ I ≥ 5 (giờ đêm, 22,5 km/h) và I ≥ 13 (cao điểm, 13,5 km/h), sau đó là hằng số. Test "giảm ngặt" không thể pass.
-- **Đề xuất sửa `docs/tests.md`:** "không tăng theo I; giảm ngặt khi còn trên sàn". Chưa tự sửa test, cần người duyệt.
-
-### Q5. `tiny.yaml` cần "2 giờ mô phỏng" nhưng chưa có khóa để biểu diễn (chặn test P1–P2)
-- Cửa sổ dài `days_per_run × 1440` phút, với `days_per_run` nguyên ≥ 1.
-- **Đề xuất:** thêm `time.window_min: null` (null nghĩa là `days_per_run × 1440`). Cần chốt luôn cách tính ngân sách ngày cho cửa sổ ngắn hơn 1 ngày (xem Q3).
-
-### Q6. Hằng 1440 trong công thức `session_id` (chặn P1)
-- `((day*1440 + tick_of_day)*N + cell)*1000 + k` chỉ đúng khi `tick_s = 60`. Nếu `tick_s < 60`, ID sẽ trùng nhau.
-- **Đề xuất:** thay 1440 bằng `ticks_per_day = 86400 // tick_s`. Với cấu hình mặc định kết quả không đổi.
-
-### Q7. Số ngẫu nhiên cho `score_fn = random` (chặn P1, vì danh sách số rút sẵn chốt ở P1)
-- Spec §6 nói score random là "Uniform từ luồng SESSION", nhưng §4.2 không liệt kê số này trong các số rút sẵn. Nếu chỉ rút khi chính sách là random, thứ tự rút trong luồng SESSION sẽ phụ thuộc chính sách, tức phá CRN.
-- **Đề xuất:** luôn rút sẵn `u_score` ở cuối danh sách §4.2, sau `e_cancel`.
-
-### Q8. A1: đội xe trong `throughput_curve` (chặn P2)
-- Spec §7 chỉ đặt `hour_profile` và `speed_factor_by_hour` thành hằng số. Số xe online vẫn đổi theo `shift_start_mixture`, nên không có "fleet cố định, trạng thái ổn định" như A1 yêu cầu. Spec cũng chưa nói đo `completed_per_h` trên khoảng thời gian nào.
-- Ghi chú: report đo đường throughput bằng cách "giữ nhu cầu cố định, giảm số xe", còn tests.md A1 giữ số xe và quét cầu. Cả hai đều hợp lệ; spec thắng.
-- **Đề xuất:** trong `throughput_curve`, mọi xe online suốt lượt chạy (bỏ lịch ca), và đo trên toàn cửa sổ sau warm-up.
-
-### Q9. Định nghĩa utilization (chặn P2)
-- Spec §4.11 dùng `(E + O) / (I + E + O)`; report M11 dùng `(L − I) / L`, với L là số xe online, gồm cả xe đang repositioning. Hai công thức khác nhau khi có xe repositioning, mà M9 bật mặc định.
-- **Đề xuất:** giữ công thức spec và ghi rõ xe repositioning không được tính.
-
-### Q10. Định nghĩa slack không thống nhất giữa các tài liệu (thuộc D4, chờ mentor)
-- Spec và report dùng `slack = I / E`. `BaoCao_MaNguon.pdf` Bảng 7 viết "(xe − đang chở) / đang đón", tức (I + E) / E = 1 + I/E.
-- Ngưỡng WGC 0,25–0,45 và `theta_grid` chỉ có nghĩa với I/E.
-- **Đề xuất:** đối chiếu lại Castillo et al. (2025) và sửa tài liệu bị sai.
-
-### Q11. Danh sách cột ẩn: CLAUDE.md và schema.md khác nhau (chặn P5)
-- CLAUDE.md quy tắc 3 dùng tên `alpha, beta, delta, max_wait`. `docs/schema.md` dùng `beta_price, beta_eta, delta_promo, max_wait_min` và có thêm `e_cancel, u_book`.
-- **Đề xuất:** `test_no_hidden_leak` lấy hợp của hai danh sách, và schema.md là nguồn chuẩn.
-
-### Q12. A2(b): `all_on` có áp ngân sách không? (chặn P6)
-- So sánh π1 = all_on với π2 = threshold θ = 0,3 (có ngân sách). Nếu all_on không áp ngân sách, hai chính sách không cùng B.
-
-### Q13. Thư viện và chỗ đặt code phân tích tuần 5 (chặn S4 trong `phan_cong.md`)
-- Phân tích cần scikit-learn và LightGBM; có thể thêm causalml hoặc scikit-uplift (theo `BaoCao_MaNguon.pdf` Bảng 8). CLAUDE.md cấm thêm thư viện nếu chưa hỏi, và quy tắc 9 cấm học mô hình uplift trong simulator.
-- **Đề xuất:**
-  - code phân tích đặt trong `analysis/`; `sim/` không import từ đó;
-  - thư viện khai báo ở extras riêng `[analysis]` trong `pyproject.toml`, không vào dependency của `sim`;
-  - dữ liệu `hidden/` chỉ dùng để đánh giá, không nối vào dữ liệu huấn luyện.
-
-### Q14. Bản NYC (P7) thiếu dữ liệu và công cụ; đề xuất làm sau P8
-- Hợp đồng spec §10 chưa có file lân cận/khoảng cách giữa ô H3, cũng chưa có cụm 7 ô cho M10 trên NYC.
-- Dựng các file đó cần thư viện `h3`, chưa được phép.
-- `demand.py` theo spec không có chiều thứ trong tuần, trong khi `demand_rate.parquet` có cột `dow`.
-- Tiêu chí nghiệm thu của đề bài (§8) không cần bản NYC; report ghi thí nghiệm chính chạy trên bản tổng hợp.
-- **Đề xuất:** làm P7 sau P8 nếu còn thời gian. Nếu vẫn làm, bổ sung hợp đồng (file lân cận, cụm, `dow`) và cho phép dùng `h3` trong công cụ dữ liệu, ngoài `sim/`.
-
-### Q15. Định nghĩa bộ đếm theo slot và chỉ số tổng hợp (chặn hợp đồng giao diện ở Sprint 0)
-- `n_completed`, `voucher_spent_usd` của `slot_snapshots` tính vào slot nào (slot đặt hay slot hoàn thành) và ô nào?
-- `mean_slack` của A1 tính thế nào khi slack = inf (E = 0)? Ví dụ: tỷ số của trung bình I/E trên cả cửa sổ, hay trung bình chỉ trên các giá trị hữu hạn.
-- Mẫu số của `abandon_rate`, `cancel_rate` trong `results/throughput_curve` là gì?
-- `block` tính từ đầu cửa sổ, nên warm-up có `block < 0`, trùng giá trị −1 mà schema dùng cho "không phải thí nghiệm".
-- **Đề xuất:** đội chốt ở Sprint 0 và ghi vào đây trước khi viết `monitor.py` và `runner.py`.
-
-### Q16. P8 thiếu bộ dữ liệu `rider_ab` (chặn S4)
-- RQ3 và tiêu chí đề bài §8.4 cần độ chệch của A/B theo rider so với GTE. P8 hiện chỉ sinh dữ liệu legacy và switchback.
-- **Đề xuất:** thêm `generate` 28 ngày với `experiment.design = rider_ab`; `plan.md` P8 đã ghi đề xuất này.
+Chưa có. Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
 
 ---
 

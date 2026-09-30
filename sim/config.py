@@ -60,6 +60,7 @@ class TimeConfig:
     tick_s: int
     slot_min: int
     days_per_run: int
+    window_min: Optional[int]
     warmup_min: int
     cooldown_max_min: int
 
@@ -167,6 +168,7 @@ class CancelConfig:
 @dataclass(frozen=True)
 class SupplyConfig:
     fleet_size: int
+    shift_mode: Literal["schedule", "always_on"]
     shift_start_mixture: tuple[tuple[float, float, float], ...]
     shift_len_mean_h: float
     shift_len_sd_h: float
@@ -214,6 +216,18 @@ class GteConfig:
 
 
 @dataclass(frozen=True)
+class ThroughputConfig:
+    demand_scale_grid: tuple[float, ...]
+    n_seeds: int
+    reference_hour: int
+
+
+@dataclass(frozen=True)
+class RunnerConfig:
+    n_procs: Optional[int]
+
+
+@dataclass(frozen=True)
 class CalibrationTargetsConfig:
     p_request_no_voucher: tuple[float, float]
     request_uplift_surplus: tuple[float, float]
@@ -247,6 +261,8 @@ class Config:
     sweep: SweepConfig
     generate: GenerateConfig
     gte: GteConfig
+    throughput: ThroughputConfig
+    runner: RunnerConfig
     calibration_targets: CalibrationTargetsConfig
     performance: PerformanceConfig
 
@@ -489,6 +505,10 @@ def _check_ranges(cfg: Config) -> None:
     if t.tick_s > 0:
         need((t.slot_min * 60) % t.tick_s == 0, "time.slot_min", "slot length must be a whole number of ticks")
     need(t.days_per_run >= 1, "time.days_per_run", f"must be >= 1, got {t.days_per_run}")
+    if t.window_min is not None:
+        # Evaluation window must be a whole number of slots (decisions T-05).
+        need(t.window_min > 0 and t.slot_min > 0 and t.window_min % t.slot_min == 0, "time.window_min",
+             f"must be a positive multiple of time.slot_min ({t.slot_min}) or null, got {t.window_min}")
     nonneg("time.warmup_min", t.warmup_min)
     nonneg("time.cooldown_max_min", t.cooldown_max_min)
 
@@ -581,6 +601,14 @@ def _check_ranges(cfg: Config) -> None:
     need(cfg.sweep.n_seeds >= 1, "sweep.n_seeds", f"must be >= 1, got {cfg.sweep.n_seeds}")
     need(cfg.generate.days >= 1, "generate.days", f"must be >= 1, got {cfg.generate.days}")
     need(cfg.gte.n_seeds >= 1, "gte.n_seeds", f"must be >= 1, got {cfg.gte.n_seeds}")
+
+    tp = cfg.throughput
+    need(len(tp.demand_scale_grid) >= 1, "throughput.demand_scale_grid", "must not be empty")
+    need(all(v > 0 for v in tp.demand_scale_grid), "throughput.demand_scale_grid", "values must be > 0")
+    need(tp.n_seeds >= 1, "throughput.n_seeds", f"must be >= 1, got {tp.n_seeds}")
+    need(0 <= tp.reference_hour <= 23, "throughput.reference_hour", f"must be in 0..23, got {tp.reference_hour}")
+    if cfg.runner.n_procs is not None:
+        need(cfg.runner.n_procs >= 1, "runner.n_procs", f"must be >= 1 or null, got {cfg.runner.n_procs}")
 
     for f in dataclasses.fields(CalibrationTargetsConfig):
         interval(f"calibration_targets.{f.name}", getattr(cfg.calibration_targets, f.name))

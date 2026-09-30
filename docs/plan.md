@@ -16,9 +16,9 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 
 | Việc | Ai | Chặn mốc nào |
 |---|---|---|
-| Mentor xác nhận D3 (π_θ hai tầng), D4 (slack), D5 (max_pickup_eta 30 phút) | Hoàng | P4 (code vẫn làm được nhờ config, nhưng cần chốt trước khi sinh dữ liệu) |
-| Mentor đồng ý mức ngân sách B (`fraction = 0,3`) và `explore_frac = 0,05` | Hoàng | P4 |
-| Thống nhất hợp đồng dữ liệu NYC (spec §10) | Tình | P7 |
+| Mentor xác nhận D3 (π_θ hai tầng), D4 (slack), D5 (max_pickup_eta 30 phút). Đội đã tạm chốt theo YAML (`decisions.md` T-17) | Hoàng | P8 (sinh dữ liệu); code không bị chặn vì đều là config |
+| Mentor đồng ý mức ngân sách B (`fraction = 0,3`) và `explore_frac = 0,05`. Đã tạm chốt (T-17) | Hoàng | P8 |
+| Thống nhất hợp đồng dữ liệu NYC (spec §10, T-14) | Tình | P7 (làm sau P8 nếu còn thời gian) |
 
 ---
 
@@ -91,7 +91,7 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 
 ## P7. Bản NYC (song song với Tình, 1–2 ngày)
 
-> Đề xuất hạ ưu tiên: làm sau P8 nếu còn thời gian (chờ mentor, Q14 trong `docs/decisions.md`).
+> Hạ ưu tiên: làm sau P8 nếu còn thời gian (`docs/decisions.md` T-14).
 
 - **Làm:** nạp dữ liệu theo spec §10, luật T gần/xa, vùng đệm, lấy mẫu 5–10%.
 - **Xong khi:** chạy 1 ngày NYC không lỗi; A5 vẫn đạt với mức lấy mẫu đã chọn; so sánh vài chỉ số (số chuyến theo giờ, thời gian chuyến) với dữ liệu thật.
@@ -101,7 +101,7 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 - **Làm:**
   - `generate` 28 ngày với chính sách cũ (dữ liệu quan sát có confounding).
   - `generate` 28 ngày với `cluster_switchback` ở cụm cấp 1, 7 và all.
-  - `generate` 28 ngày với `rider_ab` (cần để đo độ chệch A/B theo rider, RQ3; đề xuất thêm, Q16).
+  - `generate` 28 ngày với `rider_ab` (cần để đo độ chệch A/B theo rider, RQ3; T-16).
   - `gte` và `sweep_theta` với chính sách tham chiếu.
 - **Xong khi:** thư mục `runs/` có đủ dữ liệu; `docs/datasets.md` mô tả từng bộ (config_hash, số ngày, chính sách, dung lượng).
 
