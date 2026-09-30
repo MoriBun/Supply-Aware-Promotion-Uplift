@@ -1,0 +1,190 @@
+# Schema dữ liệu đầu ra
+
+Mọi bảng ghi dạng **Parquet** (pyarrow), mỗi lượt chạy một thư mục:
+
+```
+runs/<run_name>/
+  meta/run_metadata.parquet
+  observed/riders.parquet
+  observed/sessions.parquet
+  observed/orders.parquet
+  market/slot_snapshots.parquet
+  hidden/riders_hidden.parquet
+  hidden/sessions_hidden.parquet
+  results/policy_results.parquet
+  results/theta_sweep.parquet        (chỉ mode sweep_theta)
+  results/throughput_curve.parquet   (chỉ mode throughput_curve)
+```
+
+## Quy tắc tách dữ liệu (bắt buộc)
+
+- `observed/` và `market/` là dữ liệu mà mô hình uplift và chính sách **được phép** đọc.
+- `hidden/` là ground truth. **Chỉ** dùng để đánh giá và debug; tuyệt đối không nối (join) vào dữ liệu huấn luyện.
+- Test `test_no_hidden_leak` kiểm tra rằng không cột nào trong danh sách ẩn xuất hiện trong `observed/` hoặc `market/`. Danh sách ẩn gồm:
+  `u_latent, alpha, beta_price, beta_eta, delta_promo, max_wait_min, propensity_true, p_request_treat, p_request_control, direct_request_effect_fixed_market, e_cancel, u_book`.
+- Mọi bảng có cột `run_id` (string) và `seed` (int32).
+
+Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `string`, `timestamp` không dùng. Thời gian lưu bằng **giây kể từ đầu lượt chạy** (`float64`).
+
+---
+
+## meta/run_metadata
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| run_id | string | `<mode>-<config_hash>-<policy>-<theta>-<seed>` |
+| mode | string | generate / evaluate / sweep_theta / gte / … |
+| config_hash | string | 12 ký tự |
+| config_yaml | string | toàn văn config đã áp override |
+| git_sha | string | commit của code |
+| policy | string | |
+| theta | float64 | NaN nếu không áp dụng |
+| seed | int32 | |
+| world_seed | int64 | |
+| budget_B_usd | float64 | NaN nếu không áp ngân sách |
+| kappa | float64 | NaN nếu không áp dụng |
+| window_start_s, window_end_s | float64 | cửa sổ đánh giá |
+| sim_end_s | float64 | thời điểm dừng (gồm cool-down) |
+| n_truncated_orders | int32 | order bị cắt khi hết cool-down |
+| runtime_s | float64 | thời gian chạy thực |
+| created_at | string | ISO 8601 |
+
+## observed/riders
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| rider_id | int32 | |
+| home_cell | int16 | |
+| x_freq | float32 | |
+| x_tenure | float32 | tháng |
+| x_segment | int8 | 0/1/2 |
+
+## observed/sessions (một dòng mỗi session)
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| session_id | int64 | ID ổn định (spec §2) |
+| rider_id | int32 | |
+| open_time_s | float64 | |
+| day, hour, slot, slot_of_day | int16 | |
+| pu_cell, do_cell | int16 | |
+| quoted_fare_usd | float32 | giá gốc p_s |
+| voucher_value_usd | float32 | 0 nếu không phát |
+| quoted_eta_min | float32 | |
+| no_supply | bool | không có xe trong giới hạn khi báo giá |
+| promo_on_cell | bool | trạng thái khuyến mãi của ô trong slot |
+| arm | int8 | 1 = được phát voucher |
+| assign_mechanism | string | legacy_rule / legacy_eps / explore / experiment / threshold / fixed |
+| propensity | float32 | NaN nếu không biết (chính sách cũ nhắm rider) |
+| cell_propensity | float32 | NaN nếu không biết |
+| cluster_id | int16 | −1 nếu không phải thí nghiệm |
+| block | int32 | −1 nếu không phải thí nghiệm |
+| in_burnin | bool | |
+| budget_blocked | bool | muốn phát nhưng hết ngân sách |
+| score | float32 | điểm tầng rider; NaN nếu không dùng |
+| slack_hat | float32 | ŝ dùng ra quyết định; NaN nếu không dùng |
+| requested | bool | kết quả M4 |
+| in_window | bool | open_time trong cửa sổ đánh giá |
+
+## observed/orders (một dòng mỗi order, `order_id = session_id`)
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| order_id | int64 | |
+| session_id | int64 | |
+| rider_id | int32 | |
+| driver_id | int32 | −1 nếu chưa ghép |
+| pu_cell, do_cell | int16 | |
+| driver_origin_cell | int16 | −1 nếu chưa ghép |
+| request_time_s | float64 | |
+| matched_time_s | float64 | NaN nếu chưa ghép |
+| pickup_eta_min | float32 | ETA lúc ghép |
+| pickup_time_s | float64 | NaN nếu không đón |
+| dropoff_time_s | float64 | NaN nếu không hoàn thành |
+| trip_time_min | float32 | |
+| trip_km | float32 | quãng đường theo detour |
+| gross_fare_usd | float32 | |
+| voucher_value_usd | float32 | |
+| net_fare_usd | float32 | gross − voucher |
+| driver_pay_usd | float32 | (1 − commission) × gross |
+| platform_profit_usd | float32 | net − driver_pay; 0 nếu không hoàn thành |
+| status | string | Completed / Abandoned / Cancelled / Truncated |
+| cancel_reason | string | "" / rider_en_route |
+| in_window | bool | request_time trong cửa sổ đánh giá |
+
+## market/slot_snapshots (một dòng mỗi (ô, slot))
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| cell | int16 | |
+| slot, day, slot_of_day, hour | int32/int16 | |
+| idle_avg (I) | float32 | trung bình theo tick |
+| enroute_avg (E) | float32 | xe đang đi đón khách ở ô này |
+| ontrip_avg (O) | float32 | |
+| waiting_avg (W) | float32 | |
+| slack | float64 | I/E; `inf` nếu E = 0 |
+| utilization | float32 | (E+O)/(I+E+O) |
+| mean_pickup_eta_min | float32 | NaN nếu không có ghép |
+| n_sessions, n_offers, n_requests, n_matched, n_completed, n_abandoned, n_cancelled | int32 | |
+| voucher_spent_usd | float32 | |
+| promo_on | bool | trạng thái trong slot này |
+| cell_propensity | float32 | |
+| assign_mechanism_cell | string | |
+| cluster_id, block | int16/int32 | |
+| in_burnin | bool | |
+| slack_lag_slot | float64 | slack của slot k−1 (đã công bố) |
+| slack_lag_day | float64 | slack của slot k−96; NaN nếu chưa có |
+| published_at_s | float64 | thời điểm công bố (= cuối slot) |
+
+## hidden/riders_hidden
+
+| Cột | Kiểu |
+|---|---|
+| rider_id | int32 |
+| u_latent, alpha, beta_price, beta_eta, delta_promo, max_wait_min | float32 |
+
+## hidden/sessions_hidden
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| session_id | int64 | |
+| propensity_true | float32 | xác suất phát thật của chính sách cũ |
+| p_request_treat | float32 | P(đặt) nếu có voucher, cùng bối cảnh |
+| p_request_control | float32 | P(đặt) nếu không voucher |
+| direct_request_effect_fixed_market | float32 | treat − control. **Không phải uplift thật; không dùng để chấm mô hình** |
+| u_book | float32 | để tái lập |
+| e_cancel | float32 | để tái lập |
+
+## results/policy_results (một dòng mỗi lượt chạy)
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| run_id, policy | string | |
+| theta | float64 | |
+| seed | int32 | |
+| N_completed | int64 | **N(π)**, đơn tạo trong cửa sổ |
+| V_profit_usd | float64 | **V(π)** |
+| voucher_spent_usd | float64 | |
+| budget_B_usd | float64 | |
+| n_sessions, n_requests, n_abandoned, n_cancelled | int64 | trong cửa sổ |
+| mean_pickup_eta_min | float64 | |
+| share_cells_off | float64 | tỷ lệ (ô, slot) bị tắt |
+| n_switches_per_cell_day | float64 | cho test T3 |
+| runtime_s | float64 | |
+
+## results/theta_sweep (tổng hợp từ policy_results)
+
+| Cột | Kiểu |
+|---|---|
+| theta | float64 |
+| N_mean, N_se, V_mean, V_se, spent_mean | float64 |
+| n_seeds | int32 |
+| is_argmax | bool |
+
+## results/throughput_curve
+
+| Cột | Kiểu |
+|---|---|
+| demand_scale, fleet_size | float64 / int32 |
+| seed | int32 |
+| completed_per_h, requests_per_h, mean_pickup_eta_min, mean_slack, abandon_rate, cancel_rate | float64 |
