@@ -19,15 +19,17 @@ Chỉ tiêu chính là **N(π) = số chuyến hoàn thành** dưới cùng ngâ
 4. `docs/schema.md`: định dạng dữ liệu đầu ra.
 5. `docs/tests.md`: kiểm thử và tiêu chí đạt.
 6. `docs/plan.md`: các mốc. **Chỉ làm mốc hiện tại.**
-7. `docs/decisions.md`: nhật ký quyết định và mọi lệch khỏi spec (tạo nếu chưa có).
+7. `docs/decisions.md`: nhật ký quyết định, mọi lệch khỏi spec và mục **Câu hỏi mở**.
+
+Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_statement.md` (đề bài gốc), `docs/survey.md` (khảo sát; bản export bị lỗi định dạng), `docs/BaoCao_*.pdf`.
 
 ## Stack và lệnh
 
 - Python 3.11, numpy, pandas, pyarrow, pyyaml, pytest. Không thêm thư viện khác nếu chưa hỏi. `numba` chỉ được dùng ở P3 nếu cần, và phải có fallback.
-- Cài đặt: `pip install -e ".[dev]"`
+- Cài đặt: `py -3.11 -m venv .venv`, kích hoạt, rồi `pip install -e ".[dev]"`.
 - Test nhanh: `pytest -q`
 - Test chậm (nghiệm thu): `pytest -q -m slow`
-- Chạy: `python -m sim run --mode <mode> --config config/default.yaml [--set a.b=c]`
+- Chạy: `python -m sim run --mode <mode> --config config/default.yaml [--config overlay.yaml] [--set a.b=c]`
 - Profile: thêm `--profile`
 
 ## Quy tắc cứng (không được vi phạm)

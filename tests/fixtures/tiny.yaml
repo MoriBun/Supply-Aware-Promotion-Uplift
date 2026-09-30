@@ -1,0 +1,12 @@
+# tests/fixtures/tiny.yaml: lớp ghi đè lên config/default.yaml cho test nhanh (docs/tests.md).
+# Chỉ ghi các khóa khác default.yaml. Cách nạp:
+#   load_config(["config/default.yaml", "tests/fixtures/tiny.yaml"])
+#   python -m sim run ... --config config/default.yaml --config tests/fixtures/tiny.yaml
+#
+# tests.md yêu cầu "2 giờ mô phỏng", nhưng chưa có khóa nào biểu diễn cửa sổ < 1 ngày.
+# Xem docs/decisions.md, Câu hỏi mở Q5.
+
+space:
+  grid_radius: 1                  # 7 ô
+supply:
+  fleet_size: 10

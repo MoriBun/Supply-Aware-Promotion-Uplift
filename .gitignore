@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Simulator output (docs/schema.md) - không commit
+runs/
+
+# Dữ liệu tải về (NYC, mốc P7) - không commit
+data/
+
+# Editor / OS / công cụ cá nhân
+.vscode/
+.idea/
+.claude/settings.local.json
+.DS_Store
+Thumbs.db
