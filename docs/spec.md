@@ -76,7 +76,8 @@ sim/
   rng.py           # luồng ngẫu nhiên có khóa (§5)
   space.py         # M1: lưới, torus, khoảng cách, T[a,b,h], ETA
   population.py    # sinh rider, trọng số ô, đội xe (theo world_seed)
-  state.py         # SoA: DriverState, OrderBuffer, SessionBuffer, BudgetLedger
+  state.py         # SoA: DriverState, OrderBuffer, SessionBuffer, bộ đếm, Clock, SimContext
+  budget.py        # BudgetLedger (re-export từ state.py, L11)
   demand.py        # M2
   pricing.py       # M3: giá + điều phối chế độ voucher
   policies/

@@ -37,6 +37,7 @@ Các mode: `generate`, `evaluate`, `sweep_theta`, `gte`, `calibrate_budget`, `th
 | `docs/plan.md` | các mốc P0–P8 |
 | `docs/phan_cong.md` | phân công theo sprint cho Tình và Hoàng: ai làm gì, sở hữu file, điểm bàn giao |
 | `docs/decisions.md` | nhật ký quyết định và **câu hỏi mở** |
+| `docs/log.md` | nhật ký công việc của từng người: task nào xong, làm gì, test gì, còn gì |
 | `docs/problem_statement.md`, `docs/survey.md` | đề bài gốc, khảo sát tài liệu (nền, không phải nguồn sự thật cho code) |
 
 ## Cấu trúc

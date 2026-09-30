@@ -27,6 +27,8 @@ runs/<run_name>/
 
 Kiểu dữ liệu viết theo Arrow: `int8/16/32/64`, `float32/64`, `bool`, `string`, `timestamp` không dùng. Thời gian lưu bằng **giây kể từ đầu lượt chạy** (`float64`).
 
+Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), cột `string` (`assign_mechanism`, `status`, `cancel_reason`) là mã `int8` và logger đổi sang chuỗi bằng `state.decode_codes` khi ghi (T-20); các số rút sẵn của session giữ `float64` trong bộ nhớ và ghi `float32`. `tests/test_schema_contract.py` đối chiếu tên cột với file này; `test_logger` (P5) kiểm kiểu trên đĩa.
+
 ---
 
 ## meta/run_metadata

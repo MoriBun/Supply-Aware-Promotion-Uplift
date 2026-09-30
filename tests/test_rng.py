@@ -88,6 +88,79 @@ def test_hash64_is_pinned():
     assert hash64(20260930, 1, 0) == 12381375145982931506
 
 
+# --- session ids (spec §2, decisions T-06) ----------------------------------------
+
+
+def test_ticks_per_day():
+    from sim.rng import ticks_per_day
+    assert ticks_per_day(60) == 1440 and ticks_per_day(30) == 2880
+    with pytest.raises(ValueError):
+        ticks_per_day(7)
+
+
+def test_session_id_formula_and_roundtrip():
+    from sim.rng import make_session_id, split_session_id
+    sid = make_session_id(2, 100, 5, 7, n_cells=37, ticks_per_day=1440)
+    assert sid == ((2 * 1440 + 100) * 37 + 5) * 1000 + 7     # spec §2 with ticks_per_day = 1440
+    assert split_session_id(sid, n_cells=37, ticks_per_day=1440) == (2, 100, 5, 7)
+    later = make_session_id(2, 101, 0, 0, n_cells=37, ticks_per_day=1440)
+    assert later > make_session_id(2, 100, 36, 999, n_cells=37, ticks_per_day=1440)   # time order is id order
+
+
+@pytest.mark.parametrize("args", [(0, 0, 0, 1000), (0, 0, 37, 0), (0, 1440, 0, 0), (-1, 0, 0, 0)])
+def test_session_id_range_checks(args):
+    from sim.rng import make_session_id
+    with pytest.raises(ValueError):
+        make_session_id(*args, n_cells=37, ticks_per_day=1440)
+
+
+def test_session_ids_for_tick():
+    from sim.rng import make_session_id, session_ids_for_tick
+    ids = session_ids_for_tick(1, 5, 3, 4, n_cells=7, ticks_per_day=1440)
+    assert ids.dtype == np.int64 and ids.tolist() == [
+        make_session_id(1, 5, 3, k, n_cells=7, ticks_per_day=1440) for k in range(4)
+    ]
+    assert session_ids_for_tick(1, 5, 3, 0, n_cells=7, ticks_per_day=1440).shape == (0,)
+    with pytest.raises(ValueError):
+        session_ids_for_tick(1, 5, 3, 1001, n_cells=7, ticks_per_day=1440)
+
+
+# --- pre-drawn numbers (spec §4.2, decisions T-07) ------------------------------------
+
+
+def test_session_draw_order_is_pinned():
+    from sim.rng import SESSION_DRAW_ORDER, SessionScalars
+    assert SESSION_DRAW_ORDER == ("rider", "dest", "u_book", "u_target", "u_explore", "u_explore_arm",
+                                  "trip_noise", "e_cancel", "u_score")
+    assert SessionScalars._fields == SESSION_DRAW_ORDER[2:]
+
+
+def test_draw_session_scalars():
+    from sim.rng import draw_session_scalars
+    rng = Rng(run_seed=0, world_seed=0)
+    a = draw_session_scalars(rng.rng_for(Stream.SESSION, 123), 0.15)
+    b = draw_session_scalars(rng.rng_for(Stream.SESSION, 123), 0.15)
+    assert a == b
+    for u in (a.u_book, a.u_target, a.u_explore, a.u_explore_arm, a.u_score):
+        assert 0.0 <= u < 1.0
+    assert a.trip_noise > 0 and a.e_cancel >= 0
+    assert len({a.u_book, a.u_target, a.u_explore, a.u_explore_arm, a.u_score}) == 5
+    assert draw_session_scalars(rng.rng_for(Stream.SESSION, 1), 0.0).trip_noise == 1.0
+
+
+# --- CELLSLOT kinds ----------------------------------------------------------------------
+
+
+def test_cellslot_kinds_and_cluster_codes():
+    from sim.rng import CellSlotKind, cluster_level_code
+    assert int(CellSlotKind.LEGACY_EPS) == 1 and int(CellSlotKind.SWITCHBACK) == 2
+    assert cluster_level_code(1) == 1 and cluster_level_code(7) == 7 and cluster_level_code("all") == 0
+    with pytest.raises(ValueError):
+        cluster_level_code(3)
+    rng = Rng(0, 0)
+    rng.rng_for(Stream.CELLSLOT, CellSlotKind.SWITCHBACK, cluster_level_code("all"), 0, 5)   # accepted
+
+
 # --- hard rule 4: no global numpy / stdlib randomness in sim/ ----------------
 
 _ALLOWED_NP_RANDOM = {"Generator"}          # type hints anywhere

@@ -24,6 +24,7 @@ Quy ước ký hiệu:
 **Git:**
 - `develop1` là nhánh tích hợp.
 - Mỗi task một nhánh `tinh/<task>` hoặc `hoang/<task>`, PR vào `develop1`, người kia review.
+- Mỗi PR kèm mục log của task trong `docs/log.md` (mục của người làm); mô tả PR chép từ đó. Quy tắc log ở `CLAUDE.md`.
 - Sau mỗi gate (P0, P2, P3, P6), gộp `develop1 → main`.
 
 **Gate:** P2 (đồ thị throughput), P3 (A1) và P6 (đường N(π_θ)) chặn **tích hợp và sinh dữ liệu**. Chúng không chặn việc viết module độc lập của mốc sau trên nhánh riêng.
@@ -58,7 +59,7 @@ Quy ước ký hiệu:
 - ~~Đội tự chốt Q4, Q5, Q6, Q7, Q9, Q11, Q15~~ **Đã chốt toàn bộ Q1–Q16 ngày 30/09** (`decisions.md` T-01…T-18). Hoàng đọc và phản đối trong S0 nếu không đồng ý điểm nào.
 - Hoàng gửi mentor bản tóm tắt T-01…T-18 để xác nhận, nhấn mạnh T-03 (kỳ ngân sách), T-12 (all_on có ngân sách) và T-14 (hạ ưu tiên NYC). T-01 và T-17 đã chốt, không cần mentor xác nhận.
 
-**PR "hợp đồng + khung chạy được"** (làm cặp, chỉ chữ ký, dataclass và stub):
+**PR "hợp đồng + khung chạy được"** (làm cặp, chỉ chữ ký, dataclass và stub). *Trạng thái 30/09: Tình đã cài đủ 8 mục (`decisions.md` T-19), 180 test pass; chờ Hoàng review (B0).*
 1. **`state.py`:**
    - enum trạng thái xe và order;
    - cột SessionBuffer/OrderBuffer theo `schema.md` (dtype, bước nào ghi);
@@ -72,15 +73,16 @@ Quy ước ký hiệu:
    - các trường: N, `cell_q/r`, D, T, diện tích ô, `w`, rider kèm `zf`, lịch ca, cửa sổ đánh giá, mặt nạ ô tính vào N(π);
    - hàm `quote_eta(...) -> (eta_min, no_supply)`.
 4. **`policies/base.py`:**
-   - cài thật các dataclass: Policy, `CellDecision` (+ `s_hat`, `cluster_id`, `block`, `in_burnin`), `OfferDecision` (+ `propensity_true`, `budget_blocked`), LegacyHiddenView (lấy `u_latent`, `zf` theo `rider_id`);
+   - cài thật các dataclass: Policy, `CellDecision` (+ `s_hat`, `cluster_id`, `block`, `in_burnin`), `OfferDecision` (+ `propensity_true`), LegacyHiddenView (lấy `u_latent`, `zf` theo `rider_id`). `budget_blocked`, `arm`, `voucher_cents`, `budget_period` là đầu ra của lớp voucher (`pricing.VoucherOutcome`), không thuộc `OfferDecision` (T-20);
    - `SessionBatch`: tên cột theo schema, thêm `rider_id` và `u_target`, `u_explore`, `u_explore_arm`, `u_score`. Chính sách không được tự gọi `rng_for(SESSION, …)`;
    - `SnapshotView`: trả NaN trước lần công bố đầu, báo lỗi khi đọc slot ≥ k.
 5. **`budget.py`:**
    - API theo `session_id`, tiền tính bằng cent nguyên;
    - sổ riêng cho từng kỳ ngân sách neo theo cửa sổ, warm-up là kỳ −1 (T-03); engine chỉ báo `open_time` của session, phần còn lại là việc của ledger.
-6. **`engine.run(cfg, world, policy, rng, log_level, profile) -> RunResult`:**
-   - RunResult đủ trường cho mọi mode: `mean_slack`, `promo_on` theo (ô, slot), chi tiêu theo ngày ngân sách, `(score, v, completed)` của mỗi session được phát (cho κ auto);
-   - N(π), V(π) chỉ tính ở engine.
+6. **`engine.run(cfg, world, policy, rng, *, log_level, profile, budget_usd, enforce_budget) -> RunResult`:**
+   - RunResult đủ trường cho mọi mode: `mean_slack`, `promo_on` theo (ô, slot), chi tiêu theo kỳ ngân sách, `(score, v, completed)` của mỗi session được phát (cho κ auto);
+   - N(π), V(π) chỉ tính ở engine;
+   - mỗi bước có chữ ký `step(ctx: SimContext, t)`; `engine.build_context(...)` dựng `SimContext` cho unit test của từng bước (`tests/fakes.py::make_context`, `with_forbidden`) (T-20).
 7. **Stub chạy được:** ledger nhánh `enforce=false`, `pricing.quote` nhánh all_off, monitor rỗng.
 8. **Config:**
    - ~~thêm khóa mới~~ đã thêm ngày 30/09 (T-18): `time.window_min`, `supply.shift_mode`, `throughput.*`, `runner.n_procs`. Về sau chỉ đổi giá trị YAML, không phải sửa `config.py`;
@@ -151,11 +153,11 @@ Code phân tích đặt trong `analysis/`, không trong `sim/`. Không bao giờ
 
 ## 4. Bàn giao (phụ thuộc bắt buộc)
 
-Người nhận **kiểm tra trước khi dùng**. Khi giao xong, người giao điền ngày vào cột "Xong".
+Người nhận **kiểm tra trước khi dùng**. Khi giao xong, người giao điền ngày vào cột "Xong" và ghi mục "giao B-x" vào `docs/log.md`; người nhận ghi "nhận B-x" sau khi kiểm tra.
 
 | ID | Từ → Đến | Bàn giao | Khi | Người nhận kiểm tra | Nếu trễ | Xong |
 |---|---|---|---|---|---|---|
-| B0 | cả hai | PR hợp đồng + khung | cuối S0 | `pytest -q`; engine stub chạy all_off; tên cột khớp `schema.md` | chưa vào S1 | ☐ |
+| B0 | cả hai | PR hợp đồng + khung | cuối S0 | `pytest -q`; engine stub chạy all_off (`tests/test_engine.py`); tên cột khớp `schema.md` (`tests/test_schema_contract.py`) | chưa vào S1 | PR 30/09, chờ review |
 | B1 | Hoàng → Tình | `space.py` | giữa S1 | `test_space` pass; cụm R = 3 ra [3,3,4,6,7,7,7] | Tình làm T2.3 trước T2.2 | ☐ |
 | B2 | Tình → Hoàng | `budget.py` đầy đủ | cuối S1 | test ledger pass; API đúng hợp đồng | Hoàng dùng `enforce=false` | ☐ |
 | B3 | Tình → Hoàng | `pricing.py` + `fixed` + `monitor.py` | giữa S2 | all_off cho N, V `==` stub; SnapshotView báo lỗi khi nhìn trước | Hoàng test bằng stub, dời tích hợp 1 | ☐ |

@@ -23,14 +23,14 @@ def write_yaml(tmp_path, data, name="cfg.yaml"):
 
 
 def test_default_yaml_loads(default_yaml):
+    # Structural checks only: values that P3 may calibrate (grid_radius, fleet, shifts...) are not asserted.
     cfg = load_config(default_yaml)
-    assert cfg.space.grid_radius == 3
     assert cfg.time.tick_s == 60
     assert cfg.policy.threshold.kappa == "auto"
     assert cfg.experiment.cluster_level == 7
     assert cfg.matching.max_ring is None
     assert len(cfg.demand.hour_profile) == 24
-    assert cfg.supply.shift_start_mixture[0] == (6.0, 8.5, 0.30)
+    assert len(cfg.supply.shift_start_mixture[0]) == 3
 
 
 def test_new_keys_load(default_yaml):
