@@ -16,8 +16,8 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 
 | Việc | Ai | Chặn mốc nào |
 |---|---|---|
-| Mentor xác nhận D3 (π_θ hai tầng), D4 (slack), D5 (max_pickup_eta 30 phút). Đội đã tạm chốt theo YAML (`decisions.md` T-17) | Hoàng | P8 (sinh dữ liệu); code không bị chặn vì đều là config |
-| Mentor đồng ý mức ngân sách B (`fraction = 0,3`) và `explore_frac = 0,05`. Đã tạm chốt (T-17) | Hoàng | P8 |
+| D3 (π_θ hai tầng), D4 (slack), D5 (max_pickup_eta 30 phút): **đã chốt** theo YAML (`decisions.md` T-17) | Tình, Hoàng | — |
+| Mức ngân sách B (`fraction = 0,3`) và `explore_frac = 0,05`: **đã chốt** (T-17) | Tình, Hoàng | — |
 | Thống nhất hợp đồng dữ liệu NYC (spec §10, T-14) | Tình | P7 (làm sau P8 nếu còn thời gian) |
 
 ---

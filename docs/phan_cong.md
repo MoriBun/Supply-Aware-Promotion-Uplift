@@ -56,7 +56,7 @@ Quy ước ký hiệu:
 **Việc chung:**
 - Hoàng review P0 trên `develop1`; gộp `develop1 → main` (gate P0); xóa nhánh trống `p0-skeleton`.
 - ~~Đội tự chốt Q4, Q5, Q6, Q7, Q9, Q11, Q15~~ **Đã chốt toàn bộ Q1–Q16 ngày 30/09** (`decisions.md` T-01…T-18). Hoàng đọc và phản đối trong S0 nếu không đồng ý điểm nào.
-- Hoàng gửi mentor bản tóm tắt T-01…T-18 để xác nhận, nhấn mạnh T-03 (kỳ ngân sách), T-12 (all_on có ngân sách), T-14 (hạ ưu tiên NYC) và T-17 (D3–D5, B, `explore_frac`).
+- Hoàng gửi mentor bản tóm tắt T-01…T-18 để xác nhận, nhấn mạnh T-03 (kỳ ngân sách), T-12 (all_on có ngân sách) và T-14 (hạ ưu tiên NYC). T-01 và T-17 đã chốt, không cần mentor xác nhận.
 
 **PR "hợp đồng + khung chạy được"** (làm cặp, chỉ chữ ký, dataclass và stub):
 1. **`state.py`:**
@@ -195,7 +195,7 @@ Q1–Q16 đã chốt ngày 30/09 (`docs/decisions.md`, T-01…T-18). Bảng dư�
 | Trước S1 | T-06, T-07 (session_id, `u_score`), T-11 (cột ẩn), T-15 (bộ đếm) | hợp đồng S0, `demand.py`, `monitor.py` |
 | Trước S2 | T-02 (ca tuần hoàn), T-08 (`throughput_curve`), T-09/T-10 (utilization, slack) | `supply.py`, `runner.py`, `monitor.py` |
 | Trước S3 | T-03 (kỳ ngân sách), T-12 (A2(b)) | `budget.py`, `pricing.py`, `test_acceptance` |
-| Trước S4 (mentor xác nhận) | T-17 (D3–D5, B, `explore_frac`), T-13 (thư viện), T-16 (`rider_ab`) | P6, P8, tuần 5 |
+| Trước S4 (mentor xác nhận) | T-13 (thư viện), T-16 (`rider_ab`) | P8, tuần 5 |
 | Bất kỳ lúc nào | T-14 (NYC làm sau P8) | P7 |
 
 ---

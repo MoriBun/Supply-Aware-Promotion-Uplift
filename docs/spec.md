@@ -37,9 +37,9 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
 |---|---|---|---|
 | D1 | Chỉ tiêu chính là N(π); V(π) là phụ; mọi chính sách chịu cùng ngân sách B | Accepted | Voucher 20% ≈ phần nền tảng giữ lại, nên V(π) luôn giảm [report §1] |
 | D2 | θ\* = argmax_θ N(π_θ), tìm bằng quét θ; không rẽ nhánh từng (ô, slot) | Accepted | [report §1, M13] |
-| D3 | π_θ hai tầng: cắt ô theo chỉ số căng cung, phát voucher cho rider theo điểm τ̂ trong ngân sách | Tạm chốt (T-17), mentor có thể đổi qua config | [report M3] |
-| D4 | Chỉ số căng cung mặc định là slack = I/E (xe rảnh / xe đang đi đón) | Tạm chốt (T-10, T-17); đổi qua `policy.threshold.indicator` | Castillo et al. 2025 |
-| D5 | `max_pickup_eta` = 30 phút; tìm xe theo vành mở rộng dần | Tạm chốt (T-17); đổi qua `matching.max_pickup_eta_min` | Giới hạn thấp làm mất WGC [report M5] |
+| D3 | π_θ hai tầng: cắt ô theo chỉ số căng cung, phát voucher cho rider theo điểm τ̂ trong ngân sách | Accepted (T-17); đổi được qua config | [report M3] |
+| D4 | Chỉ số căng cung mặc định là slack = I/E (xe rảnh / xe đang đi đón) | Accepted (T-10, T-17); đổi qua `policy.threshold.indicator` | Castillo et al. 2025 |
+| D5 | `max_pickup_eta` = 30 phút; tìm xe theo vành mở rộng dần | Accepted (T-17); đổi qua `matching.max_pickup_eta_min` | Giới hạn thấp làm mất WGC [report M5] |
 | D6 | Lưới mặc định bán kính 3 (37 ô), torus | Accepted | [report Bảng 2]. thời gian đón tối đa (qua 3 vành) ≈ 17 phút giờ thường, ≈ 23 phút giờ cao điểm; 19 ô chỉ ≈ 11–15 phút, có thể không đủ cho WGC |
 | D7 | Cung độc lập với chính sách: rời sớm theo thu nhập tắt; repositioning theo quy tắc tĩnh | Accepted | [report M8, M9] |
 | D8 | Code dạng struct-of-arrays (numpy); không tạo object Python cho mỗi xe/khách trong vòng lặp nóng | Accepted | Mục tiêu ≤ 30 giây / ngày mô phỏng |
@@ -469,6 +469,8 @@ python -m sim run --mode <mode> --config config/default.yaml [--set a.b=c ...] [
 - `--set policy.threshold.theta=0.4` ghi đè; giá trị parse theo YAML.
 - `config_hash = sha1(json.dumps(config, sort_keys=True))[:12]`, ghi vào mọi output.
 - Khóa thêm ngày 30/09 (T-18): `time.window_min`, `supply.shift_mode`, `throughput.demand_scale_grid`, `throughput.n_seeds`, `throughput.reference_hour`, `runner.n_procs`. Ý nghĩa ghi trong `default.yaml`.
+- Ràng buộc thời gian thêm (H-01, H-02): `warmup_min` là bội của `experiment.block_min`; `window_min` ≤ 1440 hoặc là bội của 1440.
+- Độ dài cửa sổ đánh giá và kỳ ngân sách lấy qua `config.eval_window_min(cfg)` và `config.budget_period_min(cfg)` (H-03); không module nào tự đọc `window_min` hay `days_per_run` để tính.
 
 ---
 
@@ -496,7 +498,7 @@ Chỉ cần đạt hợp đồng dữ liệu; phần lõi giữ nguyên. Nhóm d
 
 Các câu hỏi Q1–Q16 đã chốt ngày 30/09/2026, xem `docs/decisions.md` (T-01…T-18). Còn lại:
 
-1. D3, D4, D5, mức B (`fraction = 0.3`) và `explore_frac` tạm chốt theo YAML (T-17); mentor có thể đổi bằng config mà không sửa code.
+1. D3, D4, D5, mức B (`fraction = 0.3`) và `explore_frac` đã chốt theo YAML (T-17); vẫn đổi được bằng config mà không sửa code.
 2. Chính sách cũ **có** áp ngân sách B, để dữ liệu quan sát giống thực tế.
 3. Mọi giá trị gắn `[assume]` trong YAML sẽ được hiệu chỉnh ở mốc P3. Kết quả hiệu chỉnh ghi vào `docs/decisions.md`.
 4. Câu hỏi mới: ghi vào `docs/decisions.md` mục "Câu hỏi mở" và dừng lại hỏi người.

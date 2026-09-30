@@ -85,4 +85,4 @@ runs/           # output (không commit)
   - 1. Tình: S0; tiếp theo T1.1–T1.5.
   - 2. Hoàng: S0; tiếp theo H1.1–H1.4.
 - Mốc P0 đã xong trên `develop1`, chờ Hoàng review (gate P0).
-- Câu hỏi Q1–Q16 đã chốt ngày 30/09 (`decisions.md` T-01…T-18). D3, D4, D5, mức B và `explore_frac` tạm chốt theo YAML; mentor có thể đổi bằng config, không sửa code.
+- Câu hỏi Q1–Q16 đã chốt ngày 30/09 (`decisions.md` T-01…T-18). D3, D4, D5, mức B và `explore_frac` đã chốt theo YAML (T-17); vẫn đổi được bằng config, không sửa code.

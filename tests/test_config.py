@@ -5,7 +5,15 @@ import dataclasses
 import pytest
 import yaml
 
-from sim.config import ConfigError, config_hash, load_config, load_raw, to_dict
+from sim.config import (
+    ConfigError,
+    budget_period_min,
+    config_hash,
+    eval_window_min,
+    load_config,
+    load_raw,
+    to_dict,
+)
 
 
 def write_yaml(tmp_path, data, name="cfg.yaml"):
@@ -44,6 +52,30 @@ def test_tiny_overlay(tiny_cfg, default_yaml):
     assert tiny_cfg.space.edge_km == default.space.edge_km
     assert tiny_cfg.supply.shift_len_mean_h == default.supply.shift_len_mean_h
 
+
+
+# --- derived lengths (decisions H-03) -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "overrides, window, period",
+    [
+        ([], 1440, 1440),                              # days_per_run = 1
+        (["time.days_per_run=2"], 2880, 1440),
+        (["time.window_min=120"], 120, 120),          # tiny window: one budget period
+        (["time.window_min=2880"], 2880, 1440),       # whole days are allowed
+        (["time.window_min=120", "time.days_per_run=3"], 120, 120),  # days_per_run ignored
+    ],
+)
+def test_window_and_budget_period(default_yaml, overrides, window, period):
+    cfg = load_config(default_yaml, overrides)
+    assert eval_window_min(cfg) == window
+    assert budget_period_min(cfg) == period
+
+
+def test_tiny_window(tiny_cfg):
+    assert eval_window_min(tiny_cfg) == 120
+    assert budget_period_min(tiny_cfg) == 120
 
 # --- unknown / missing keys -------------------------------------------------
 
@@ -154,6 +186,8 @@ def test_set_wrong_type_raises(default_yaml, assignment):
         "calibration_targets.mean_gross_fare_usd=[21.0, 17.2]",
         "time.window_min=100",                 # not a multiple of slot_min (15)
         "time.window_min=0",
+        "time.window_min=1500",                # > 1 day but not whole days (H-02)
+        "time.warmup_min=45",                  # not a multiple of experiment.block_min (60) (H-01)
         "throughput.reference_hour=24",
         "runner.n_procs=0",
     ],
