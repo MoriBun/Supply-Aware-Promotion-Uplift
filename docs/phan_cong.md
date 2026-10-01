@@ -158,7 +158,7 @@ Người nhận **kiểm tra trước khi dùng**. Khi giao xong, người giao 
 | ID | Từ → Đến | Bàn giao | Khi | Người nhận kiểm tra | Nếu trễ | Xong |
 |---|---|---|---|---|---|---|
 | B0 | cả hai | PR hợp đồng + khung | cuối S0 | `pytest -q`; engine stub chạy all_off (`tests/test_engine.py`); tên cột khớp `schema.md` (`tests/test_schema_contract.py`) | chưa vào S1 | PR 30/09, chờ review |
-| B1 | Hoàng → Tình | `space.py` | giữa S1 | `test_space` pass; cụm R = 3 ra [3,3,4,6,7,7,7] | Tình làm T2.3 trước T2.2 | ☐ |
+| B1 | Hoàng → Tình | `space.py` | giữa S1 | `test_space` pass; cụm R = 3 ra [3,3,4,6,7,7,7] | Tình làm T2.3 trước T2.2 | PR 01/10, chờ review |
 | B2 | Tình → Hoàng | `budget.py` đầy đủ | cuối S1 | test ledger pass; API đúng hợp đồng | Hoàng dùng `enforce=false` | ☐ |
 | B3 | Tình → Hoàng | `pricing.py` + `fixed` + `monitor.py` | giữa S2 | all_off cho N, V `==` stub; SnapshotView báo lỗi khi nhìn trước | Hoàng test bằng stub, dời tích hợp 1 | ☐ |
 | B4 | Tình → Hoàng | mode `throughput_curve` | cuối S1 | chạy với engine giả, đúng cột `results/throughput_curve` | dời Gate P2 | ☐ |
