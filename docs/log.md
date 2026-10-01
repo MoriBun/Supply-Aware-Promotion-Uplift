@@ -56,7 +56,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S0, review PR hợp đồng của Tình (B0). Tiếp theo: H1.1 `space.py`.
+**Đang làm:** S1. H1.1 `space.py` xong, chờ Tình review (B1). Tiếp theo: H1.2 `population.py`, `demand.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -66,3 +66,19 @@ Mẫu:
 - Bàn giao: không
 - Còn lại / bước tiếp: review B0; H1.1 `space.py`
 - *(Mục này do Tình ghi hộ từ commit `726f662`; Hoàng sửa nếu thiếu.)*
+
+### 2026-10-01 · S0 · hợp đồng + khung chạy được · nhận B0
+- Nhánh/PR: commit `b586fa9` của Tình, vào thẳng `develop1` (không qua PR); kiểm tra sau khi đã gộp
+- Đã làm: chạy phần "Người nhận kiểm tra" của B0; đọc `rng.py` (thứ tự rút số, `session_id`), `engine.py` (vòng lặp, `RunResult`, `build_context`), chữ ký trong `state.py`, và stub 7 bước của Hoàng. Chưa đọc từng dòng `budget.py`, `pricing.py`, `policies/`
+- Test: `pytest -q` → 192 passed (py3.12); `tests/test_engine.py` và `tests/test_schema_contract.py` → 23 passed
+- Lệch spec / quyết định mới: không; đồng ý T-19, T-20
+- Bàn giao: nhận B0
+- Còn lại / bước tiếp: gộp `develop1 → main` (gate P0 kèm hợp đồng); H1.1
+
+### 2026-10-01 · H1.1 · space.py (M1) · xong
+- Nhánh/PR: `hoang/space → develop1`, review: Tình
+- Đã làm: `sim/space.py` (lưới hex, torus, `D`, bảng ô kề, `rings`, `T[a,b,h]`, `eta_in`, `find_pickup`, `quote_eta`; mảng chỉ đọc; giữ tên trường của hợp đồng B0); `tests/test_space.py` (+37)
+- Test: `pytest -q` → 229 passed (py3.12); test chậm: không chạy. `build_space` 0,7 ms; `quote_eta` 6–15 µs mỗi lần gọi
+- Lệch spec / quyết định mới: H-04 trong `decisions.md` (thêm trường vào `SpaceTime`, `find_pickup` dùng chung cho báo giá và M5)
+- Bàn giao: giao B1; người nhận kiểm tra: `tests/test_space.py` pass, trong đó `test_clusters_of_seven_have_spec_sizes` cho [3, 3, 4, 6, 7, 7, 7]
+- Còn lại / bước tiếp: H1.2 `population.py`, `demand.py`
