@@ -56,7 +56,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S1. H1.1 `space.py` xong, chờ Tình review (B1). Tiếp theo: H1.2 `population.py`, `demand.py`.
+**Đang làm:** S1. H1.2 `population.py`, `demand.py` xong, chờ Tình review. Tiếp theo: H1.3 `choice.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -82,3 +82,11 @@ Mẫu:
 - Lệch spec / quyết định mới: H-04 trong `decisions.md` (thêm trường vào `SpaceTime`, `find_pickup` dùng chung cho báo giá và M5)
 - Bàn giao: giao B1; người nhận kiểm tra: `tests/test_space.py` pass, trong đó `test_clusters_of_seven_have_spec_sizes` cho [3, 3, 4, 6, 7, 7, 7]
 - Còn lại / bước tiếp: H1.2 `population.py`, `demand.py`
+
+### 2026-10-01 · H1.2 · population.py, demand.py (M2) · xong
+- Nhánh/PR: `hoang/h1-2-demand → develop1`, review: Tình
+- Đã làm: `sim/population.py` (trọng số ô, rider kèm biến ẩn, lịch ca tài xế, bảng lấy mẫu rider và ô đích; mảng chỉ đọc); `sim/demand.py` (`spawn`: Poisson theo (ô, tick), chọn rider, chọn đích, rút sẵn số theo `SESSION_DRAW_ORDER`); `tests/test_demand.py` (+30); `tests/test_engine.py` chạy khung với `demand_scale = 0`
+- Test: `pytest -q` → 259 passed (py3.12); test chậm: không chạy. Đo 1 ngày mô phỏng, cấu hình mặc định, 30.397 session: `spawn` 1,56 giây (DEMAND 0,72; SESSION 0,54), `build_world` 20 ms
+- Lệch spec / quyết định mới: H-05 trong `decisions.md`. Giữ một bộ sinh số cho mỗi session, không dùng SESSION_BATCH
+- Bàn giao: không. Ghi chú cho Tình: `pricing.quote` (T2.1) chưa nhận session, nên engine chỉ chạy được với `demand_scale = 0` đến khi có B3
+- Còn lại / bước tiếp: H1.3 `choice.py`
