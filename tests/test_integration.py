@@ -1,10 +1,4 @@
-"""docs/tests.md §2, integration: the real tick loop (engine.run) with every step of spec §4.0.
-
-Step 5 (``pricing.VoucherLayer.quote``, task T2.1) is not delivered yet, so this
-module replaces it with ``quote_stand_in`` below. Remove the stand-in and the
-``patched_quote`` fixture at Integration 1 (docs/phan_cong.md, end of S2, handoff
-B3); the tests themselves stay as they are.
-"""
+"""docs/tests.md §2, integration: the real tick loop (engine.run) with every step of spec §4.0."""
 
 import numpy as np
 import pytest
@@ -13,7 +7,6 @@ from sim import reposition
 from sim.config import load_config
 from sim.engine import run
 from sim.policies.fixed import FixedPolicy
-from sim.pricing import VoucherLayer, base_fare_usd, voucher_cents
 from sim.rng import Rng
 from sim.state import Clock, DriverStatus, OrderStatus
 from tests.conftest import ROOT
@@ -24,33 +17,6 @@ TINY = [DEFAULT, ROOT / "tests" / "fixtures" / "tiny.yaml"]
 OFFLINE, IDLE, EN_ROUTE, ON_TRIP, REPOSITIONING = (int(s) for s in DriverStatus)
 WAITING, MATCHED, O_ON_TRIP, COMPLETED, ABANDONED, CANCELLED, TRUNCATED = (int(s) for s in OrderStatus)
 POLICIES = ("all_off", "all_on")      # the other policies join at T3.1 ("smoke_day with every policy")
-
-
-def quote_stand_in(self, ctx, t):
-    """Minimal step 5: base fare, quoted ETA by the M5 rule, and a voucher for every session under all_on."""
-    start, stop = ctx.tick_sessions
-    if stop <= start:
-        return
-    s, space, hour = ctx.sessions, ctx.world.space, ctx.clock.hour_of(t)
-    rows = slice(start, stop)
-    for i in range(start, stop):
-        s.quoted_eta_min[i], s.no_supply[i] = space.quote_eta(int(s.pu_cell[i]), hour, ctx.cells.idle)
-    fare = base_fare_usd(ctx.cfg, space.T[s.pu_cell[rows], s.do_cell[rows], hour])
-    s.quoted_fare_usd[rows] = fare
-    if self.policy.name == "all_on":
-        cents = voucher_cents(ctx.cfg, fare)
-        for i in range(start, stop):
-            if ctx.ledger.reserve(int(s.session_id[i]), float(s.open_time_s[i]), int(cents[i - start])):
-                s.voucher_cents[i] = cents[i - start]
-                s.voucher_value_usd[i] = cents[i - start] / 100.0
-                s.arm[i] = 1
-
-
-@pytest.fixture(scope="module", autouse=True)
-def patched_quote():
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(VoucherLayer, "quote", quote_stand_in)
-        yield
 
 
 def simulate(cfg, policy, **kw):
@@ -78,7 +44,7 @@ def test_smoke_day(day, policy):
     assert res.n_sessions > 20_000 and res.sessions.n >= res.n_sessions
     assert 0 < res.mean_pickup_eta_min <= cfg.matching.max_pickup_eta_min
     assert np.isfinite(res.mean_slack) and res.mean_slack > 0
-    assert res.runtime_s < cfg.performance.max_seconds_per_sim_day          # the stand-in is not the A5 measure
+    assert res.runtime_s < cfg.performance.max_seconds_per_sim_day          # a safety bound, not the A5 measure
     assert res.V_profit_usd != 0.0
     if policy == "all_on":
         assert res.voucher_spent_usd > 0 and res.promo_on.all() and res.offer_completed.sum() > 0

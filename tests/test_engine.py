@@ -48,8 +48,8 @@ def test_build_context_and_fakes(tiny_cfg):
 
 
 def _no_demand(cfg):
-    # The skeleton loop is tested without sessions: demand.spawn is real since H1.2, but
-    # pricing.quote cannot quote a session before T2.1. Integration 1 (end of S2) removes this.
+    # These tests check the loop itself (window, slots, snapshots, aggregates of an empty market),
+    # so they run without demand. Runs with real sessions are in tests/test_integration.py.
     return dataclasses.replace(cfg, demand=dataclasses.replace(cfg.demand, demand_scale=0.0))
 
 

@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S1 của Tình xong (T1.1–T1.4; T1.5 bỏ theo T-14), đã vào `develop1`; Hoàng kiểm B2, B4 khi pull. Tiếp theo: S2, T2.1 `pricing.py` đầy đủ (`quote`, B3).
+**Đang làm:** S2 của Tình xong về code + test (T2.1–T2.4), trên `develop1`, **chưa commit** (Tình tự commit) và chưa PR. Tiếp theo: commit theo task, PR `develop1 → develop` (H-07/H-08; B3 giao sớm nếu Hoàng cần), rồi chờ B5 để Tích hợp 1 + Gate P2; S3: T3.1, T3.2 `logger.py` đủ bảng.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -92,11 +92,51 @@ Mẫu:
 - Bàn giao: giao B4; người nhận kiểm tra: `pytest -q tests/test_runner.py tests/test_cli.py` pass; `python -m sim run --mode throughput_curve --config config/default.yaml --config tests/fixtures/tiny.yaml --set demand.base_sessions_per_cell_h=0 --set runner.n_procs=1 --out runs/thử` ghi `results/throughput_curve.parquet` đúng cột `schema.md`
 - Còn lại / bước tiếp: S2 — T2.1 `pricing.quote` (B3), rồi T2.2 `experiment.py`, T2.3 chính sách, T2.4 runner các mode còn lại (cần chốt Q17)
 
+### 2026-10-01 · S1 · nhận H1.3, H1.4 của Hoàng (PR #5 `develop2 → develop`) · nhận
+- Nhánh/PR: pull `develop` (`7636d01`) vào `develop1`
+- Đã làm: đọc `choice.py` (H-06: voucher trong logit lấy từ `voucher_cents`, `p_request_treat` dùng cùng cách làm tròn; `decide` cộng `waiting`, `n_requests`; session bị chặn quyết định như không voucher), `supply.py` (H-08), đổi quy trình nhánh H-07; chạy `test_choice.py` (18) và `test_supply.py` (12) trong bộ test chung
+- Test: `pytest -q` → 321 passed trước khi làm S2 (py3.11)
+- Lệch spec / quyết định mới: không; đồng ý H-06, H-07, H-08
+- Bàn giao: nhận (không có mã B); `pricing.quote` (T2.1) viết theo đúng cột mà `choice.decide` đọc (`quoted_fare_usd`, `quoted_eta_min`, `voucher_cents`)
+- Còn lại / bước tiếp: S2
+
+### 2026-10-01 · T2.1 · pricing.quote + lớp voucher đầy đủ · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit (Tình commit); vào PR S2 `develop1 → develop`
+- Đã làm: `sim/pricing.py`: `VoucherLayer.quote` — giá gốc từ `T[pu, do, h]`, ETA báo theo quy tắc M5 trên `cells.idle` thật (`quote_eta_by_cell`, một lần tìm xe cho mỗi ô có session), dựng `SessionBatch` chỉ cột quan sát + 4 uniform, gọi `decide` (chính sách → ngân sách theo `session_id`), ghi lại đủ cột bước "quote" của `schema.md` kể cả trường thí nghiệm (`cluster_id`, `block`, `in_burnin` theo `open_time`), cộng `n_offers` (T-15). `policies/fixed.py` giữ nguyên S0. `tests/test_pricing.py` +6: giá/ETA/cột với all_off, `quote_eta_by_cell` theo idle thật, all_on cấp voucher và đếm offer, chặn ngân sách theo thứ tự `session_id` trong tick, CRN all_on/all_off (A2(c) mức session), engine chạy cầu thật qua lớp voucher (B3: all_off cho N, V = 0 như stub, all_on đặt nhiều hơn, cùng seed cho cùng kết quả)
+- Test: `pytest -q tests/test_pricing.py` → 29 passed; toàn bộ xem T2.4
+- Lệch spec / quyết định mới: không (T-25c cho `in_burnin` theo session)
+- Bàn giao: giao B3 (`pricing.py` + `fixed` + `monitor.py`); người nhận kiểm tra: `pytest -q tests/test_pricing.py tests/test_monitor.py`; `test_engine_runs_with_real_demand_through_the_voucher_layer` pass; sau đó bỏ `demand_scale = 0` trong `test_engine.py` được
+- Còn lại / bước tiếp: Tích hợp 1 khi có B5
+
+### 2026-10-01 · T2.2 · experiment.py (M10) · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit; PR S2
+- Đã làm: `sim/experiment.py`: `cluster_ids` (cấp 1 / 7 / all; tâm `(q+5r) mod 7 = 0`, gán ô vào tâm gần nhất, hòa lấy id nhỏ), `block_of`, `in_burnin` (T-15, vector hóa), `cluster_on` (CELLSLOT `(SWITCHBACK, mã cấp, cụm, block)`), `rider_arm` (RIDER `(rider_id)`), `effective_level` (global = một cụm). `tests/test_experiment.py` (+7): cụm phủ kín không chồng, R = 3 ra [3, 3, 4, 6, 7, 7, 7], mỗi ô cách tâm ≤ 1; block/burn-in; tỷ lệ bật ≈ p_on ±3% trên 2.000 block, tất định theo seed, mã cấp nằm trong khóa; arm rider cố định, ≈ p_on ±2% trên 20.000 rider
+- Test: `pytest -q tests/test_experiment.py` → 7 passed
+- Lệch spec / quyết định mới: T-25a
+- Bàn giao: không
+- Còn lại / bước tiếp: T2.3
+
+### 2026-10-01 · T2.3 · legacy.py, threshold.py, policies/experiment.py, factory · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit; PR S2
+- Đã làm: `LegacyPolicy` (luật slack trễ + ε từ CELLSLOT, nhắm rider qua `LegacyHiddenView` với `u_latent`, lát explore; `propensity` NaN/`explore_p`/0 theo T-24), `ThresholdPolicy` (ŝ `persistence`/`ar` có chặn trần, `promo_on = not (ŝ < θ)`, hysteresis, điểm `score_fn(batch, ŝ theo session)` ≥ κ; κ = −∞ khi config `auto`; chỉ `slack`, Q19), `ExperimentPolicy` (switchback cụm/toàn hệ, `rider_ab`), `make_policy(cfg, world, rng, theta, kappa)`. `tests/test_policies.py` +12: θ = 0 không cắt, θ lớn cắt mọi ô hữu hạn, inf/NaN giữ bật; điểm/κ/NaN; score_fn thấy ŝ của ô từng session; hysteresis 19 → 0 lần đổi; `ar` chặn inf và dùng lag slot ngày đầu; legacy khớp số rút CELLSLOT và chỉ dùng luồng này; nhắm theo `u_latent`; explore bất kể trạng thái ô; experiment policy khớp M10
+- Test: `pytest -q tests/test_policies.py` → 27 passed
+- Lệch spec / quyết định mới: T-23 (a–d), T-24, T-25 (b, d); câu hỏi mở Q19
+- Bàn giao: không
+- Còn lại / bước tiếp: T2.4
+
+### 2026-10-01 · T2.4 · runner: evaluate, gte, sweep_theta, calibrate_budget, κ auto, generate · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit; PR S2
+- Đã làm: `sim/runner.py`: `calibrate_budget` (pilot all_on seed `run_seed + pilot_seed_offset`, B = `fraction × chi tiêu trung bình mỗi kỳ`; `fixed` → `fixed_usd`), `kappa_from_pilot` + `kappa_auto` (T-23e), `resolve_kappa`, `evaluate` (`sweep.n_seeds`, T-22), `gte` + `gte_summary` (ghép cặp theo seed), `sweep_theta` (một κ mỗi θ, cùng B) + `theta_sweep_table` (`N_se`, `is_argmax`), `generate` (`generate.days`, legacy có B / experiment không, log full; bảng observed/hidden/market để T3.2), `calibrate_budget_table`, `metadata_table` → `meta/run_metadata` (gồm `config_yaml`, `git_sha`, κ, B). `sim/logger.py`: thêm `theta_sweep`, `META_COLUMNS`, `write_metadata`, `git_sha`. `sim/cli.py`: mọi mode chạy được, in tóm tắt; `NotImplementedError`/`ValueError` → exit 1. `tests/fakes.py`: `fake_run` theo chính sách (tỷ lệ phát, `offer_*` cho κ auto, cực trị nhẹ tại θ = 0,5). `tests/test_runner.py` +10, `tests/test_cli.py` 7 (gte và sweep chạy engine thật với cầu thật trên tiny), `tests/test_schema_contract.py` kiểm thêm `theta_sweep`, `run_metadata`
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 358 passed (py3.11, 36,0 s); `test_runner.py` 24, `test_cli.py` 7; test chậm: không chạy
+- Lệch spec / quyết định mới: T-22 (chốt Q17), T-23 (e, f)
+- Bàn giao: không
+- Còn lại / bước tiếp: Tích hợp 1 + Gate P2 khi Hoàng xong H2.1–H2.4 (B5): bỏ `demand_scale = 0` ở `test_engine.py`, chạy A2(a)(c), `throughput_curve` thật; T3.2 logger đủ bảng để `generate` ghi observed/hidden/market
+
 ---
 
 ## 2. Hoàng
 
-**Đang làm:** S2 của Hoàng xong (H2.1–H2.4, commit trên `develop2`); chờ B3 (`pricing.quote`) của Tình để làm Tích hợp 1 và Gate P2. Tiếp theo: gỡ bước báo giá tạm trong `tests/test_integration.py`, chạy `throughput_curve` thật.
+**Đang làm:** S2 xong; đã gộp `develop` (S2 của Tình) vào `develop2`, nhận B3, Tích hợp 1 xong; PR `develop2 → develop` chờ Tình review. Tiếp theo: cùng Tình xem đường throughput (Gate P2), rồi S3: H3.1 đo A5, H3.2 hiệu chỉnh (CAL + A1).
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -211,3 +251,29 @@ Mẫu:
   - Xem trước đường throughput (thiết lập T-08: `always_on`, giờ 18 cố định, `all_off`): `completed_per_h` theo `demand_scale` 0,25 → 100,6; 0,5 → 191,5; 0,75 → 270,1; 1,0 → 329,7; **1,25 → 335,5 (đỉnh)**; 1,5 → 296,1; 1,75 → 283,4; 2,0 → 283,4; 3,0 → 286,9; 4,0 → 282,1 (= 0,841 × đỉnh). Slack 0,68 ở 1,0; 0,19 ở 1,25; 0,04–0,05 từ 1,5 trở lên. ETA đón 3,1 phút ở 0,25 lên 11,7 phút ở 4,0
   - Thời gian: `spawn` chiếm khoảng 65–70% (1,5 giây trong 2,3 giây ở mức mặc định; 5,8–10,3 giây ở `demand_scale` 1,75–2,0 với 105.019–120.269 session)
 - Còn lại / bước tiếp: nhận B3, gỡ `quote_stand_in`, Tích hợp 1 và Gate P2 cùng Tình
+
+### 2026-10-01 · T2.1 · pricing.quote, lớp voucher, monitor · nhận B3
+- Nhánh/PR: commit của Tình trong `develop` (`9fec911`, PR #6), đã gộp vào `develop2`
+- Đã làm: chạy phần "Người nhận kiểm tra" của B3. So `engine.run` 1 ngày `default.yaml` giữa `pricing.quote` thật và bản tạm `quote_stand_in`: `all_off` N = 2.642, V = 10448,4375 ở cả hai; `all_on` N = 2.489, V = 1715,087646484375 ở cả hai; các cột `status`, `driver_id`, `pickup_time_s`, `dropoff_time_s`, `voucher_cents` của mọi order giống hệt
+- Test: `pytest -q tests/test_pricing.py tests/test_monitor.py` → pass (nằm trong 414 passed của cả bộ)
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B3
+- Còn lại / bước tiếp: không
+
+### 2026-10-01 · S2 · gộp `develop` vào `develop2`, Tích hợp 1 · xong
+- Nhánh/PR: merge `origin/develop` (`9fec911`: T2.1–T2.4 của Tình) vào `develop2`; PR `develop2 → develop` (H2.1–H2.4 + lần gộp này), review: Tình
+- Đã làm: xử lý conflict ở `docs/decisions.md` (giữ đủ H-09…H-12 và T-22…T-25). Gỡ `quote_stand_in` và fixture `patched_quote` khỏi `tests/test_integration.py`: 14 test tích hợp chạy trên `pricing.quote` thật. Sửa 2 test của Tình viết khi lõi còn là stub (kỳ vọng N = 0, mọi order bị Truncated): `tests/test_pricing.py::test_engine_runs_with_real_demand_through_the_voucher_layer` và `tests/test_cli.py::test_gte_and_sweep_with_real_demand`; giữ các kiểm tra về voucher, CRN, tính tất định, thay kỳ vọng "không ghép được" bằng "có order hoàn thành, không order nào bị Truncated". `tests/test_engine.py` vẫn chạy với `demand_scale = 0` vì các test đó kiểm vòng lặp trên thị trường rỗng; sửa lại chú thích
+- Test: `pytest -q` → 414 passed (py3.12, `.venv`, 46 giây); test chậm: không chạy
+- Lệch spec / quyết định mới: H-13 trong `decisions.md`
+- Bàn giao: B5 đã giao đủ (bước 5 dùng `pricing.quote` thật)
+- Còn lại / bước tiếp: Gate P2
+
+### 2026-10-01 · Gate P2 · đường throughput trên simulator thật · dở (chờ Tình và Hoàng cùng xem)
+- Nhánh/PR: chạy trên `develop2` sau Tích hợp 1 (chưa commit lúc chạy); kết quả ở `runs/p2_throughput/results/throughput_curve.parquet` (không commit)
+- Đã làm: `python -m sim run --mode throughput_curve --config config/default.yaml --out runs/p2_throughput` (`config_hash = 126e0c67a0ad`; 16 mức `demand_scale` × 3 seed = 48 lượt; `all_off`, `always_on`, giờ 18 cố định; tham số `[assume]` chưa hiệu chỉnh)
+- Test: lệnh chạy hết 60 giây, không lỗi
+- Số liệu (trung bình 3 seed, `completed_per_h`): 0,25 → 97,0; 0,5 → 188,5; 0,75 → 267,4; 1,0 → 326,4; **1,25 → 341,4 (đỉnh, cả 3 seed)**; 1,5 → 299,1; 1,75 → 284,5; 2,0 → 284,8; 3,0 → 287,3; 4,0 → 283,2. Tỷ lệ mức cao nhất / đỉnh: 0,830 (từng seed: 0,841; 0,824; 0,825). `mean_slack`: 0,738 ở 1,0; 0,226 ở 1,25; 0,057 ở 1,5; 0,042–0,043 từ 1,75 trở lên. ETA đón: 3,1 phút ở 0,25; 7,2 ở 1,25; 11,7 ở 4,0. Tỷ lệ hủy khi xe đang đến cao nhất 31,8% ở 1,75; tỷ lệ bỏ chờ 61,5% ở 4,0
+- Đối chiếu 4 tiêu chí A1 của `tests.md` (cấu hình chưa hiệu chỉnh): (1) có đỉnh: đạt; (2) mức cao nhất ≤ 0,95 × đỉnh: đạt (0,830); (3) slack < 0,45 ở vùng giảm: đạt (lớn nhất 0,057); (4) ETA tăng đơn điệu, không bước nhảy > 3 phút: **chưa đạt**: bước nhảy lớn nhất 3.44 phút giữa `demand_scale` 1,25 và 1,5; và ở vùng bão hòa (từ 1,75) ETA đi ngang quanh 11,5–11,7 phút, có 3 bước giảm nhỏ (nhiều nhất 0.025 phút)
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: Tình và Hoàng cùng xem bảng này (và đồ thị, khi có `matplotlib` theo T-13) rồi ghi "gate P2 đạt" hoặc "không đạt"; sau đó S3: H3.1 (A5), H3.2 (CAL + A1)

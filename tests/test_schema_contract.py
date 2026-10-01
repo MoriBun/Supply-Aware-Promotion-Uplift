@@ -86,16 +86,22 @@ def test_rider_columns(schema):
     assert set(Riders.HIDDEN) == set(schema["hidden/riders_hidden"]) - LOGGER_ADDS - {"rider_id"}
 
 
-def test_results_tables_match_schema(schema):
-    from sim.logger import RESULTS_TABLES
-    titles = {"policy_results": "results/policy_results (một dòng mỗi lượt chạy)",
-              "throughput_curve": "results/throughput_curve"}
-    for name, title in titles.items():
+def test_results_and_meta_tables_match_schema(schema):
+    from sim.logger import META_COLUMNS, RESULTS_TABLES
+    tables = {
+        "policy_results": (RESULTS_TABLES["policy_results"], "results/policy_results (một dòng mỗi lượt chạy)", True),
+        "throughput_curve": (RESULTS_TABLES["throughput_curve"], "results/throughput_curve", True),
+        "theta_sweep": (RESULTS_TABLES["theta_sweep"], "results/theta_sweep (tổng hợp từ policy_results)", False),
+        "run_metadata": (META_COLUMNS, "meta/run_metadata", True),
+    }
+    for name, (columns, title, per_run) in tables.items():
         types = schema[title]
-        assert set(RESULTS_TABLES[name]) == set(types) | LOGGER_ADDS, name
+        assert set(columns) - LOGGER_ADDS == set(types) - LOGGER_ADDS, name
+        if per_run:
+            assert LOGGER_ADDS <= set(columns), name                     # every per-run table has run_id and seed
         for col, want in types.items():
             if want:
-                assert RESULTS_TABLES[name][col] == want, f"{name}.{col}: {RESULTS_TABLES[name][col]} vs schema {want}"
+                assert columns[col] == want, f"{name}.{col}: {columns[col]} vs schema {want}"
 
 
 def test_observed_dtypes_match_schema(schema):
