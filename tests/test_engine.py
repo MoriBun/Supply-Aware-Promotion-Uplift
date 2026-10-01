@@ -47,7 +47,14 @@ def test_build_context_and_fakes(tiny_cfg):
     assert real.ledger.enforce and real.ledger.limit_cents(0) == 1000
 
 
+def _no_demand(cfg):
+    # The skeleton loop is tested without sessions: demand.spawn is real since H1.2, but
+    # pricing.quote cannot quote a session before T2.1. Integration 1 (end of S2) removes this.
+    return dataclasses.replace(cfg, demand=dataclasses.replace(cfg.demand, demand_scale=0.0))
+
+
 def _run(cfg, on=False, **kw):
+    cfg = _no_demand(cfg)
     world = stub_world(cfg)
     return run(cfg, world, FixedPolicy(on, world.n_cells), Rng.from_config(cfg), enforce_budget=False, **kw)
 
@@ -94,6 +101,7 @@ def test_same_seed_same_result(tiny_cfg):
 
 
 def test_budget_arguments(tiny_cfg):
+    tiny_cfg = _no_demand(tiny_cfg)
     world = stub_world(tiny_cfg)
     policy = FixedPolicy(True, world.n_cells)
     rng = Rng.from_config(tiny_cfg)
