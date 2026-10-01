@@ -72,7 +72,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S1. H1.2 `population.py`, `demand.py` xong, chờ Tình review. Tiếp theo: H1.3 `choice.py`.
+**Đang làm:** S1. H1.3 `choice.py` xong, chờ Tình review. Tiếp theo: H1.4 `supply.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -106,3 +106,20 @@ Mẫu:
 - Lệch spec / quyết định mới: H-05 trong `decisions.md`. Giữ một bộ sinh số cho mỗi session, không dùng SESSION_BATCH
 - Bàn giao: không. Ghi chú cho Tình: `pricing.quote` (T2.1) chưa nhận session, nên engine chỉ chạy được với `demand_scale = 0` đến khi có B3
 - Còn lại / bước tiếp: H1.3 `choice.py`
+
+### 2026-10-01 · T1.1 · budget.py đầy đủ · nhận B2
+- Nhánh/PR: commit của Tình trên `develop1`, đã có trong `develop` (`db9efd1`)
+- Đã làm: chạy phần "Người nhận kiểm tra" của B2; đối chiếu API sổ với chỗ `choice.py` gọi (`commit`, `release_reserved`, `entry`, `totals`)
+- Test: `pytest -q tests/test_pricing.py` → 23 passed (py3.12)
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B2
+- Còn lại / bước tiếp: `settle` và `release_committed` sẽ dùng ở H2.2 (`trips.py`, `cancel.py`)
+
+### 2026-10-01 · H1.3 · choice.py (M4) · xong
+- Nhánh/PR: `develop2 → develop`, review: Tình
+- Đã làm: `sim/choice.py` (`request_probability`, `decide`: quyết định đặt xe, ghi `p_request_*` ẩn, tạo order Waiting, `commit`/`release_reserved` trên sổ, cộng `cells.waiting` và `n_requests`); `tests/test_choice.py` (+18). Phần `state.py` của H1.3 đã có từ hợp đồng B0. Sửa quy trình nhánh trong `CLAUDE.md`, `phan_cong.md`, `plan.md` (H-07)
+- Test: `pytest -q` → 282 passed (py3.12); test chậm: không chạy. `decide` cho 1 ngày mô phỏng, mọi session có voucher: 0,28 giây
+- Lệch spec / quyết định mới: H-06, H-07 trong `decisions.md`
+- Bàn giao: không
+- Số liệu tham khảo (chưa phải CAL; ETA báo cố định 4 phút, giá tự tính): tỷ lệ đặt không voucher 18,9% (mục tiêu P3: 13–17%), có voucher 26,1% (+38,0%), giá trung bình 21,27 USD
+- Còn lại / bước tiếp: H1.4 `supply.py`
