@@ -96,7 +96,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S1 xong (H1.1–H1.4); đã gộp `develop` (T1.2–T1.4) vào `develop2`; PR `develop2 → develop` chờ Tình review. Tiếp theo: S2, H2.1 `matching.py`.
+**Đang làm:** S2. H2.1 `matching.py` xong (commit trên `develop2`, PR cuối sprint). Tiếp theo: H2.2 `trips.py`, `cancel.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -165,3 +165,19 @@ Mẫu:
 - Bàn giao: không
 - Đính chính: mục "H1.4" ở trên ghi "câu hỏi mở Q17"; số đúng là **Q18**
 - Còn lại / bước tiếp: S2, H2.1 `matching.py`
+
+### 2026-10-01 · T1.4 · mode throughput_curve trên engine giả · nhận B4
+- Nhánh/PR: commit của Tình, đã có trong `develop` (`eb96ab9`) và `develop2`
+- Đã làm: chạy phần "Người nhận kiểm tra" của B4
+- Test: `pytest -q tests/test_runner.py` → 14 passed (py3.12, `.venv`)
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B4
+- Còn lại / bước tiếp: chạy `throughput_curve` trên engine thật ở Gate P2 (cuối S2)
+
+### 2026-10-01 · H2.1 · matching.py (M5) · xong
+- Nhánh/PR: commit trên `develop2`; PR `develop2 → develop` cuối S2, review: Tình
+- Đã làm: `sim/matching.py` (`match`: FIFO theo thứ tự order, tìm xe bằng `SpaceTime.find_pickup`, hàng đợi xe theo `idle_since`, ghi cột bước "match", chốt `trip_time_min` lúc ghép, cập nhật `cells` và bộ đếm slot qua `MarketMonitor.on_matched`); `tests/test_matching.py` (+16)
+- Test: `pytest -q` → 337 passed (py3.12, `.venv`); test chậm: không chạy. Một lần gọi `match`: 300 order chờ, 60 xe rảnh → 0,64 ms; 300 order chờ, không xe → 0,03 ms
+- Lệch spec / quyết định mới: H-09 trong `decisions.md`
+- Bàn giao: không
+- Còn lại / bước tiếp: H2.2 `trips.py`, `cancel.py`
