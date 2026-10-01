@@ -187,7 +187,7 @@ def test_session_rate_formula(cfg, world):
     lam = demand.session_rate(cfg, world.cell_weight, 18)
     np.testing.assert_allclose(lam, d.base_sessions_per_cell_h * d.demand_scale * world.cell_weight
                                * d.hour_profile[18] * cfg.time.tick_s / 3600)
-    assert lam.mean() * 3600 / cfg.time.tick_s == pytest.approx(d.base_sessions_per_cell_h * d.hour_profile[18])
+    assert lam.mean() * 3600 / cfg.time.tick_s == pytest.approx(d.base_sessions_per_cell_h * d.demand_scale * d.hour_profile[18])
 
 
 def test_mean_sessions_per_cell_hour_match_lambda(tiny_layers):

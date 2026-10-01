@@ -236,11 +236,11 @@ def test_empty_tick_is_a_no_op(tiny_cfg):
 
 def test_decide_reads_only_sessions_riders_and_ledger(tiny_cfg):
     ctx = make_context(tiny_cfg)
-    demand.spawn(ctx, 3600.0)
-    quote_by_hand(ctx, voucher=False)
-    guarded = with_forbidden(ctx, "policy", "drivers", "layer", "monitor", "rng")
-    choice.decide(guarded, 3600.0)
-    assert guarded.sessions.n > 0
+    for tick in range(60, 90):                                 # 30 ticks: enough for sessions at any demand scale
+        demand.spawn(ctx, tick * 60.0)
+        quote_by_hand(ctx, voucher=False)
+        choice.decide(with_forbidden(ctx, "policy", "drivers", "layer", "monitor", "rng"), tick * 60.0)
+    assert ctx.sessions.n > 0
 
 
 def test_decide_handles_only_the_current_tick(tiny_cfg):

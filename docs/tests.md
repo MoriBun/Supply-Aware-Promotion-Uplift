@@ -124,14 +124,14 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 
 ## 4. Hiệu chỉnh [CAL] (mốc P3)
 
-Chạy all_off và all_on, 5 seed, `default.yaml`. Kiểm từng chỉ tiêu trong `calibration_targets`:
+Chạy all_off, 5 seed, `default.yaml` (`tests/test_acceptance_core.py`, đánh dấu `slow`). Một session ở "ô dư cung" khi slack của **slot trước**, cùng ô (`slack_lag_slot`) lớn hơn 1 (H-15); không dùng slack của chính slot đó, vì nó là kết quả của các lượt đặt trong slot. Kiểm từng chỉ tiêu trong `calibration_targets`:
 
 | Chỉ tiêu | Cách đo | Khoảng mục tiêu |
 |---|---|---|
-| P(đặt) không voucher | requested / sessions, all_off, các slot có slack > 1 | 0,13–0,17 |
-| Tăng request khi dư cung | (P_on − P_off)/P_off, slot có slack > 1 | +35% … +70% |
-| Giá gốc trung bình | mean gross_fare | 17,2–21,0 USD |
-| Tỷ lệ (ô, slot) căng | share slack < 0,35 (all_off) | 10–35% |
+| P(đặt) không voucher | requested / sessions, all_off, session ở ô dư cung | 0,13–0,17 |
+| Tăng request khi dư cung | `mean(p_request_treat) / mean(p_request_control) − 1` trên session ở ô dư cung (cột ẩn, cùng bối cảnh; H-16) | +35% … +70% |
+| Giá gốc trung bình | mean gross_fare của order hoàn thành trong cửa sổ | 17,2–21,0 USD |
+| Tỷ lệ (ô, slot) căng | share slack < 0,35 (all_off; slack của chính (ô, slot), I = 0 thì slack = 0, H-14) | 10–35% |
 | Tỷ lệ (ô, slot) dư | share slack > 1 (all_off) | 30–80% |
 
 Núm chỉnh theo thứ tự: `alpha0` (cho P(đặt)), `beta_price_per_usd` và `delta0` (cho uplift), `per_min_usd` (cho giá), `fleet_size` và `demand_scale` (cho phân bố slack). Ghi giá trị cuối vào `default.yaml` và lý do vào `docs/decisions.md`.

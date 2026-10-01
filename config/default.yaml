@@ -58,7 +58,7 @@ time:
 # ---------------------------------------------------------------------
 demand:
   base_sessions_per_cell_h: 35.0  # λ trung bình mỗi ô mỗi giờ [assume]
-  demand_scale: 1.0               # núm hiệu chỉnh tổng cầu (test T1 quét núm này)
+  demand_scale: 0.85              # núm hiệu chỉnh tổng cầu (A1 quét núm này) [hiệu chỉnh P3, H-17; trước 1,0]
   cell_weight_sigma: 0.5          # trọng số ô ~ LogNormal(0, σ), chuẩn hóa trung bình 1 [assume]
   # hệ số cầu theo giờ 0..23 (trung bình ≈ 1) [assume]
   hour_profile: [0.35, 0.25, 0.20, 0.20, 0.25, 0.45, 0.80, 1.40,
@@ -79,7 +79,7 @@ riders:
   # --- mô hình đặt xe (M4), logit theo Johari et al. 2026 (App. G.3) ---
   # Mục tiêu hiệu chỉnh: P(đặt) ≈ 15% không voucher [data];
   # tăng request ~ +50% khi dư cung (bảng trong đề bài) [data]
-  alpha0: 0.475                   # [assume, hiệu chỉnh theo P(đặt)=15%]
+  alpha0: 0.35                    # [hiệu chỉnh P3, H-17: P(đặt) = 15,3% ở ô dư cung; trước 0,475]
   alpha_freq: 0.4                 # hệ số với x_freq đã chuẩn hóa [assume]
   alpha_u: 0.4                    # hệ số với u_latent (tạo confounding) [assume]
   alpha_noise_sd: 0.3             # [assume]
@@ -88,7 +88,7 @@ riders:
   beta_price_noise_sd: 0.25       # log-normal quanh trung vị [assume]
   beta_eta_per_min: 0.10          # |β_η| trung vị [assume]
   beta_eta_noise_sd: 0.25         # [assume]
-  delta0: 0.15                    # phản ứng riêng với voucher [assume]
+  delta0: 0.25                    # phản ứng riêng với voucher [hiệu chỉnh P3, H-17: tăng request +51%; trước 0,15]
   delta_u: 0.10                   # [assume]
   delta_seg: [0.0, 0.15, -0.10]   # [assume]
   delta_noise_sd: 0.10            # [assume]
@@ -101,7 +101,7 @@ riders:
 # ---------------------------------------------------------------------
 pricing:
   base_fare_usd: 3.0              # a_f [assume]
-  per_min_usd: 1.4                # b_f, theo T[pu,do,h] tính bằng phút [assume]
+  per_min_usd: 1.70               # b_f, theo T[pu,do,h] tính bằng phút [hiệu chỉnh P3, H-17: giá TB 19,0 USD; trước 1,4]
   target_mean_fare_usd: 19.1      # mục tiêu hiệu chỉnh a_f, b_f (±10%) [data]
   commission_rate: 0.24           # tài xế nhận 76% giá gốc [data]
 
@@ -162,7 +162,7 @@ cancel:
 # M8 SupplyModel
 # ---------------------------------------------------------------------
 supply:
-  fleet_size: 120                 # núm hiệu chỉnh chính [assume]
+  fleet_size: 240                 # núm hiệu chỉnh chính [hiệu chỉnh P3, H-17: 27,9% (ô, slot) căng, 63,3% dư; trước 120]
   shift_mode: schedule            # schedule | always_on (mọi xe online suốt lượt; chỉ cho
                                   # throughput_curve) [decisions T-02, T-08]
   # ca làm tuần hoàn theo ngày: (giờ bắt đầu từ, đến, trọng số) — bắt đầu đều trong khoảng [assume]

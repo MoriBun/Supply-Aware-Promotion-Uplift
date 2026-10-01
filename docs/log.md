@@ -136,7 +136,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S2 xong; đã gộp `develop` (S2 của Tình) vào `develop2`, nhận B3, Tích hợp 1 xong; PR `develop2 → develop` chờ Tình review. Tiếp theo: cùng Tình xem đường throughput (Gate P2), rồi S3: H3.1 đo A5, H3.2 hiệu chỉnh (CAL + A1).
+**Đang làm:** S3 của Hoàng xong (H3.1, H3.2): A1, A5, CAL đạt với `default.yaml` đã hiệu chỉnh (`config_hash = cb27f5348011`); giao B6, chờ Tình review (Gate P3). Tiếp theo: S4, H4.1 đo lại A5 với chính sách mặc định.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -277,3 +277,36 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: không
 - Còn lại / bước tiếp: Tình và Hoàng cùng xem bảng này (và đồ thị, khi có `matplotlib` theo T-13) rồi ghi "gate P2 đạt" hoặc "không đạt"; sau đó S3: H3.1 (A5), H3.2 (CAL + A1)
+
+### 2026-10-01 · H3.1 · A5 với all_on · xong
+- Nhánh/PR: commit trên `develop2`; PR cuối S3, review: Tình
+- Đã làm: `tests/test_acceptance_core.py` (đánh dấu `slow`): `test_a5_one_simulated_day_within_the_time_limit` và hàm đo `measure_runtime`; kèm sẵn hàm đo và test của CAL (`calibration_metrics`) và A1 (`throughput_summary`, `a1_checks`) cho H3.2
+- Test: `pytest -q` → 414 passed (py3.12, `.venv`). A5: 1 job `evaluate`, `policy.name = all_on`, có ngân sách B = 2.609,96 USD (pilot), 1 tiến trình, 3 lần: 6,73; 6,69; 6,91 giây, trung vị **6,73 giây** ≤ 30 giây. Profile lần 3: spawn 4,66; quote 1,17; match 0,35; decide 0,29; advance 0,16; en_route 0,10; monitor 0,05; expire 0,04; reposition 0,04; supply 0,03
+- Lệch spec / quyết định mới: không. Không tối ưu gì, nên cách rút số ngẫu nhiên giữ nguyên
+- Bàn giao: không
+- Còn lại / bước tiếp: H3.2; H4.1 đo lại A5 với chính sách mặc định
+
+### 2026-10-01 · H3.2 · CAL + A1 · dở (chờ chốt Q20, Q21, Q22)
+- Nhánh/PR: `develop2`, chưa đổi `default.yaml`
+- Đã làm: đo CAL ban đầu (5 seed, `all_off` và `all_on` không ngân sách, theo cách đọc sát chữ `tests.md` §4); phân tích vì sao P(đặt) ở ô "dư cung" thấp bất thường; ghi 3 câu hỏi mở
+- Test: không đổi code `sim/`
+- Số liệu CAL ban đầu (`config_hash = 126e0c67a0ad`): P(đặt) không voucher ở slot slack > 1 = 4,78% (mục tiêu 13–17%); tăng request = +104,7% (35–70%); giá gốc trung bình đơn hoàn thành = 16,47 USD (17,2–21,0); tỷ lệ (ô, slot) slack < 0,35 = 53,9% (10–35%); tỷ lệ slack > 1 = 40,2% (30–80%). 4/5 ngoài khoảng
+- Chẩn đoán (1 seed, `all_off`): thị trường mặc định quá căng: 73,0% session ở ô có slack < 0,35; trung bình 0,10 xe rảnh mỗi (ô, slot); 40,9 xe online trung bình; slack toàn hệ theo slot có trung vị 0,07, chỉ 13,5% số slot > 1. Phân loại theo slot trước cùng ô: P(đặt) = 19,6% (slack hữu hạn > 1), 14,7% (0,35–1), 12,8% (< 0,35), 10,9% (I = 0, E = 0)
+- Lệch spec / quyết định mới: Q20, Q21, Q22 trong `decisions.md` (câu hỏi mở)
+- Bàn giao: không
+- Còn lại / bước tiếp: chốt Q20–Q22; sau đó chỉnh theo thứ tự `tests.md` §4 (`alpha0`; `beta_price_per_usd`, `delta0`; `per_min_usd`; `fleet_size`, `demand_scale`), rồi A1 tiêu chí 4 (bước nhảy ETA 3,44 phút)
+
+### 2026-10-01 · H3.2 · CAL + A1, hiệu chỉnh `default.yaml` · xong (chờ Gate P3)
+- Nhánh/PR: `develop2`; PR `develop2 → develop` cuối S3, review: Tình
+- Đã làm: chốt Q20, Q21, Q22 (H-15, H-14, H-16). Sửa `sim/monitor.py`: I = 0 thì slack = 0. Viết lại `calibration_metrics` theo `slack_lag_slot` và cột ẩn `p_request_*`; sửa `tests.md` §4, spec §4.11, `schema.md`. Hiệu chỉnh 5 tham số trong `config/default.yaml` (H-17). Sửa 4 test ghi cứng giá trị cũ (H-18)
+- Test: `pytest -q` → 414 passed (py3.12, `.venv`, 44 giây). `pytest -q -m slow tests/test_acceptance_core.py` → 3 passed (A1, A5, CAL; 96 giây)
+- Tham số: `fleet_size` 120 → 240; `demand_scale` 1,0 → 0,85; `alpha0` 0,475 → 0,35; `delta0` 0,15 → 0,25; `per_min_usd` 1,4 → 1,70. `config_hash = cb27f5348011`
+- CAL (5 seed, `all_off`), trước → sau (cùng cách đo H-14…H-16): P(đặt) ở ô dư cung 17,21% → **15,35%** [13–17]; tăng request +36,4% → **+50,6%** [35–70]; giá trung bình 16,47 → **19,03 USD** [17,2–21,0]; (ô, slot) slack < 0,35: 80,5% → **27,9%** [10–35]; slack > 1: 13,5% → **63,3%** [30–80]. Kiểm thêm: `run_seed` 100 và 200, `world_seed` 7 đều trong khoảng
+- A1 (3 seed, `completed_per_h` theo `demand_scale`): 0,25 → 80,3; 1,0 → 317,7; 2,0 → 598,9; 3,0 → 780,2; **3,25 → 781,2 (đỉnh)**; 3,5 → 735,1; 3,75 → 671,6; 4,0 → 659,8 (= 0,845 × đỉnh). Slack ở vùng giảm ≤ 0,095. ETA đón 2,06 → 9,85 phút, bước nhỏ nhất +0,012, lớn nhất +1,871 phút. Đạt cả 4 tiêu chí
+- A5 (`all_on`, B = 5.545,80 USD/kỳ): 6,14; 7,07; 7,01 giây; trung vị 7,01 giây
+- 1 ngày, seed 0: `all_off` 25.859 session, 3.716 request, N = 3.506, 2 bỏ chờ, 208 hủy, ETA 3,84 phút, slack 3,23, V = 16.015 USD. `all_on` không ngân sách: 5.226 request, N = 4.722, 53 bỏ chờ, 451 hủy, ETA 5,01, slack 1,34, V = 3.785, voucher 18.892 USD. `all_on` có ngân sách B: 4.176 request, N = 3.759, V = 11.774, voucher 5.544 USD
+- Theo giờ (5 seed, `all_on` không ngân sách trừ `all_off`): N tăng ở 22/24 giờ (tổng +1.199 chuyến/ngày); **giảm ở 07h (−15,4) và 08h (−6,4)**, khi chỉ có 31 và 57 xe trong ca và tỷ lệ hoàn thành của `all_on` còn 53% và 67%
+- Lệch spec / quyết định mới: H-14…H-18
+- Bàn giao: giao B6 (`default.yaml` đã hiệu chỉnh); người nhận kiểm tra: A1, A5, CAL đạt (`pytest -q -m slow tests/test_acceptance_core.py`), bảng hiệu chỉnh ở H-17, `config_hash` mới
+- Ghi chú rủi ro cho Gate P6: sau hiệu chỉnh, voucher chỉ làm giảm số chuyến ở 2 giờ cao điểm sáng. Biên độ θ có thể cải thiện N(π_θ) vì vậy nhỏ khi không có ngân sách; cần xem đường N(π_θ) dưới ngân sách B
+- Còn lại / bước tiếp: Tình review và chạy lại `calibrate_budget` (B đổi từ 2.609,96 lên 5.545,80 USD/kỳ); S4: H4.1
