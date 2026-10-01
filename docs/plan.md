@@ -5,7 +5,7 @@ Nguyên tắc:
 - Hai người làm **song song** theo `docs/phan_cong.md` (sprint, sở hữu file, điểm bàn giao).
   - Các review gate (P2, P3, P6) chặn **tích hợp và sinh dữ liệu** của mốc sau.
   - Module độc lập của mốc sau được viết trước trên nhánh riêng và test bằng đồ giả.
-- Mỗi task là một PR nhỏ từ nhánh cá nhân (`develop1` của Tình, `develop2` của Hoàng) vào nhánh chung `develop`. Mỗi PR có mô tả: làm gì, test nào pass, lệch khỏi spec chỗ nào (nếu có).
+- Mỗi sprint là một PR từ nhánh cá nhân (`develop1` của Tình, `develop2` của Hoàng) vào nhánh chung `develop`; mỗi task là một commit trong PR đó. Mỗi PR có mô tả: làm gì, test nào pass, lệch khỏi spec chỗ nào (nếu có).
 - Mọi lệch khỏi `docs/spec.md` hoặc thay đổi tham số đều phải ghi vào `docs/decisions.md` (ngày, nội dung, lý do, người duyệt).
 
 Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **tuần 4** gồm P5–P8, **tuần 5** dành cho phân tích và nghiệm thu (ngoài phạm vi file này). Lịch chi tiết theo sprint và theo người, gồm cả tuần 5, ở `docs/phan_cong.md`.

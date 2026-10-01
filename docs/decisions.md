@@ -53,6 +53,7 @@ Quy ước:
 | 2026-10-01 | H-05 | **Sinh thế giới và nhu cầu (H1.2).** (a) Luồng WORLD khóa `(WorldPart, chỉ số biến)` với `CELL_WEIGHT = 1`, `RIDERS = 2`, `DRIVERS = 3` (không đổi số); mỗi biến một bộ sinh riêng, nên rider i và tài xế j giữ nguyên thuộc tính khi đổi `n_riders` hoặc `fleet_size` (trừ `zf`, là z-score trên cả quần thể). (b) `World` thêm trường `tables` (bảng cộng dồn để lấy mẫu rider và ô đích); mọi mảng của `World` bị khóa ghi. (c) Mỗi session lấy 3 số đều trước các số rút sẵn: đồng xu ô nhà, chọn rider, chọn ô đích; khớp hai mục `rider`, `dest` của `SESSION_DRAW_ORDER`. (d) `demand.spawn` cộng `slot_counters.n_sessions` theo ô đón (T-15); `pricing.quote` không cộng lại. (e) Giữ một bộ sinh số cho mỗi session, không dùng SESSION_BATCH. (f) `tests/test_engine.py` chạy khung với `demand_scale = 0` cho đến tích hợp 1. | (a) P3 hiệu chỉnh `fleet_size`; đổi số xe không được xáo lại ca của các xe đã có. (e) Đo được 1,56 giây cho 1 ngày mô phỏng (30.397 session), khoảng 5% của mục tiêu 30 giây (A5). (f) `pricing.quote` chưa nhận session trước T2.1, còn `spawn` đã sinh session thật. | Hoàng (chờ Tình review PR) |
 | 2026-10-01 | H-06 | **Quyết định đặt xe (H1.3).** (a) Voucher dùng trong công thức là `voucher_cents / 100` của session (số cent do lớp voucher cấp), không đọc cột `voucher_value_usd` float32. (b) `p_request_treat` tính với voucher từ `pricing.voucher_cents(cfg, giá)`, tức cùng quy tắc làm tròn cent và cùng trần `max_usd` với voucher thật. Hệ quả: session được cấp voucher có xác suất đặt đúng bằng `p_request_treat`, session không được cấp đúng bằng `p_request_control`. (c) `choice.decide` cộng `cells.waiting` và `slot_counters.n_requests` theo ô đón cho order mới; `matching.py` chỉ trừ `waiting` khi ghép. (d) Session bị chặn ngân sách (`voucher_cents = 0`) quyết định như không có voucher và không có dòng nào trong sổ. | (a)(b) Hai cách làm tròn khác nhau sẽ làm `direct_request_effect_fixed_market` lệch khỏi hiệu ứng thật của chính session đó. (c) Hợp đồng B0 chưa ghi ai cộng hai bộ đếm này; nơi tạo order là nơi biết rõ nhất. | Hoàng (chờ Tình review PR) |
 | 2026-10-01 | H-07 | **Đổi mô hình nhánh.** `develop` là nhánh chung; Tình code trên `develop1`, Hoàng trên `develop2`; mỗi người PR từ nhánh của mình vào `develop`, gộp bằng merge commit, không squash; gate gộp `develop → main`. Bỏ nhánh riêng cho từng task (`hoang/<task>`, `tinh/<task>`). | Hai người thống nhất ngày 01/10. Không squash vì nhánh cá nhân được dùng lại cho nhiều PR. | Hoàng, Tình |
+| 2026-10-01 | H-08 | **Cung (H1.4) và nhịp PR.** (a) `supply.update` chạy ở bước 2: trước hết cho xe **đang rảnh** và đã quá `shift_end` rời hệ thống, sau đó cho xe đến giờ vào ca. Xe bận khi hết ca không bị đụng tới; `trips.advance` (bước 1) trả xe về rảnh, rồi bước 2 của cùng tick cho xe rời. (b) Xe rời muộn nhận ca kế tiếp là ca đầu tiên chưa kết thúc, đúng giờ cũ. (c) `on_shift`, `online_by_hour`, `describe_world` đặt trong `population.py`. (d) Mỗi sprint một PR từ nhánh cá nhân vào `develop`, mỗi task một commit; bàn giao mà người kia đang chờ thì PR sớm (sửa H-07). | (a) Thứ tự bước của engine đã đủ để thỏa "chỉ rời khi rảnh" mà không cần cờ riêng. (c) `supply.py` import `population.py`, nên hàm dùng cho bảng tóm tắt phải nằm ở `population.py` để tránh import vòng. (d) Hai người thống nhất ngày 01/10. | Hoàng (chờ Tình review PR) |
 
 ---
 
@@ -115,7 +116,12 @@ Quy ước:
 
 ## Câu hỏi mở
 
-Chưa có. Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
+Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
+
+### Q17. `supply.early_exit_enabled = true` chưa được cài (không chặn mốc nào)
+- Spec §4.8: khi bật, xe rảnh ở thời điểm ≥ **2 giờ** vào ca mà `earnings_today / giờ_đã_làm < reservation_wage` thì rời. Con số 2 giờ không có khóa trong `default.yaml`, nên cài vào code là vi phạm quy tắc cứng 1. Spec cũng chưa nói `earnings_today` reset lúc nào.
+- Hiện tại `supply.init_drivers` báo `NotImplementedError` khi cờ này bật. Mặc định cờ tắt (quy tắc cứng 5), và spec ghi nhánh này chỉ dùng cho phân tích độ nhạy.
+- **Đề xuất:** nếu tuần 5 cần phân tích độ nhạy này thì thêm khóa `supply.early_exit_min_hours: 2.0` (file chung), reset thu nhập khi vào ca, rồi cài. Nếu không cần thì bỏ nhánh này khỏi spec.
 
 ---
 

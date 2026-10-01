@@ -72,7 +72,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S1. H1.3 `choice.py` xong, chờ Tình review. Tiếp theo: H1.4 `supply.py`.
+**Đang làm:** S1 xong (H1.1–H1.4); PR `develop2 → develop` cho H1.3 và H1.4 chờ Tình review. Tiếp theo: S2, H2.1 `matching.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -123,3 +123,12 @@ Mẫu:
 - Bàn giao: không
 - Số liệu tham khảo (chưa phải CAL; ETA báo cố định 4 phút, giá tự tính): tỷ lệ đặt không voucher 18,9% (mục tiêu P3: 13–17%), có voucher 26,1% (+38,0%), giá trung bình 21,27 USD
 - Còn lại / bước tiếp: H1.4 `supply.py`
+
+### 2026-10-01 · H1.4 · supply.py (M8), bảng tóm tắt thế giới · xong
+- Nhánh/PR: `develop2 → develop` (một PR cho H1.3 và H1.4), review: Tình
+- Đã làm: `sim/supply.py` (`init_drivers`: xe đang trong ca lúc t = 0 thì rảnh tại ô xuất phát; `update`: hết ca chỉ rời khi rảnh, vào ca tại ô xuất phát; `shift_mode = always_on`); `sim/population.py` thêm `on_shift`, `online_by_hour`, `describe_world`; `tests/test_supply.py` (+12, phần M8)
+- Test: `pytest -q` → 294 passed (py3.12); test chậm: không chạy
+- Lệch spec / quyết định mới: H-08 trong `decisions.md`; câu hỏi mở Q17 (`early_exit_enabled` chưa cài)
+- Bàn giao: không
+- Số liệu tham khảo (cấu hình mặc định): số xe trong ca theo giờ thấp nhất 6 xe lúc 06:00, 18 xe lúc 07:00, 31 xe lúc 08:00 (cầu cao điểm sáng 1,40–1,70), cao nhất 61 xe lúc 14:00 và 21:00; 43/120 xe trong ca lúc 00:00
+- Còn lại / bước tiếp: S2: H2.1 `matching.py`, H2.2 `trips.py` + `cancel.py`, H2.3 `reposition.py`, H2.4 `engine.py`

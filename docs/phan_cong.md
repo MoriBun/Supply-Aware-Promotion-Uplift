@@ -23,7 +23,7 @@ Quy ước ký hiệu:
 
 **Git:**
 - `develop` là nhánh tích hợp; `develop1` là nhánh làm việc của Tình, `develop2` của Hoàng (H-07, từ 01/10).
-- Trước mỗi task: kéo `develop` về nhánh của mình. Xong task: PR từ nhánh của mình vào `develop`, người kia review, gộp bằng merge commit (không squash, vì nhánh cá nhân dùng lại cho nhiều PR).
+- Trước mỗi task: kéo `develop` về nhánh của mình. Mỗi task một commit kèm mục log; xong các task của một sprint thì mở một PR từ nhánh của mình vào `develop` (bàn giao B-x mà người kia đang chờ thì PR sớm), người kia review, gộp bằng merge commit (không squash, vì nhánh cá nhân dùng lại cho nhiều PR).
 - Mỗi PR kèm mục log của task trong `docs/log.md` (mục của người làm); mô tả PR chép từ đó. Quy tắc log ở `CLAUDE.md`.
 - Sau mỗi gate (P0, P2, P3, P6), gộp `develop → main`.
 
