@@ -11,11 +11,12 @@ import dataclasses
 import numpy as np
 
 from sim.budget import BudgetLedger, usd_to_cents
+from sim.engine import RunResult
 from sim.policies.base import SNAPSHOT_FIELDS, SessionBatch, SnapshotStore
 from sim.policies.fixed import FixedPolicy
 from sim.population import World, build_world
-from sim.rng import Rng
-from sim.state import SimContext
+from sim.rng import Rng, Stream
+from sim.state import Clock, SimContext
 
 NAN = float("nan")
 
@@ -50,10 +51,11 @@ def with_forbidden(ctx: SimContext, *fields: str) -> SimContext:
 
 
 def make_batch(n: int, n_cells: int, *, fare_usd: float = 20.0, open_time_s: float = 3600.0,
-               slot: int = 4, session_ids=None, pu_cell=None) -> SessionBatch:
+               slot: int = 4, session_ids=None, pu_cell=None, x_freq=None) -> SessionBatch:
     """A batch of ``n`` quoted sessions with simple deterministic values."""
     ids = np.arange(n, dtype=np.int64) if session_ids is None else np.asarray(session_ids, dtype=np.int64)
     pu = (np.arange(n) % n_cells).astype(np.int16) if pu_cell is None else np.asarray(pu_cell, dtype=np.int16)
+    freq = np.ones(n, dtype=np.float32) if x_freq is None else np.asarray(x_freq, dtype=np.float32)
     u = (np.arange(n, dtype=np.float64) + 0.5) / max(n, 1)
     return SessionBatch(
         session_id=ids,
@@ -65,7 +67,7 @@ def make_batch(n: int, n_cells: int, *, fare_usd: float = 20.0, open_time_s: flo
         slot_of_day=np.full(n, slot, dtype=np.int16),
         pu_cell=pu,
         do_cell=((np.arange(n) + 1) % n_cells).astype(np.int16),
-        x_freq=np.ones(n, dtype=np.float32),
+        x_freq=freq,
         x_tenure=np.full(n, 12.0, dtype=np.float32),
         x_segment=np.zeros(n, dtype=np.int8),
         quoted_fare_usd=np.full(n, fare_usd, dtype=np.float32),
@@ -116,3 +118,77 @@ def published_store(n_cells: int, n_slots: int, slots_per_day: int = 96) -> Snap
     for s in range(n_slots):
         store.publish(s, blank_record(n_cells, s))
     return store
+
+
+# ---------------------------------------------------------------------------
+# Score function and engine stand-ins, importable as "tests.fakes:<name>" (spec §7)
+# ---------------------------------------------------------------------------
+
+
+def fake_score(batch: SessionBatch, s_hat: np.ndarray) -> np.ndarray:
+    """A 'module:function' score for the loader tests: tenure plus the forecast (NaN counts as 0)."""
+    return batch.x_tenure.astype(np.float64) + np.nan_to_num(s_hat, nan=0.0)
+
+
+def make_run_result(**overrides) -> RunResult:
+    """A ``RunResult`` with every field defaulted to an empty all_off run."""
+    base = dict(
+        policy="all_off", N_completed=0, V_profit_usd=0.0, voucher_spent_usd=0.0, budget_B_usd=NAN,
+        n_sessions=0, n_requests=0, n_abandoned=0, n_cancelled=0, mean_pickup_eta_min=NAN,
+        share_cells_off=1.0, n_switches_per_cell_day=0.0, mean_slack=float("inf"),
+        completed_per_h=0.0, requests_per_h=0.0, abandon_rate=NAN, cancel_rate=NAN,
+        window_start_s=3600.0, window_end_s=90000.0, sim_end_s=90000.0, n_truncated_orders=0, runtime_s=0.0,
+    )
+    base.update(overrides)
+    return RunResult(**base)
+
+
+def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bool = False,
+             budget_usd: float | None = None, enforce_budget: bool | None = None) -> RunResult:
+    """Deterministic stand-in for ``engine.run`` with a WGC-like throughput hump (docs/phan_cong.md T1.4, B4).
+
+    Completed trips per hour rise with demand, peak when requests match the fleet's
+    capacity and fall beyond it; slack falls and pickup ETA rises with demand. The
+    seed jitter is drawn from the DEMAND stream, so it is identical for every
+    policy (CRN). ``profile`` records what the engine was given, so runner tests can
+    check the config transforms.
+    """
+    clock = Clock.from_config(cfg)
+    window_h = clock.window_s / 3600.0
+    d, sp = cfg.demand, cfg.supply
+    sessions_per_h = d.base_sessions_per_cell_h * d.demand_scale * world.n_cells * float(np.mean(d.hour_profile))
+    p_book = 0.15 * (1.5 if policy.name == "all_on" else 1.0)
+    requests_per_h = p_book * sessions_per_h
+    capacity_per_h = 3.0 * sp.fleet_size
+    x = requests_per_h / capacity_per_h
+    jitter = 1.0 + 0.01 * float(rng.rng_for(Stream.DEMAND, 0, 0, 0).standard_normal())
+    completed_per_h = capacity_per_h * 2.0 * x / (1.0 + x * x) * jitter
+
+    n_sessions = int(round(sessions_per_h * window_h))
+    n_requests = int(round(requests_per_h * window_h))
+    n_completed = min(n_requests, int(round(completed_per_h * window_h)))
+    n_abandoned = n_requests - n_completed
+    voucher = 3.5 * n_completed if policy.name == "all_on" else 0.0
+    enforce = cfg.budget.enforce if enforce_budget is None else bool(enforce_budget)
+    if enforce and budget_usd is not None:
+        voucher = min(voucher, float(budget_usd) * clock.n_periods)
+    markers = {
+        "demand_scale": float(d.demand_scale),
+        "always_on": float(sp.shift_mode == "always_on"),
+        "hour_profile_const": float(len(set(d.hour_profile)) == 1),
+        "speed_const": float(len(set(cfg.space.speed_factor_by_hour)) == 1),
+        "enforce": float(enforce),
+        "run_seed": float(cfg.meta.run_seed),
+    }
+    return make_run_result(
+        policy=policy.name, N_completed=n_completed, V_profit_usd=5.0 * n_completed - voucher,
+        voucher_spent_usd=voucher, budget_B_usd=NAN if budget_usd is None else float(budget_usd),
+        n_sessions=n_sessions, n_requests=n_requests, n_abandoned=n_abandoned, n_cancelled=0,
+        mean_pickup_eta_min=2.0 + 6.0 * x, share_cells_off=0.0 if policy.name == "all_on" else 1.0,
+        mean_slack=(1.0 / x) if x > 0 else float("inf"),
+        completed_per_h=n_completed / window_h, requests_per_h=n_requests / window_h,
+        abandon_rate=(n_abandoned / n_requests) if n_requests else NAN, cancel_rate=0.0 if n_requests else NAN,
+        window_start_s=float(clock.window_start_s), window_end_s=float(clock.window_end_s),
+        sim_end_s=float(clock.window_end_s), runtime_s=0.001,
+        spent_by_period_usd=np.full(clock.n_periods, voucher / clock.n_periods), profile=markers,
+    )
