@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S1. T1.1 `budget.py` xong, chờ Hoàng review (B2). Tiếp theo: T1.2 `monitor.py`.
+**Đang làm:** S1. T1.1 `budget.py` xong, đã vào `develop1`; Hoàng kiểm B2 khi pull. Tiếp theo: T1.2 `monitor.py`.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -61,7 +61,7 @@ Mẫu:
 - Còn lại / bước tiếp: T1.1 `budget.py` đầy đủ (enforce, bất biến theo kỳ, reset) + test ledger trong `test_pricing.py`; sau đó T1.2 `monitor.py`
 
 ### 2026-10-01 · T1.1 · budget.py đầy đủ · xong
-- Nhánh/PR: `tinh/t1-1-budget → develop1`, review: Hoàng
+- Nhánh/PR: commit thẳng `develop1` (không PR, như B0); Hoàng kiểm B2 sau khi pull
 - Đã làm: `sim/budget.py`: thêm `resolve_budget_usd(cfg, pilot_spent_by_period_usd)` (B theo `budget.mode`: `fixed` → `fixed_usd`; `fraction_of_all_on` → `fraction × trung bình chi tiêu mỗi kỳ` của pilot, spec §4.3), `check_invariant` luôn bắt tổng âm kể cả khi `enforce=false`, kiểm `warmup_s ≥ 0`; API sổ (`reserve/commit/settle/release_*`, `period_of`, `totals`) giữ nguyên hợp đồng B0. "Reset ngày" = mỗi kỳ có sổ riêng theo T-03, không reset lúc 00:00. `tests/test_pricing.py` (+5): kỳ chéo d→d+1 và cool-down, kỳ mới có đủ B, sổ dựng từ `Clock` (2 ngày default và tiny 120 phút), bất biến dưới 6.000 bước ngẫu nhiên có sổ đối chiếu độc lập (2.957 session, 721 bị chặn, 3.043 chuyển trạng thái), `resolve_budget_usd`
 - Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 234 passed (py3.11, 5,3 s); test chậm: không chạy
 - Lệch spec / quyết định mới: không
