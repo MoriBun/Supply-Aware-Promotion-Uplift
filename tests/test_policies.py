@@ -11,8 +11,9 @@ from sim.policies.base import (
     SessionBatch, SnapshotStore, SnapshotView,
 )
 from sim.policies.fixed import FixedPolicy
+from sim.policies.scores import BUILTIN_SCORES, import_callable, load_score_fn, score_batch
 from sim.state import HIDDEN_COLUMNS, POLICY_UNIFORMS, Mechanism
-from tests.fakes import blank_record, make_batch, make_ledger, published_store, stub_world
+from tests.fakes import blank_record, fake_score, make_batch, make_ledger, published_store, stub_world
 
 
 # --- SessionBatch (docs/tests.md: "SessionBatch truyền cho π_θ không chứa cột ẩn") ---
@@ -148,3 +149,42 @@ def test_make_policy(tiny_cfg, default_yaml):
     assert make_policy(load_config(default_yaml, ["policy.name=all_off"]), world).name == "all_off"
     with pytest.raises(NotImplementedError):
         make_policy(tiny_cfg, world)   # default policy is threshold (task T2.3)
+
+
+# --- score functions (spec §6; decisions T-07, T-21; task T1.3) ---------------------------
+
+
+def test_builtin_scores_random_and_low_freq():
+    batch = make_batch(5, 7, x_freq=[1.0, 4.0, 2.0, 8.0, 3.0])
+    s_hat = np.full(5, np.nan)
+    rnd = score_batch(load_score_fn("random"), batch, s_hat)
+    assert rnd.dtype == np.float32
+    np.testing.assert_array_equal(rnd, batch.u_score.astype(np.float32))      # T-07: pre-drawn, never redrawn
+    low = score_batch(load_score_fn("heuristic_low_freq"), batch, s_hat)
+    np.testing.assert_array_equal(low, -batch.x_freq)
+    assert int(low.argmax()) == 0                                              # lowest frequency scores highest
+    assert load_score_fn(" random ") is BUILTIN_SCORES["random"]
+    assert set(BUILTIN_SCORES) == {"random", "heuristic_low_freq"}
+
+
+def test_score_fn_loader_module_function():
+    fn = load_score_fn("tests.fakes:fake_score")
+    assert fn is fake_score and import_callable("tests.fakes:fake_score") is fake_score
+    batch = make_batch(3, 7)                                                   # x_tenure = 12
+    out = score_batch(fn, batch, np.array([0.5, np.nan, 2.0]))
+    np.testing.assert_allclose(out, [12.5, 12.0, 14.0])
+    for bad in ("nope", "tests.fakes", "tests.fakes:missing", "tests.no_such_module:f", "tests.fakes:NAN", ":f", "m:"):
+        with pytest.raises(ValueError):
+            load_score_fn(bad)
+
+
+def test_score_batch_validates_output_and_s_hat():
+    batch, s_hat = make_batch(4, 7), np.zeros(4)
+    for fn in (lambda b, s: np.zeros(3), lambda b, s: np.zeros((4, 1)), lambda b, s: np.ones(4, dtype=bool),
+               lambda b, s: np.array(["a"] * 4)):
+        with pytest.raises(ValueError):
+            score_batch(fn, batch, s_hat)
+    with pytest.raises(ValueError):
+        score_batch(fake_score, batch, np.zeros(3))                            # s_hat must be [n]
+    out = score_batch(lambda b, s: list(range(4)), batch, s_hat)
+    assert out.dtype == np.float32 and out.tolist() == [0.0, 1.0, 2.0, 3.0]

@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S1. T1.1 `budget.py`, T1.2 `monitor.py` xong, đã vào `develop1`; Hoàng kiểm B2 khi pull. Tiếp theo: T1.3 `tests/fakes.py`, `policies/scores.py`.
+**Đang làm:** S1 của Tình xong (T1.1–T1.4; T1.5 bỏ theo T-14), đã vào `develop1`; Hoàng kiểm B2, B4 khi pull. Tiếp theo: S2, T2.1 `pricing.py` đầy đủ (`quote`, B3).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -75,6 +75,22 @@ Mẫu:
 - Lệch spec / quyết định mới: không. Làm rõ T-15: `n_offers` = session có `arm = 1` (voucher thật sự được phát), đếm theo `open_time`; `slack_cap` để chính sách `ar` tự áp (spec §6), log giữ `inf`
 - Bàn giao: không (monitor nằm trong B3, giao giữa S2 cùng `pricing.py`). Nhận code H1.2 của Hoàng (PR #3, review: Tình) khi pull: đọc `demand.py`, H-05; `test_demand.py` 30 passed; `spawn` chỉ dùng `rng_for`, không đọc chính sách/snapshot; không phản đối
 - Còn lại / bước tiếp: T1.3 `tests/fakes.py`, `policies/scores.py` + test
+
+### 2026-10-01 · T1.3 · scores.py + đồ giả · xong
+- Nhánh/PR: commit thẳng `develop1` (không PR); Hoàng kiểm khi pull
+- Đã làm: `sim/policies/scores.py`: `random` → `u_score` rút sẵn (T-07), `heuristic_low_freq` → `−x_freq`, `load_score_fn` (tên có sẵn hoặc `"module:function"`), `import_callable` (nạp động, báo `ValueError` rõ khi sai spec/thiếu module/thiếu hàm/không gọi được), `score_batch` kiểm `s_hat` [n], đầu ra [n] kiểu số, ép float32. `tests/fakes.py`: `make_batch(x_freq=…)`, `fake_score` (nạp qua `"tests.fakes:fake_score"`), `make_run_result`, `fake_run` (engine giả tất định: bướu throughput kiểu WGC theo `demand_scale`, slack giảm/ETA tăng theo cầu, jitter theo seed từ luồng DEMAND nên giống nhau giữa chính sách, `profile` ghi lại config engine nhận được). `tests/test_policies.py` +3
+- Test: `pytest -q tests/test_policies.py` → 15 passed; toàn bộ xem T1.4
+- Lệch spec / quyết định mới: T-21 (`s_hat` theo session, một loader dùng chung cho score_fn và engine)
+- Bàn giao: không
+- Còn lại / bước tiếp: T1.4
+
+### 2026-10-01 · T1.4 · runner.py khung + throughput_curve + cli · xong
+- Nhánh/PR: commit thẳng `develop1` (không PR); Hoàng kiểm B4 khi pull
+- Đã làm: `sim/runner.py`: `run_id` (`<mode>-<config_hash>-<policy>-<theta>-<seed>`), `seeds_for` (`run_seed + i`), `Job` (chỉ dữ liệu pickle được), `execute_job` (worker dựng world từ `world_seed`, `make_policy`, nạp engine từ chuỗi `"module:function"`), `run_jobs` (pool `spawn`, kết quả theo thứ tự job, `n_procs` từ `runner.n_procs`/số lõi, 1 job hoặc 1 proc thì chạy inline), `policy_results_table`, `throughput_curve_table`, `throughput_config` (T-08: all_off, `always_on`, `hour_profile` và `speed_factor_by_hour` hằng tại `reference_hour`), `throughput_jobs`, `run_throughput_curve`, `summarize_throughput`, `run_mode` (mode khác → `NotImplementedError("T2.4")`). `sim/logger.py` tối thiểu: `RESULTS_TABLES` (cột + dtype của `results/policy_results`, `results/throughput_curve`), `cast_table`, `write_results`. `sim/cli.py`: nối `run_mode`, `--out` mặc định `runs/<mode>-<hash>`, in bảng tóm tắt; mode chưa có → exit 1. `tests/test_runner.py` (+14, trên engine giả: thứ tự/tất định, pool spawn == inline, cấu hình T-08 engine nhận được, parquet đúng cột/dtype, bướu A1 trên bảng tóm tắt), `tests/test_schema_contract.py` +1 (bảng results khớp `schema.md`), `tests/test_cli.py` 5 (throughput_curve chạy engine thật với `demand.base_sessions_per_cell_h=0` vì `quote` chưa nhận session, H-05 f)
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 291 passed (py3.11, 22,0 s); `test_runner.py` 14 passed (3,4 s, gồm pool spawn 2 proc); `test_cli.py` 5 passed; test chậm: không chạy
+- Lệch spec / quyết định mới: không. Câu hỏi mở Q17 (`evaluate` dùng `n_seeds` nào; đề xuất `sweep.n_seeds`), chặn T2.4, không chặn T1.4
+- Bàn giao: giao B4; người nhận kiểm tra: `pytest -q tests/test_runner.py tests/test_cli.py` pass; `python -m sim run --mode throughput_curve --config config/default.yaml --config tests/fixtures/tiny.yaml --set demand.base_sessions_per_cell_h=0 --set runner.n_procs=1 --out runs/thử` ghi `results/throughput_curve.parquet` đúng cột `schema.md`
+- Còn lại / bước tiếp: S2 — T2.1 `pricing.quote` (B3), rồi T2.2 `experiment.py`, T2.3 chính sách, T2.4 runner các mode còn lại (cần chốt Q17)
 
 ---
 
