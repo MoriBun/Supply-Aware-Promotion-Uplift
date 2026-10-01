@@ -96,7 +96,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S2. H2.1, H2.2, H2.3 xong (commit trên `develop2`, PR cuối sprint). Tiếp theo: H2.4 `engine.py` + 4 test tích hợp (cần B3 của Tình để chạy có session).
+**Đang làm:** S2 của Hoàng xong (H2.1–H2.4, commit trên `develop2`); chờ B3 (`pricing.quote`) của Tình để làm Tích hợp 1 và Gate P2. Tiếp theo: gỡ bước báo giá tạm trong `tests/test_integration.py`, chạy `throughput_curve` thật.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -199,3 +199,15 @@ Mẫu:
 - Bàn giao: không
 - Số liệu tham khảo (cùng cách chạy tay như mục H2.2, 1 ngày + 3 giờ cool-down): `static_weights` 469 lượt điều xe, 0,05 giây; 3.923 request, 2.636 hoàn thành, 1.032 hủy, 255 bỏ chờ, ETA đón 9,53 phút, slack 0,32. `stay`: 3.956 request, 2.659 hoàn thành, 1.042 hủy, 255 bỏ chờ, ETA 9,58 phút, slack 0,40
 - Còn lại / bước tiếp: H2.4 `engine.py` + 4 test tích hợp; cần B3 (`pricing.quote`) để engine chạy có session
+
+### 2026-10-01 · H2.4 · engine chạy thật + 4 test tích hợp · xong (chờ B3 để tích hợp 1)
+- Nhánh/PR: commit trên `develop2`; PR `develop2 → develop` cuối S2, review: Tình
+- Đã làm: `tests/test_integration.py` (+14): `test_smoke_day`, `test_conservation`, `test_cooldown`, `test_driver_state_consistency` cho `all_off` và `all_on`, cộng test Truncated, thứ tự thời gian của order, cùng seed cùng kết quả, hai chính sách gặp cùng session. `engine.py` không phải sửa: vòng lặp 10 bước, warm-up, cool-down, Truncated của hợp đồng B0 chạy đúng với 7 bước thật của Hoàng
+- Test: `pytest -q` → 377 passed (py3.12, `.venv`, 36 giây); test chậm: không chạy
+- Lệch spec / quyết định mới: H-12 trong `decisions.md`. Bước 5 (`pricing.quote`, T2.1) chưa có, nên file test thay nó bằng `quote_stand_in` (giá gốc, ETA theo `space.quote_eta`, `all_on` cấp voucher cho mọi session); gỡ khi nhận B3
+- Bàn giao: giao B5 (`engine.run` thật); người nhận kiểm tra: 4 test tích hợp pass, `RunResult` đủ trường
+- Số liệu tham khảo, `engine.run` với bước báo giá tạm, 1 seed (chưa phải gate):
+  - 1 ngày `default.yaml`: `all_off` N = 2.642, 3.917 request, 255 bỏ chờ, 1.020 hủy, ETA đón 9,52 phút, slack 0,19, V = 10.448 USD, 2,34 giây. `all_on` không ngân sách: N = 2.489, 5.156 request, 1.407 bỏ chờ, 1.260 hủy, ETA 10,91 phút, slack 0,08, V = 1.715 USD, voucher 8.559 USD, 2,39 giây
+  - Xem trước đường throughput (thiết lập T-08: `always_on`, giờ 18 cố định, `all_off`): `completed_per_h` theo `demand_scale` 0,25 → 100,6; 0,5 → 191,5; 0,75 → 270,1; 1,0 → 329,7; **1,25 → 335,5 (đỉnh)**; 1,5 → 296,1; 1,75 → 283,4; 2,0 → 283,4; 3,0 → 286,9; 4,0 → 282,1 (= 0,841 × đỉnh). Slack 0,68 ở 1,0; 0,19 ở 1,25; 0,04–0,05 từ 1,5 trở lên. ETA đón 3,1 phút ở 0,25 lên 11,7 phút ở 4,0
+  - Thời gian: `spawn` chiếm khoảng 65–70% (1,5 giây trong 2,3 giây ở mức mặc định; 5,8–10,3 giây ở `demand_scale` 1,75–2,0 với 105.019–120.269 session)
+- Còn lại / bước tiếp: nhận B3, gỡ `quote_stand_in`, Tích hợp 1 và Gate P2 cùng Tình
