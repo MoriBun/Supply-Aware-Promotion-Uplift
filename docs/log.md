@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S2 của Tình xong về code + test (T2.1–T2.4), trên `develop1`, **chưa commit** (Tình tự commit) và chưa PR. Tiếp theo: commit theo task, PR `develop1 → develop` (H-07/H-08; B3 giao sớm nếu Hoàng cần), rồi chờ B5 để Tích hợp 1 + Gate P2; S3: T3.1, T3.2 `logger.py` đủ bảng.
+**Đang làm:** S3 của Tình xong về code + test (T3.1–T3.3), trên `develop1`, **chưa commit** (Tình tự commit) và chưa PR. Tiếp theo: commit theo task, PR `develop1 → develop`; chờ B6 (Hoàng hiệu chỉnh, Gate P3) rồi S4: T4.1 `generate` 28 ngày, T4.2 P6 (κ auto, A2(b), A3, sweep).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -132,11 +132,43 @@ Mẫu:
 - Bàn giao: không
 - Còn lại / bước tiếp: Tích hợp 1 + Gate P2 khi Hoàng xong H2.1–H2.4 (B5): bỏ `demand_scale = 0` ở `test_engine.py`, chạy A2(a)(c), `throughput_curve` thật; T3.2 logger đủ bảng để `generate` ghi observed/hidden/market
 
+### 2026-10-01 · S2 · nhận B5 (`engine.run` thật, PR #7 `develop2 → develop`) và Gate P2 · nhận B5, gate P2 đạt (ý kiến Tình)
+- Nhánh/PR: pull `develop` (`b815fe8`) vào `develop1`
+- Đã làm: đọc H-09…H-13, `engine.py` (không đổi so với hợp đồng), `trips.py`/`cancel.py` (gọi `settle`/`release_committed` đúng chỗ, dùng `MarketMonitor.on_*`), 14 test tích hợp của Hoàng (chạy trên `pricing.quote` thật). Hoàng sửa 2 test của tôi theo hành vi thật (H-13b): đồng ý. Gate P2 (số liệu trong mục của Hoàng, cấu hình chưa hiệu chỉnh): đường throughput có đỉnh tại `demand_scale` 1,25 và giảm còn 0,83 × đỉnh; slack < 0,06 ở vùng giảm; tiêu chí 4 của A1 lệch nhẹ (ETA nhảy 3,44 phút giữa 1,25 và 1,5, đúng chỗ slack sụp 0,23 → 0,06; vài bước giảm 0,025 phút ở vùng bão hòa). Theo `plan.md` P2 là gate "xem đồ thị có đoạn giảm", còn 4 tiêu chí A1 kiểm ở P3 sau hiệu chỉnh → **Tình: gate P2 đạt**; đề nghị H3.2 xem lại tiêu chí 4 sau hiệu chỉnh (thêm mốc 1,375 nếu cần), nếu vẫn > 3 phút thì báo mentor, không nới tiêu chí
+- Test: `pytest -q` → 414 passed (py3.11, 50 s) trước khi làm S3
+- Lệch spec / quyết định mới: không; đồng ý H-09…H-13
+- Bàn giao: nhận B5
+- Còn lại / bước tiếp: S3
+
+### 2026-10-01 · T3.1 · tích hợp P4 trên engine thật · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit (Tình commit); PR S3 `develop1 → develop`
+- Đã làm: `tests/test_acceptance.py` (+15, file A2/A3 của Tình): bất biến `spent + committed + reserved ≤ B` kiểm **sau bước 9 của mọi tick** trong 1 ngày `default.yaml`, all_on có B từ `calibrate_budget` thật (B = 0,3 × chi tiêu all_on; chặn nhiều hơn phát); sổ sau lượt chạy: không voucher → không dòng, không đặt → RELEASED, Completed → SPENT, Abandoned/Cancelled/Truncated → RELEASED, `committed = reserved = 0` ở cả hai kỳ, `spent` kỳ 0 = tổng voucher order hoàn thành trong cửa sổ, kỳ −1 = warm-up; session bị chặn quyết định theo `p_request_control` (H-06d); 2 ngày tiny với B nhỏ: hai kỳ đều chi, đều ≤ B, đều có chặn và có phát lại ("reset ngày", T-03); `smoke_day` cho legacy, threshold, experiment (N > 0, không order mở, không Truncated, ≤ 30 s) kèm kiểm tra cơ chế/propensity (legacy: explore ≈ 5%, propensity NaN đúng chỗ nhắm rider; threshold: `promo_on = not (ŝ < θ)`, 0 < share_cells_off < 1; experiment: cụm 0–6, block ≥ 1, burn-in ≈ 25%, propensity = p_on); A2(a) cùng seed cùng kết quả cho 3 chính sách; A2(c) 3 chính sách gặp cùng session
+- Test: `pytest -q tests/test_acceptance.py` → 15 passed (43 s: 4 lượt 1 ngày thật + pilot); toàn bộ xem T3.3
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: A2(b), A3 ở T4.2 (cần κ auto trên engine thật và B sau hiệu chỉnh)
+
+### 2026-10-01 · T3.2 · logger.py đủ bảng · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit; PR S3
+- Đã làm: `sim/logger.py`: `RUN_TABLES` (cột + dtype trên đĩa của `observed/riders|sessions|orders`, `market/slot_snapshots`, `hidden/riders_hidden|sessions_hidden`, suy từ `SESSION_COLUMNS`/`ORDER_COLUMNS`/`SNAPSHOT_FIELDS`), `sessions_frames`/`orders_frame`/`riders_frames`/`snapshots_frame` (giải mã cột mã sang string, float32 cho số rút sẵn, `run_id` + `seed` ở mọi bảng), `run_tables`, `write_run`; assert lúc import: không cột ẩn nào trong bảng observed/market. `sim/runner.py`: `write_full_runs` — `generate` ghi thẳng dưới `--out`, các mode nhiều seed với `--log-level full` ghi `<out>/runs/<run_id>/` (T-26). `tests/test_logger.py` (+13): `generate` 2 ngày tiny legacy trên engine thật → đủ 6 bảng + results + meta; cột và kiểu Arrow trên đĩa khớp `schema.md` cho từng bảng; **`test_no_hidden_leak`** (không cột ẩn ở observed/market, `p_request_*`/`direct_request_effect_fixed_market`/`propensity_true` chỉ ở hidden); số dòng, khóa lượt chạy, hai kỳ ngân sách; cột mã là string; giá trị khớp buffer; nhiều seed mỗi lượt một thư mục
+- Test: `pytest -q tests/test_logger.py` → 13 passed (7,5 s)
+- Lệch spec / quyết định mới: T-26
+- Bàn giao: không (B7a dùng `generate` này ở T4.1)
+- Còn lại / bước tiếp: T3.3
+
+### 2026-10-01 · T3.3 · khung đánh giá tuần 5 (`analysis/`) · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit; PR S3
+- Đã làm: `analysis/io.py` (`load_run` không bao giờ trả `hidden/`, `load_hidden` riêng, `completed_outcome`), `analysis/metrics.py` (`value_table`: N/V/chi tiêu với SE và CI theo seed; `paired_difference` ghép cặp theo seed cho A2(b); `bootstrap_mean_ci`; `uplift_curve` Qini/uplift thô gộp điểm trùng; `qini_auuc`), T-27. `tests/test_analysis.py` (+10): ví dụ tay (Qini = 0,875, hệ số 0,375), gộp trùng, điểm hằng = đường ngẫu nhiên, NaN khi thiếu nhánh, điểm đúng uplift thật thắng điểm nhiễu trên 20.000 mẫu mô phỏng, CI/hiệu ghép cặp, nạp lượt chạy thật (tiny, all_on) không có bảng ẩn, nối `x_freq` từ `observed/riders`
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 452 passed (py3.11, 98 s; từ 414); `test_analysis.py` 10 passed; test chậm: không chạy
+- Lệch spec / quyết định mới: T-27; chỉ dùng numpy/pandas, chưa thêm extras `[analysis]` (pyproject là file chung, để khi cần sklearn/lightgbm ở S5)
+- Bàn giao: không
+- Còn lại / bước tiếp: PR S3; S4: T4.1 (cần B6), T4.2
+
 ---
 
 ## 2. Hoàng
 
-**Đang làm:** S3 của Hoàng xong (H3.1, H3.2): A1, A5, CAL đạt với `default.yaml` đã hiệu chỉnh (`config_hash = cb27f5348011`); giao B6, chờ Tình review (Gate P3). Tiếp theo: S4, H4.1 đo lại A5 với chính sách mặc định.
+**Đang làm:** S3 xong; đã gộp `develop` (S3 của Tình) vào `develop2`; PR `develop2 → develop` chờ Tình review (B6, Gate P3). Tiếp theo: S4, H4.1 đo lại A5 với chính sách mặc định.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -310,3 +342,11 @@ Mẫu:
 - Bàn giao: giao B6 (`default.yaml` đã hiệu chỉnh); người nhận kiểm tra: A1, A5, CAL đạt (`pytest -q -m slow tests/test_acceptance_core.py`), bảng hiệu chỉnh ở H-17, `config_hash` mới
 - Ghi chú rủi ro cho Gate P6: sau hiệu chỉnh, voucher chỉ làm giảm số chuyến ở 2 giờ cao điểm sáng. Biên độ θ có thể cải thiện N(π_θ) vì vậy nhỏ khi không có ngân sách; cần xem đường N(π_θ) dưới ngân sách B
 - Còn lại / bước tiếp: Tình review và chạy lại `calibrate_budget` (B đổi từ 2.609,96 lên 5.545,80 USD/kỳ); S4: H4.1
+
+### 2026-10-01 · S3 · gộp `develop` vào `develop2` · xong
+- Nhánh/PR: merge `origin/develop` (`87fbdab`, PR #8: T3.1, T3.2, T3.3 của Tình) vào `develop2`; PR `develop2 → develop` (H3.1, H3.2 + lần gộp này), review: Tình
+- Đã làm: xử lý conflict ở `docs/decisions.md` (giữ đủ H-13…H-18 và T-26, T-27). Không phải sửa code hay test nào: phần S3 của Tình (`logger.py`, `analysis/`, `tests/test_acceptance.py`, `tests/test_logger.py`, `tests/test_analysis.py`) chạy đúng trên `default.yaml` đã hiệu chỉnh và định nghĩa slack mới (H-14)
+- Test: `pytest -q` → 452 passed (py3.12, `.venv`, 89 giây); `pytest -q -m slow` → 3 passed (A1, A5, CAL; 97 giây)
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: Tình review PR, xác nhận H-14 (đổi `monitor.py`) và chạy lại `calibrate_budget` với `config_hash = cb27f5348011`; hai người ghi kết quả Gate P3
