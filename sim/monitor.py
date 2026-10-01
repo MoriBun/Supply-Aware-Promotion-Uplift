@@ -2,10 +2,16 @@
 
 Spec: docs/spec.md §4.11; decisions T-09, T-10, T-15. Milestone: P1 (task T1.2).
 
-Sprint-0 contract: ``accumulate`` every tick from the live counters,
-``publish`` at the end of a slot (record fields = docs/schema.md), ``view``
-for the policy of a slot. Values are computed from the per-slot accumulators
-that the other modules fill; T1.2 adds tests and the remaining counters.
+``accumulate`` runs every tick from the live counters, ``publish`` closes a slot
+(record fields = docs/schema.md) and ``view`` hands the policy of slot k the
+snapshots of slots < k. The store is a queue: ``publish`` must be called at the
+end of slot k with slot k-1 already published, and ``view(k)`` refuses to exist
+while slot k is published or slot k-1 is missing (hard rule 2, spec §4.11).
+
+Event counters (decisions T-15) are recorded through the ``on_*`` methods at the
+time of the event and in the pickup cell; several events in the same cell and
+tick add up (``np.add.at``). ``n_sessions`` is the exception: ``demand.spawn``
+adds it from its per-cell Poisson counts (decisions H-05 d).
 """
 
 from __future__ import annotations
@@ -13,7 +19,7 @@ from __future__ import annotations
 import numpy as np
 
 from sim.config import Config
-from sim.policies.base import CellDecision, SnapshotStore, SnapshotView
+from sim.policies.base import CellDecision, LookAheadError, SnapshotStore, SnapshotView
 from sim.state import CellCounters, Clock, SlotCounters
 
 NAN = float("nan")
@@ -26,6 +32,8 @@ class MarketMonitor:
         self.n_cells = int(n_cells)
         self.store = SnapshotStore(n_cells, clock.slots_per_day)
 
+    # --- per tick --------------------------------------------------------------
+
     def accumulate(self, cells: CellCounters, acc: SlotCounters) -> None:
         """Step 10 of every tick: add the live per-cell counts to the slot sums."""
         acc.sum_idle += cells.idle
@@ -34,11 +42,55 @@ class MarketMonitor:
         acc.sum_waiting += cells.waiting
         acc.n_ticks += 1
 
+    # --- event counters (decisions T-15): by event time, in the pickup cell -----
+
+    @staticmethod
+    def on_offers(acc: SlotCounters, pu_cell) -> None:
+        """Step 5: sessions granted a voucher (``arm = 1``), by ``open_time``."""
+        np.add.at(acc.n_offers, pu_cell, 1)
+
+    @staticmethod
+    def on_requests(acc: SlotCounters, pu_cell) -> None:
+        """Step 6: sessions that booked, by ``open_time``."""
+        np.add.at(acc.n_requests, pu_cell, 1)
+
+    @staticmethod
+    def on_matched(acc: SlotCounters, pu_cell, pickup_eta_min) -> None:
+        """Step 7: orders matched this tick with their quoted pickup ETA (by ``matched_time``)."""
+        np.add.at(acc.n_matched, pu_cell, 1)
+        np.add.at(acc.sum_pickup_eta_min, pu_cell, pickup_eta_min)
+        np.add.at(acc.n_pickup_eta, pu_cell, 1)
+
+    @staticmethod
+    def on_abandoned(acc: SlotCounters, pu_cell) -> None:
+        """Step 3: Waiting orders that gave up this tick."""
+        np.add.at(acc.n_abandoned, pu_cell, 1)
+
+    @staticmethod
+    def on_cancelled(acc: SlotCounters, pu_cell) -> None:
+        """Step 8: en-route cancellations this tick."""
+        np.add.at(acc.n_cancelled, pu_cell, 1)
+
+    @staticmethod
+    def on_completed(acc: SlotCounters, pu_cell, voucher_cents) -> None:
+        """Step 1: orders completed this tick with the voucher they carried (by ``dropoff_time``)."""
+        np.add.at(acc.n_completed, pu_cell, 1)
+        np.add.at(acc.voucher_spent_cents, pu_cell, voucher_cents)
+
+    # --- per slot --------------------------------------------------------------
+
     def publish(self, slot: int, published_at_s: float, acc: SlotCounters,
                 cell_dec: CellDecision | None) -> dict[str, np.ndarray]:
-        """Close slot ``slot``: compute the snapshot, store it, reset the accumulators."""
+        """Close slot ``slot``: compute the snapshot, store it, reset the accumulators.
+
+        Must be called at the end of the slot (``published_at_s = (slot + 1) * slot_s``);
+        the store enforces slot order.
+        """
         n = self.n_cells
         t_start = slot * self.clock.slot_s
+        if published_at_s != t_start + self.clock.slot_s:
+            raise ValueError(f"snapshot of slot {slot} must be published at its end "
+                             f"({t_start + self.clock.slot_s} s), got {published_at_s}")
         full = lambda v, dt: np.full(n, v, dtype=dt)  # noqa: E731
         with np.errstate(divide="ignore", invalid="ignore"):
             ticks = acc.n_ticks if acc.n_ticks > 0 else NAN
@@ -96,5 +148,21 @@ class MarketMonitor:
         return np.full(self.n_cells, NAN, dtype=np.float64)
 
     def view(self, current_slot: int) -> SnapshotView:
-        """View for decisions taken in ``current_slot``: only earlier slots are readable."""
+        """View for decisions taken in ``current_slot``: only earlier slots are readable.
+
+        Queue discipline (spec §4.11): slot ``current_slot - 1`` must be the last one
+        published, and nothing readable may have been published after the slot started.
+        """
+        last = self.store.last_published_slot
+        if last >= current_slot:
+            raise LookAheadError(f"slot {last} is already published; decisions in slot {current_slot} "
+                                 f"would see it")
+        if last < current_slot - 1:
+            raise RuntimeError(f"snapshot of slot {current_slot - 1} was not published before slot "
+                               f"{current_slot} started (last published: {last})")
+        if last >= 0:
+            published_at = float(self.store.get("published_at_s", last)[0])
+            if published_at > current_slot * self.clock.slot_s:
+                raise LookAheadError(f"slot {last} was published at {published_at} s, after slot "
+                                     f"{current_slot} started")
         return SnapshotView(self.store, current_slot)

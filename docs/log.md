@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S1. T1.1 `budget.py` xong, đã vào `develop1`; Hoàng kiểm B2 khi pull. Tiếp theo: T1.2 `monitor.py`.
+**Đang làm:** S1. T1.1 `budget.py`, T1.2 `monitor.py` xong, đã vào `develop1`; Hoàng kiểm B2 khi pull. Tiếp theo: T1.3 `tests/fakes.py`, `policies/scores.py`.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -67,6 +67,14 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: giao B2; người nhận kiểm tra: `pytest -q tests/test_pricing.py` pass (23 test), API đúng docstring các stub `choice.py`/`trips.py`/`cancel.py` (`commit`/`release_reserved` ở bước 6, `settle` ở bước 1, `release_committed` ở bước 3/8)
 - Còn lại / bước tiếp: test "bất biến 1 ngày trên engine thật" để S3 (T3.1) khi có B5; T1.2 `monitor.py`
+
+### 2026-10-01 · T1.2 · monitor.py: công bố theo slot, lag, hàng đợi không nhìn trước · xong
+- Nhánh/PR: commit thẳng `develop1` (không PR); Hoàng kiểm khi pull
+- Đã làm: `sim/monitor.py`: `publish` bắt buộc đúng cuối slot (`published_at_s = (slot+1)·slot_s`, sai → `ValueError`); `view(k)` chỉ tạo được khi slot k−1 là slot vừa công bố (slot k đã công bố → `LookAheadError`, thiếu slot → `RuntimeError`) và không snapshot nào công bố sau đầu slot k (assert hàng đợi spec §4.11); thêm điểm ghi bộ đếm T-15 `on_offers/on_requests/on_matched/on_abandoned/on_cancelled/on_completed(acc, pu_cell, …)` dùng `np.add.at` để nhiều sự kiện cùng ô cùng tick cộng dồn đúng; `n_sessions` do `demand.spawn` cộng (H-05 d), monitor không cộng lại. `tests/test_monitor.py` 5 → 13 test: trung bình theo tick, slack `inf`/utilization NaN khi ô trống, bộ đếm giả theo ô đón rồi reset, lag ngày NaN suốt ngày 1 và đúng slot k−96 suốt ngày 2 (qua store và qua `view.lag_day`), view chỉ thấy `published_at_s ≤ đầu slot k`, publish sai giờ/sai thứ tự/trùng bị từ chối, engine stub công bố đủ slot đúng thứ tự (`demand_scale = 0` đến khi có B3)
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 272 passed (py3.11, 14,6 s); `test_monitor.py` 13 passed; test chậm: không chạy
+- Lệch spec / quyết định mới: không. Làm rõ T-15: `n_offers` = session có `arm = 1` (voucher thật sự được phát), đếm theo `open_time`; `slack_cap` để chính sách `ar` tự áp (spec §6), log giữ `inf`
+- Bàn giao: không (monitor nằm trong B3, giao giữa S2 cùng `pricing.py`). Nhận code H1.2 của Hoàng (PR #3, review: Tình) khi pull: đọc `demand.py`, H-05; `test_demand.py` 30 passed; `spawn` chỉ dùng `rng_for`, không đọc chính sách/snapshot; không phản đối
+- Còn lại / bước tiếp: T1.3 `tests/fakes.py`, `policies/scores.py` + test
 
 ---
 
