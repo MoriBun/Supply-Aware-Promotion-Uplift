@@ -27,7 +27,7 @@ def init_drivers(ctx: SimContext) -> None:
     """Called once before the first tick: put the drivers whose shift covers t = 0 online."""
     cfg, drivers, schedule = ctx.cfg, ctx.drivers, ctx.world.drivers
     if cfg.supply.early_exit_enabled:
-        raise NotImplementedError("supply.early_exit_enabled: sensitivity analysis only, see decisions Q17")
+        raise NotImplementedError("supply.early_exit_enabled: sensitivity analysis only, see decisions Q18")
 
     if cfg.supply.shift_mode == "always_on":
         drivers.shift_start_s[:] = 0.0

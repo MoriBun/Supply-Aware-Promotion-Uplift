@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S1. T1.1 `budget.py` xong, đã vào `develop1`; Hoàng kiểm B2 khi pull. Tiếp theo: T1.2 `monitor.py`.
+**Đang làm:** S1 của Tình xong (T1.1–T1.4; T1.5 bỏ theo T-14), đã vào `develop1`; Hoàng kiểm B2, B4 khi pull. Tiếp theo: S2, T2.1 `pricing.py` đầy đủ (`quote`, B3).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -68,11 +68,35 @@ Mẫu:
 - Bàn giao: giao B2; người nhận kiểm tra: `pytest -q tests/test_pricing.py` pass (23 test), API đúng docstring các stub `choice.py`/`trips.py`/`cancel.py` (`commit`/`release_reserved` ở bước 6, `settle` ở bước 1, `release_committed` ở bước 3/8)
 - Còn lại / bước tiếp: test "bất biến 1 ngày trên engine thật" để S3 (T3.1) khi có B5; T1.2 `monitor.py`
 
+### 2026-10-01 · T1.2 · monitor.py: công bố theo slot, lag, hàng đợi không nhìn trước · xong
+- Nhánh/PR: commit thẳng `develop1` (không PR); Hoàng kiểm khi pull
+- Đã làm: `sim/monitor.py`: `publish` bắt buộc đúng cuối slot (`published_at_s = (slot+1)·slot_s`, sai → `ValueError`); `view(k)` chỉ tạo được khi slot k−1 là slot vừa công bố (slot k đã công bố → `LookAheadError`, thiếu slot → `RuntimeError`) và không snapshot nào công bố sau đầu slot k (assert hàng đợi spec §4.11); thêm điểm ghi bộ đếm T-15 `on_offers/on_requests/on_matched/on_abandoned/on_cancelled/on_completed(acc, pu_cell, …)` dùng `np.add.at` để nhiều sự kiện cùng ô cùng tick cộng dồn đúng; `n_sessions` do `demand.spawn` cộng (H-05 d), monitor không cộng lại. `tests/test_monitor.py` 5 → 13 test: trung bình theo tick, slack `inf`/utilization NaN khi ô trống, bộ đếm giả theo ô đón rồi reset, lag ngày NaN suốt ngày 1 và đúng slot k−96 suốt ngày 2 (qua store và qua `view.lag_day`), view chỉ thấy `published_at_s ≤ đầu slot k`, publish sai giờ/sai thứ tự/trùng bị từ chối, engine stub công bố đủ slot đúng thứ tự (`demand_scale = 0` đến khi có B3)
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 272 passed (py3.11, 14,6 s); `test_monitor.py` 13 passed; test chậm: không chạy
+- Lệch spec / quyết định mới: không. Làm rõ T-15: `n_offers` = session có `arm = 1` (voucher thật sự được phát), đếm theo `open_time`; `slack_cap` để chính sách `ar` tự áp (spec §6), log giữ `inf`
+- Bàn giao: không (monitor nằm trong B3, giao giữa S2 cùng `pricing.py`). Nhận code H1.2 của Hoàng (PR #3, review: Tình) khi pull: đọc `demand.py`, H-05; `test_demand.py` 30 passed; `spawn` chỉ dùng `rng_for`, không đọc chính sách/snapshot; không phản đối
+- Còn lại / bước tiếp: T1.3 `tests/fakes.py`, `policies/scores.py` + test
+
+### 2026-10-01 · T1.3 · scores.py + đồ giả · xong
+- Nhánh/PR: commit thẳng `develop1` (không PR); Hoàng kiểm khi pull
+- Đã làm: `sim/policies/scores.py`: `random` → `u_score` rút sẵn (T-07), `heuristic_low_freq` → `−x_freq`, `load_score_fn` (tên có sẵn hoặc `"module:function"`), `import_callable` (nạp động, báo `ValueError` rõ khi sai spec/thiếu module/thiếu hàm/không gọi được), `score_batch` kiểm `s_hat` [n], đầu ra [n] kiểu số, ép float32. `tests/fakes.py`: `make_batch(x_freq=…)`, `fake_score` (nạp qua `"tests.fakes:fake_score"`), `make_run_result`, `fake_run` (engine giả tất định: bướu throughput kiểu WGC theo `demand_scale`, slack giảm/ETA tăng theo cầu, jitter theo seed từ luồng DEMAND nên giống nhau giữa chính sách, `profile` ghi lại config engine nhận được). `tests/test_policies.py` +3
+- Test: `pytest -q tests/test_policies.py` → 15 passed; toàn bộ xem T1.4
+- Lệch spec / quyết định mới: T-21 (`s_hat` theo session, một loader dùng chung cho score_fn và engine)
+- Bàn giao: không
+- Còn lại / bước tiếp: T1.4
+
+### 2026-10-01 · T1.4 · runner.py khung + throughput_curve + cli · xong
+- Nhánh/PR: commit thẳng `develop1` (không PR); Hoàng kiểm B4 khi pull
+- Đã làm: `sim/runner.py`: `run_id` (`<mode>-<config_hash>-<policy>-<theta>-<seed>`), `seeds_for` (`run_seed + i`), `Job` (chỉ dữ liệu pickle được), `execute_job` (worker dựng world từ `world_seed`, `make_policy`, nạp engine từ chuỗi `"module:function"`), `run_jobs` (pool `spawn`, kết quả theo thứ tự job, `n_procs` từ `runner.n_procs`/số lõi, 1 job hoặc 1 proc thì chạy inline), `policy_results_table`, `throughput_curve_table`, `throughput_config` (T-08: all_off, `always_on`, `hour_profile` và `speed_factor_by_hour` hằng tại `reference_hour`), `throughput_jobs`, `run_throughput_curve`, `summarize_throughput`, `run_mode` (mode khác → `NotImplementedError("T2.4")`). `sim/logger.py` tối thiểu: `RESULTS_TABLES` (cột + dtype của `results/policy_results`, `results/throughput_curve`), `cast_table`, `write_results`. `sim/cli.py`: nối `run_mode`, `--out` mặc định `runs/<mode>-<hash>`, in bảng tóm tắt; mode chưa có → exit 1. `tests/test_runner.py` (+14, trên engine giả: thứ tự/tất định, pool spawn == inline, cấu hình T-08 engine nhận được, parquet đúng cột/dtype, bướu A1 trên bảng tóm tắt), `tests/test_schema_contract.py` +1 (bảng results khớp `schema.md`), `tests/test_cli.py` 5 (throughput_curve chạy engine thật với `demand.base_sessions_per_cell_h=0` vì `quote` chưa nhận session, H-05 f)
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 291 passed (py3.11, 22,0 s); `test_runner.py` 14 passed (3,4 s, gồm pool spawn 2 proc); `test_cli.py` 5 passed; test chậm: không chạy
+- Lệch spec / quyết định mới: không. Câu hỏi mở Q17 (`evaluate` dùng `n_seeds` nào; đề xuất `sweep.n_seeds`), chặn T2.4, không chặn T1.4
+- Bàn giao: giao B4; người nhận kiểm tra: `pytest -q tests/test_runner.py tests/test_cli.py` pass; `python -m sim run --mode throughput_curve --config config/default.yaml --config tests/fixtures/tiny.yaml --set demand.base_sessions_per_cell_h=0 --set runner.n_procs=1 --out runs/thử` ghi `results/throughput_curve.parquet` đúng cột `schema.md`
+- Còn lại / bước tiếp: S2 — T2.1 `pricing.quote` (B3), rồi T2.2 `experiment.py`, T2.3 chính sách, T2.4 runner các mode còn lại (cần chốt Q17)
+
 ---
 
 ## 2. Hoàng
 
-**Đang làm:** S1 xong (H1.1–H1.4); PR `develop2 → develop` cho H1.3 và H1.4 chờ Tình review. Tiếp theo: S2, H2.1 `matching.py`.
+**Đang làm:** S1 xong (H1.1–H1.4); đã gộp `develop` (T1.2–T1.4) vào `develop2`; PR `develop2 → develop` chờ Tình review. Tiếp theo: S2, H2.1 `matching.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -132,3 +156,12 @@ Mẫu:
 - Bàn giao: không
 - Số liệu tham khảo (cấu hình mặc định): số xe trong ca theo giờ thấp nhất 6 xe lúc 06:00, 18 xe lúc 07:00, 31 xe lúc 08:00 (cầu cao điểm sáng 1,40–1,70), cao nhất 61 xe lúc 14:00 và 21:00; 43/120 xe trong ca lúc 00:00
 - Còn lại / bước tiếp: S2: H2.1 `matching.py`, H2.2 `trips.py` + `cancel.py`, H2.3 `reposition.py`, H2.4 `engine.py`
+
+### 2026-10-01 · S1 · gộp `develop` vào `develop2`, đính chính số câu hỏi mở · xong
+- Nhánh/PR: merge `origin/develop` (`eb96ab9`, gồm T1.2, T1.3, T1.4 của Tình) vào `develop2`; PR `develop2 → develop`, review: Tình
+- Đã làm: xử lý conflict ở `docs/decisions.md`: giữ đủ H-06, H-07, H-08 và T-21; mục "Câu hỏi mở" giữ Q17 của Tình (`evaluate` dùng `n_seeds` nào), câu về `supply.early_exit_enabled` đổi thành **Q18**; sửa thông báo lỗi trong `sim/supply.py` theo số mới. Tạo `.venv` (py3.12) và cài `pip install -e ".[dev]"`
+- Test: `pytest -q` trong `.venv` → 321 passed (py3.12, numpy 2.5.3, pandas 3.0.6, pyarrow 25.0.1)
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Đính chính: mục "H1.4" ở trên ghi "câu hỏi mở Q17"; số đúng là **Q18**
+- Còn lại / bước tiếp: S2, H2.1 `matching.py`

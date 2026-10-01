@@ -86,6 +86,18 @@ def test_rider_columns(schema):
     assert set(Riders.HIDDEN) == set(schema["hidden/riders_hidden"]) - LOGGER_ADDS - {"rider_id"}
 
 
+def test_results_tables_match_schema(schema):
+    from sim.logger import RESULTS_TABLES
+    titles = {"policy_results": "results/policy_results (một dòng mỗi lượt chạy)",
+              "throughput_curve": "results/throughput_curve"}
+    for name, title in titles.items():
+        types = schema[title]
+        assert set(RESULTS_TABLES[name]) == set(types) | LOGGER_ADDS, name
+        for col, want in types.items():
+            if want:
+                assert RESULTS_TABLES[name][col] == want, f"{name}.{col}: {RESULTS_TABLES[name][col]} vs schema {want}"
+
+
 def test_observed_dtypes_match_schema(schema):
     for columns, key in ((SESSION_COLUMNS, "observed/sessions (một dòng mỗi session)"),
                          (ORDER_COLUMNS, "observed/orders (một dòng mỗi order, `order_id = session_id`)")):

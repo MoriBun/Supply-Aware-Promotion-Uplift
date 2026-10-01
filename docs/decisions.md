@@ -54,6 +54,7 @@ Quy ước:
 | 2026-10-01 | H-06 | **Quyết định đặt xe (H1.3).** (a) Voucher dùng trong công thức là `voucher_cents / 100` của session (số cent do lớp voucher cấp), không đọc cột `voucher_value_usd` float32. (b) `p_request_treat` tính với voucher từ `pricing.voucher_cents(cfg, giá)`, tức cùng quy tắc làm tròn cent và cùng trần `max_usd` với voucher thật. Hệ quả: session được cấp voucher có xác suất đặt đúng bằng `p_request_treat`, session không được cấp đúng bằng `p_request_control`. (c) `choice.decide` cộng `cells.waiting` và `slot_counters.n_requests` theo ô đón cho order mới; `matching.py` chỉ trừ `waiting` khi ghép. (d) Session bị chặn ngân sách (`voucher_cents = 0`) quyết định như không có voucher và không có dòng nào trong sổ. | (a)(b) Hai cách làm tròn khác nhau sẽ làm `direct_request_effect_fixed_market` lệch khỏi hiệu ứng thật của chính session đó. (c) Hợp đồng B0 chưa ghi ai cộng hai bộ đếm này; nơi tạo order là nơi biết rõ nhất. | Hoàng (chờ Tình review PR) |
 | 2026-10-01 | H-07 | **Đổi mô hình nhánh.** `develop` là nhánh chung; Tình code trên `develop1`, Hoàng trên `develop2`; mỗi người PR từ nhánh của mình vào `develop`, gộp bằng merge commit, không squash; gate gộp `develop → main`. Bỏ nhánh riêng cho từng task (`hoang/<task>`, `tinh/<task>`). | Hai người thống nhất ngày 01/10. Không squash vì nhánh cá nhân được dùng lại cho nhiều PR. | Hoàng, Tình |
 | 2026-10-01 | H-08 | **Cung (H1.4) và nhịp PR.** (a) `supply.update` chạy ở bước 2: trước hết cho xe **đang rảnh** và đã quá `shift_end` rời hệ thống, sau đó cho xe đến giờ vào ca. Xe bận khi hết ca không bị đụng tới; `trips.advance` (bước 1) trả xe về rảnh, rồi bước 2 của cùng tick cho xe rời. (b) Xe rời muộn nhận ca kế tiếp là ca đầu tiên chưa kết thúc, đúng giờ cũ. (c) `on_shift`, `online_by_hour`, `describe_world` đặt trong `population.py`. (d) Mỗi sprint một PR từ nhánh cá nhân vào `develop`, mỗi task một commit; bàn giao mà người kia đang chờ thì PR sớm (sửa H-07). | (a) Thứ tự bước của engine đã đủ để thỏa "chỉ rời khi rảnh" mà không cần cờ riêng. (c) `supply.py` import `population.py`, nên hàm dùng cho bảng tóm tắt phải nằm ở `population.py` để tránh import vòng. (d) Hai người thống nhất ngày 01/10. | Hoàng (chờ Tình review PR) |
+| 2026-10-01 | T-21 | **Giao diện hàm điểm (`policies/scores.py`, T1.3).** `score_fn(batch, s_hat) -> float[n]`: `s_hat` là ŝ của ô đón **từng session** (float [n], NaN khi chính sách không dự báo); kết quả một số thực mỗi session, cao hơn = ưu tiên phát; `score_batch` kiểm hình dạng, kiểu số và ép float32. `random` trả `u_score` rút sẵn (T-07), `heuristic_low_freq` trả `−x_freq`; chuỗi `"module:function"` nạp bằng `import_callable`, hàm này cũng nạp engine cho `runner` (spec §7, tiến trình con spawn). | Spec §6 viết `score_fn(SessionBatch, ŝ)` mà không nói ŝ theo ô hay theo session; theo session thì B8 (Hoàng) chỉ cần nối cột của batch, không cần biết ô. Một loader cho cả score_fn và engine để hai chỗ không lệch nhau. | Tình |
 
 ---
 
@@ -118,7 +119,12 @@ Quy ước:
 
 Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
 
-### Q17. `supply.early_exit_enabled = true` chưa được cài (không chặn mốc nào)
+### Q17. Mode `evaluate` dùng `n_seeds` nào?
+- Bối cảnh: spec §7 ghi `evaluate` = "1 chính sách × `n_seeds`", nhưng YAML chỉ có `sweep.n_seeds`, `gte.n_seeds`, `throughput.n_seeds`. Thêm khóa mới cần PR chung (`config.py`).
+- Đề xuất (Tình): `evaluate` dùng `sweep.n_seeds`, vì bảng N(π)/V(π) tuần 5 so các chính sách dưới cùng B và cần cùng số seed với `sweep_theta`.
+- Mốc bị chặn: T2.4 (`runner.evaluate`). Không chặn T1.4 (`throughput_curve` có `throughput.n_seeds` riêng).
+
+### Q18. `supply.early_exit_enabled = true` chưa được cài (không chặn mốc nào)
 - Spec §4.8: khi bật, xe rảnh ở thời điểm ≥ **2 giờ** vào ca mà `earnings_today / giờ_đã_làm < reservation_wage` thì rời. Con số 2 giờ không có khóa trong `default.yaml`, nên cài vào code là vi phạm quy tắc cứng 1. Spec cũng chưa nói `earnings_today` reset lúc nào.
 - Hiện tại `supply.init_drivers` báo `NotImplementedError` khi cờ này bật. Mặc định cờ tắt (quy tắc cứng 5), và spec ghi nhánh này chỉ dùng cho phân tích độ nhạy.
 - **Đề xuất:** nếu tuần 5 cần phân tích độ nhạy này thì thêm khóa `supply.early_exit_min_hours: 2.0` (file chung), reset thu nhập khi vào ca, rồi cài. Nếu không cần thì bỏ nhánh này khỏi spec.
