@@ -70,6 +70,16 @@ class DriverSchedule:
         return len(self.driver_id)
 
 
+def on_shift(schedule: DriverSchedule, t: float) -> np.ndarray:
+    """Periodic shift rule (T-02): on shift when ``((t/3600 - shift_start) mod 24) < shift_len``."""
+    return ((t / 3600.0 - schedule.shift_start_h) % 24.0) < schedule.shift_len_h
+
+
+def online_by_hour(schedule: DriverSchedule) -> np.ndarray:
+    """Number of drivers on shift at the start of each hour 0..23 (the same every day)."""
+    return np.array([int(on_shift(schedule, h * 3600.0).sum()) for h in range(24)])
+
+
 @dataclass
 class DemandTables:
     """Cumulative tables for sampling a session's rider and destination (spec §4.2).
@@ -115,6 +125,31 @@ def build_world(cfg: Config, rng: Rng) -> World:
         eval_cell_mask=_frozen(np.ones(space.n_cells, dtype=bool)),
         tables=_demand_tables(cfg, space, cell_weight, riders),
     )
+
+
+def describe_world(cfg: Config, world: World) -> str:
+    """Plain-text summary of the static world (docs/plan.md, P1): cells, travel times, riders, fleet by hour."""
+    space, riders, d = world.space, world.riders, cfg.demand
+    off_diag = ~np.eye(space.n_cells, dtype=bool)
+    t_by_hour = np.array([space.T[:, :, h][off_diag].mean() for h in range(24)])
+    w = world.cell_weight
+    sessions_per_day = (d.base_sessions_per_cell_h * d.demand_scale * np.sum(d.hour_profile) * w.sum())
+    home = np.bincount(riders.home_cell, minlength=space.n_cells)
+    online = online_by_hour(world.drivers)
+    hours = " ".join(f"{h:>3d}" for h in range(24))
+    lines = [
+        f"cells            {space.n_cells} (radius {space.radius}, torus {space.torus}, area {space.area_km2:.2f} km2 each)",
+        f"cell weight      min {w.min():.2f}  max {w.max():.2f}  (mean 1)",
+        f"travel time      mean between cells {t_by_hour.mean():.1f} min"
+        f"  (fastest hour {t_by_hour.min():.1f}, slowest hour {t_by_hour.max():.1f}); farthest ring"
+        f" {space.T.max():.1f} min at the slowest hour",
+        f"riders           {riders.n}  per home cell: min {home.min()}  max {home.max()}",
+        f"sessions         {sessions_per_day:,.0f} expected per day",
+        f"fleet            {world.drivers.n} drivers, shift_mode {cfg.supply.shift_mode}",
+        f"hour             {hours}",
+        "on shift         " + " ".join(f"{n:>3d}" for n in online),
+    ]
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

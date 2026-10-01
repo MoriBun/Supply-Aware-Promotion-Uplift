@@ -59,7 +59,7 @@ Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_st
 
 - **Đầu phiên:** đọc `docs/log.md` mục của mình (dòng "Đang làm" và mục cuối) và mục cuối của người kia; đọc task hiện tại trong `docs/phan_cong.md`; đọc mục tương ứng trong `spec.md` và `tests.md` trước khi code một module.
 - Viết test trước hoặc cùng lúc với code. Task chỉ xong khi test của task pass.
-- Mỗi task là một nhánh (`tinh/<task>` hoặc `hoang/<task>`) và một PR nhỏ vào `develop1`; người kia review. Mô tả PR chép từ mục log của task: làm gì, test nào pass, lệch spec ở đâu.
+- Nhánh (H-07): `develop` là nhánh chung; Tình code trên `develop1`, Hoàng trên `develop2`. Trước mỗi task kéo `develop` về nhánh mình; mỗi task một commit kèm mục log; **xong các task của một sprint** thì mở một PR từ nhánh mình vào `develop`, người kia review, gộp bằng merge commit (không squash). Thứ người kia đang chờ (bàn giao B-x) thì PR sớm, không đợi hết sprint. Mô tả PR chép từ mục log của task: làm gì, test nào pass, lệch spec ở đâu.
 - **Hai người làm song song** theo `docs/phan_cong.md`:
   - chỉ sửa file mình sở hữu (mục 2 của file đó);
   - cần sửa file của người kia thì mở PR nhỏ để chủ file review;
@@ -84,7 +84,7 @@ Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_st
 
 ```
 ### 2026-10-01 · T1.1 · budget.py đầy đủ · xong
-- Nhánh/PR: tinh/t1-1-budget → develop1 (#5), review: Hoàng
+- Nhánh/PR: develop1 → develop (#5), review: Hoàng
 - Đã làm: sim/budget.py (enforce, bất biến theo kỳ, reset); tests/test_pricing.py (+6)
 - Test: pytest -q → 210 passed (py3.11); test chậm: không chạy
 - Lệch spec / quyết định mới: không (hoặc: T-21 trong decisions.md)

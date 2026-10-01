@@ -96,7 +96,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S1. H1.2 `population.py`, `demand.py` xong, chờ Tình review. Tiếp theo: H1.3 `choice.py`.
+**Đang làm:** S1 xong (H1.1–H1.4); đã gộp `develop` (T1.2–T1.4) vào `develop2`; PR `develop2 → develop` chờ Tình review. Tiếp theo: S2, H2.1 `matching.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -130,3 +130,38 @@ Mẫu:
 - Lệch spec / quyết định mới: H-05 trong `decisions.md`. Giữ một bộ sinh số cho mỗi session, không dùng SESSION_BATCH
 - Bàn giao: không. Ghi chú cho Tình: `pricing.quote` (T2.1) chưa nhận session, nên engine chỉ chạy được với `demand_scale = 0` đến khi có B3
 - Còn lại / bước tiếp: H1.3 `choice.py`
+
+### 2026-10-01 · T1.1 · budget.py đầy đủ · nhận B2
+- Nhánh/PR: commit của Tình trên `develop1`, đã có trong `develop` (`db9efd1`)
+- Đã làm: chạy phần "Người nhận kiểm tra" của B2; đối chiếu API sổ với chỗ `choice.py` gọi (`commit`, `release_reserved`, `entry`, `totals`)
+- Test: `pytest -q tests/test_pricing.py` → 23 passed (py3.12)
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B2
+- Còn lại / bước tiếp: `settle` và `release_committed` sẽ dùng ở H2.2 (`trips.py`, `cancel.py`)
+
+### 2026-10-01 · H1.3 · choice.py (M4) · xong
+- Nhánh/PR: `develop2 → develop`, review: Tình
+- Đã làm: `sim/choice.py` (`request_probability`, `decide`: quyết định đặt xe, ghi `p_request_*` ẩn, tạo order Waiting, `commit`/`release_reserved` trên sổ, cộng `cells.waiting` và `n_requests`); `tests/test_choice.py` (+18). Phần `state.py` của H1.3 đã có từ hợp đồng B0. Sửa quy trình nhánh trong `CLAUDE.md`, `phan_cong.md`, `plan.md` (H-07)
+- Test: `pytest -q` → 282 passed (py3.12); test chậm: không chạy. `decide` cho 1 ngày mô phỏng, mọi session có voucher: 0,28 giây
+- Lệch spec / quyết định mới: H-06, H-07 trong `decisions.md`
+- Bàn giao: không
+- Số liệu tham khảo (chưa phải CAL; ETA báo cố định 4 phút, giá tự tính): tỷ lệ đặt không voucher 18,9% (mục tiêu P3: 13–17%), có voucher 26,1% (+38,0%), giá trung bình 21,27 USD
+- Còn lại / bước tiếp: H1.4 `supply.py`
+
+### 2026-10-01 · H1.4 · supply.py (M8), bảng tóm tắt thế giới · xong
+- Nhánh/PR: `develop2 → develop` (một PR cho H1.3 và H1.4), review: Tình
+- Đã làm: `sim/supply.py` (`init_drivers`: xe đang trong ca lúc t = 0 thì rảnh tại ô xuất phát; `update`: hết ca chỉ rời khi rảnh, vào ca tại ô xuất phát; `shift_mode = always_on`); `sim/population.py` thêm `on_shift`, `online_by_hour`, `describe_world`; `tests/test_supply.py` (+12, phần M8)
+- Test: `pytest -q` → 294 passed (py3.12); test chậm: không chạy
+- Lệch spec / quyết định mới: H-08 trong `decisions.md`; câu hỏi mở Q17 (`early_exit_enabled` chưa cài)
+- Bàn giao: không
+- Số liệu tham khảo (cấu hình mặc định): số xe trong ca theo giờ thấp nhất 6 xe lúc 06:00, 18 xe lúc 07:00, 31 xe lúc 08:00 (cầu cao điểm sáng 1,40–1,70), cao nhất 61 xe lúc 14:00 và 21:00; 43/120 xe trong ca lúc 00:00
+- Còn lại / bước tiếp: S2: H2.1 `matching.py`, H2.2 `trips.py` + `cancel.py`, H2.3 `reposition.py`, H2.4 `engine.py`
+
+### 2026-10-01 · S1 · gộp `develop` vào `develop2`, đính chính số câu hỏi mở · xong
+- Nhánh/PR: merge `origin/develop` (`eb96ab9`, gồm T1.2, T1.3, T1.4 của Tình) vào `develop2`; PR `develop2 → develop`, review: Tình
+- Đã làm: xử lý conflict ở `docs/decisions.md`: giữ đủ H-06, H-07, H-08 và T-21; mục "Câu hỏi mở" giữ Q17 của Tình (`evaluate` dùng `n_seeds` nào), câu về `supply.early_exit_enabled` đổi thành **Q18**; sửa thông báo lỗi trong `sim/supply.py` theo số mới. Tạo `.venv` (py3.12) và cài `pip install -e ".[dev]"`
+- Test: `pytest -q` trong `.venv` → 321 passed (py3.12, numpy 2.5.3, pandas 3.0.6, pyarrow 25.0.1)
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Đính chính: mục "H1.4" ở trên ghi "câu hỏi mở Q17"; số đúng là **Q18**
+- Còn lại / bước tiếp: S2, H2.1 `matching.py`
