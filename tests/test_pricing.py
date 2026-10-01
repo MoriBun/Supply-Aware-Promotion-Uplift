@@ -19,10 +19,11 @@ from tests.fakes import make_batch, make_context, make_ledger, stub_world
 
 
 def test_base_fare_formula(default_yaml):
-    cfg = load_config(default_yaml)  # base 3.0, per_min 1.4
+    cfg = load_config(default_yaml)  # values come from the config: P3 calibrates per_min_usd
     fare = base_fare_usd(cfg, [0.0, 10.0])
     assert fare.dtype == np.float32
-    np.testing.assert_allclose(fare, [3.0, 17.0])
+    np.testing.assert_allclose(fare, [cfg.pricing.base_fare_usd, cfg.pricing.base_fare_usd + 10.0 * cfg.pricing.per_min_usd],
+                               rtol=1e-6)
 
 
 def test_voucher_cents_pct_and_cap(default_yaml):

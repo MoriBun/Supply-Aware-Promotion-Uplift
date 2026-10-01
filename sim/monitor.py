@@ -98,8 +98,9 @@ class MarketMonitor:
             E = (acc.sum_enroute / ticks).astype(np.float32)
             O = (acc.sum_ontrip / ticks).astype(np.float32)
             W = (acc.sum_waiting / ticks).astype(np.float32)
-            # slack = I/E, +inf when E = 0 (spec §4.11, decisions T-10)
-            slack = np.where(E > 0, I.astype(np.float64) / E, np.inf)
+            # slack = I/E (T-10). With E = 0: +inf if some driver idles there, 0 if the cell has no idle
+            # driver at all, i.e. no supply to offer (spec §4.11, decisions H-14).
+            slack = np.where(E > 0, I.astype(np.float64) / E, np.where(I > 0, np.inf, 0.0))
             slack = np.where(np.isnan(I), NAN, slack).astype(np.float64)
             busy = E.astype(np.float64) + O
             denom = I.astype(np.float64) + busy

@@ -61,7 +61,7 @@ def test_accumulate_and_publish_means(monitor):
     assert acc.n_ticks == 0 and (acc.sum_idle == 0).all()      # reset after publish
 
 
-def test_means_are_per_tick_averages_and_empty_cells_give_inf_slack_nan_utilization(monitor):
+def test_means_are_per_tick_averages_and_empty_cells_give_zero_slack_nan_utilization(monitor):
     mon, clock = monitor
     cells, acc = CellCounters(7), SlotCounters(7)
     for idle in (1, 2, 3):                       # cell 0 varies; cell 6 stays empty
@@ -72,7 +72,7 @@ def test_means_are_per_tick_averages_and_empty_cells_give_inf_slack_nan_utilizat
     rec = mon.publish(0, clock.slot_s, acc, None)
     assert rec["idle_avg"][0] == 2.0 and rec["slack"][0] == 2.0
     assert rec["utilization"][0] == pytest.approx(3 / 5)
-    assert np.isinf(rec["slack"][6]) and np.isnan(rec["utilization"][6])   # I = E = 0: inf (T-10), NaN (T-09)
+    assert rec["slack"][6] == 0.0 and np.isnan(rec["utilization"][6])       # I = E = 0: no supply, slack 0 (H-14); NaN (T-09)
     assert rec["slack"].dtype == np.float64 and rec["utilization"].dtype == np.float32
 
 

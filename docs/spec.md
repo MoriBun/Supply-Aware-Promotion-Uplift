@@ -337,7 +337,7 @@ Trong mỗi slot, sau bước 9 của **mỗi tick**, cộng dồn cho từng ô
 - `W_z`: số order `Waiting` ở ô z.
 
 Cuối slot, lấy trung bình theo số tick để có `I, E, O, W`, rồi tính:
-- `slack = I / E`; nếu E = 0 thì `+inf` [Castillo et al. 2025].
+- `slack = I / E` [Castillo et al. 2025]. Khi E = 0: `+inf` nếu I > 0; **0 nếu I = 0** (ô không có xe rảnh nào thì là ô căng, H-14).
 - `utilization = (E + O) / (I + E + O)`; nếu mẫu số = 0 thì NaN. Xe `repositioning` và `offline` không tính (T-09).
 - Đếm trong slot theo **thời điểm sự kiện** và **ô đón** (T-15): `n_sessions`, `n_offers`, `n_requests` theo `open_time`; `n_matched` và `mean_pickup_eta_min` theo `matched_time`; `n_abandoned`, `n_cancelled` theo thời điểm hủy; `n_completed`, `voucher_spent_usd` theo `dropoff_time`.
 - Giá trị trễ để làm feature: `slack_lag_slot` (slot k-1) và `slack_lag_day` (slot k-96; NaN nếu chưa có).

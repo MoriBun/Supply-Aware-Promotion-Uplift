@@ -104,7 +104,8 @@ def test_throughput_config_transforms(default_yaml):
     assert t.demand.hour_profile == (cfg.demand.hour_profile[h],) * 24
     assert t.space.speed_factor_by_hour == (cfg.space.speed_factor_by_hour[h],) * 24
     assert t.demand.hour_profile[0] == 1.85 and t.space.speed_factor_by_hour[0] == 0.75     # hour 18 in default.yaml
-    assert cfg.demand.demand_scale == 1.0 and cfg.policy.name == "threshold"                  # original untouched
+    assert cfg.demand.demand_scale == load_config(default_yaml).demand.demand_scale            # original untouched
+    assert cfg.policy.name == "threshold" and cfg.supply.shift_mode == "schedule"
 
 
 def test_throughput_jobs_grid_times_seeds(default_yaml):

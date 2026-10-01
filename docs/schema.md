@@ -126,7 +126,7 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | enroute_avg (E) | float32 | xe đang đi đón khách ở ô này |
 | ontrip_avg (O) | float32 | |
 | waiting_avg (W) | float32 | |
-| slack | float64 | I/E; `inf` nếu E = 0 |
+| slack | float64 | I/E; khi E = 0: `inf` nếu I > 0, 0 nếu I = 0 (H-14) |
 | utilization | float32 | (E+O)/(I+E+O) |
 | mean_pickup_eta_min | float32 | NaN nếu không có ghép |
 | n_sessions, n_offers, n_requests, n_matched, n_completed, n_abandoned, n_cancelled | int32 | đếm theo thời điểm sự kiện và ô đón (T-15): `n_sessions/n_offers/n_requests` theo open_time; `n_matched` theo matched_time; `n_abandoned/n_cancelled` theo thời điểm hủy; `n_completed` theo dropoff_time |
