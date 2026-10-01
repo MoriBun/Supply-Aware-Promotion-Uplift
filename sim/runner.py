@@ -34,7 +34,7 @@ import yaml
 from sim.budget import resolve_budget_usd
 from sim.config import Config, config_hash, to_dict
 from sim.engine import RunResult
-from sim.logger import git_sha, write_metadata, write_results
+from sim.logger import git_sha, write_metadata, write_results, write_run
 from sim.policies import make_policy
 from sim.policies.scores import import_callable
 from sim.population import build_world
@@ -204,10 +204,30 @@ def metadata_table(mode: str, jobs: list[Job], results: list[RunResult], *,
     return pd.DataFrame(rows)
 
 
+def write_full_runs(out_dir: Path, mode: str, jobs: list[Job], results: list[RunResult]) -> list[Path]:
+    """Per-run tables of the full-log runs (``log_level = "full"``), each under ``out_dir/runs/<run_id>``.
+
+    A single-run mode (``generate``) writes straight into ``out_dir`` instead. The
+    world only depends on ``world_seed``, so it is built once for all runs.
+    """
+    full = [(job, res) for job, res in zip(jobs, results, strict=True) if res.sessions is not None]
+    if not full:
+        return []
+    cfg0 = full[0][0].cfg
+    riders = build_world(cfg0, Rng.from_config(cfg0)).riders
+    written = []
+    for job, res in full:
+        rid = run_id(mode, job.cfg, res.policy, job.theta, job.seed)
+        target = Path(out_dir) if len(jobs) == 1 else Path(out_dir) / "runs" / rid
+        written += list(write_run(target, res, riders, rid, job.seed).values())
+    return written
+
+
 def _finish(mode: str, out_dir: Path, jobs: list[Job], results: list[RunResult]) -> pd.DataFrame:
     table = policy_results_table(mode, jobs, results)
     write_results(out_dir, "policy_results", table)
     write_metadata(out_dir, metadata_table(mode, jobs, results))
+    write_full_runs(out_dir, mode, jobs, results)
     return table
 
 
@@ -334,9 +354,9 @@ def generate(cfg: Config, out_dir: Path, *, engine: str = DEFAULT_ENGINE, log_le
     """``generate.days`` continuous days with ``policy.name`` legacy or experiment, one seed, full log.
 
     The window is ``generate.days`` x 1440 min (``time.window_min`` is ignored). B is
-    per budget period, so the all_on pilot runs on the base window. The observed /
-    hidden / market tables are written by the logger (task T3.2); this writes
-    results/policy_results and meta/run_metadata and returns the engine result.
+    per budget period, so the all_on pilot runs on the base window. Writes
+    observed/, market/, hidden/ (docs/schema.md), results/policy_results and
+    meta/run_metadata under ``out_dir`` and returns the engine result.
     """
     if cfg.policy.name not in ("legacy", "experiment"):
         raise ValueError(f"generate needs policy.name legacy or experiment, got {cfg.policy.name!r} (spec §7)")
