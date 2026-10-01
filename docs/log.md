@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S0, chờ Hoàng review PR hợp đồng (B0). Tiếp theo: T1.1 `budget.py` đầy đủ.
+**Đang làm:** S1. T1.1 `budget.py` xong, chờ Hoàng review (B2). Tiếp theo: T1.2 `monitor.py`.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -51,6 +51,22 @@ Mẫu:
 - Lệch spec / quyết định mới: T-19 (nội dung hợp đồng), T-20 (giữ `SimContext`, `budget_blocked` ở `VoucherOutcome`, cột chuỗi là mã int8)
 - Bàn giao: giao B0 khi PR được duyệt; người nhận kiểm tra: `pytest -q`, `tests/test_engine.py`, `tests/test_schema_contract.py`
 - Còn lại / bước tiếp: commit + mở PR; sau B0 vào T1.1
+
+### 2026-10-01 · pull develop1 + B0 chốt + kiểm B1 từ Hoàng · nhận B1
+- Nhánh/PR: pull `develop1`; S0 đã vào thẳng `develop1` (`b586fa9`, không qua PR, chép từ log Hoàng); H1.1 vào qua PR #2 `hoang/space` (`c69d3fe` merge, `f413efc` H1.1)
+- Đã làm: chạy phần "Người nhận kiểm tra" của B1; đọc nhanh `sim/space.py` (hex, torus, `D`, `rings`, `T[a,b,h]`, `eta_in`, `find_pickup`, `quote_eta`) và `tests/test_space.py`; đọc H-04 trong `decisions.md`
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 229 passed (py3.11, 5,5 s); `tests/test_space.py` 37 passed; `test_clusters_of_seven_have_spec_sizes` cho [3, 3, 4, 6, 7, 7, 7] đúng spec. Thư mục tmp mặc định `C:\Users\E7480\AppData\Local\Temp\pytest-of-E7480` bị khóa quyền nên phải truyền `--basetemp`
+- Lệch spec / quyết định mới: không; đồng ý H-04 (thêm trường vào `SpaceTime`, `find_pickup` dùng chung cho báo giá và M5)
+- Bàn giao: nhận B1; B0 không mở PR theo kế hoạch (S0 ở trên nói sẽ mở PR, kết cục commit thẳng)
+- Còn lại / bước tiếp: T1.1 `budget.py` đầy đủ (enforce, bất biến theo kỳ, reset) + test ledger trong `test_pricing.py`; sau đó T1.2 `monitor.py`
+
+### 2026-10-01 · T1.1 · budget.py đầy đủ · xong
+- Nhánh/PR: `tinh/t1-1-budget → develop1`, review: Hoàng
+- Đã làm: `sim/budget.py`: thêm `resolve_budget_usd(cfg, pilot_spent_by_period_usd)` (B theo `budget.mode`: `fixed` → `fixed_usd`; `fraction_of_all_on` → `fraction × trung bình chi tiêu mỗi kỳ` của pilot, spec §4.3), `check_invariant` luôn bắt tổng âm kể cả khi `enforce=false`, kiểm `warmup_s ≥ 0`; API sổ (`reserve/commit/settle/release_*`, `period_of`, `totals`) giữ nguyên hợp đồng B0. "Reset ngày" = mỗi kỳ có sổ riêng theo T-03, không reset lúc 00:00. `tests/test_pricing.py` (+5): kỳ chéo d→d+1 và cool-down, kỳ mới có đủ B, sổ dựng từ `Clock` (2 ngày default và tiny 120 phút), bất biến dưới 6.000 bước ngẫu nhiên có sổ đối chiếu độc lập (2.957 session, 721 bị chặn, 3.043 chuyển trạng thái), `resolve_budget_usd`
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 234 passed (py3.11, 5,3 s); test chậm: không chạy
+- Lệch spec / quyết định mới: không
+- Bàn giao: giao B2; người nhận kiểm tra: `pytest -q tests/test_pricing.py` pass (23 test), API đúng docstring các stub `choice.py`/`trips.py`/`cancel.py` (`commit`/`release_reserved` ở bước 6, `settle` ở bước 1, `release_committed` ở bước 3/8)
+- Còn lại / bước tiếp: test "bất biến 1 ngày trên engine thật" để S3 (T3.1) khi có B5; T1.2 `monitor.py`
 
 ---
 

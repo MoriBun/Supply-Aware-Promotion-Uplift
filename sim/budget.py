@@ -4,7 +4,8 @@ Money is kept in integer cents so the invariant ``spent + committed + reserved
 <= B`` is exact. The ledger is keyed by ``session_id``; every reservation belongs
 to the budget period of the session's ``open_time`` and stays there when the
 order ends later (cool-down included). Period -1 is the warm-up, with budget
-``B * warmup / period``.
+``B * warmup / period``. There is no reset at midnight: each period has its own
+counters and the same B, so a new period simply starts with a full budget.
 
 State machine of one session: RESERVED (voucher offered, step 5) -> COMMITTED
 (rider booked, step 6) -> SPENT (order Completed, step 1); RESERVED or COMMITTED
@@ -18,7 +19,27 @@ import math
 
 import numpy as np
 
+from sim.config import Config
+
 CENTS_PER_USD = 100
+
+
+def resolve_budget_usd(cfg: Config, pilot_spent_by_period_usd=None) -> float:
+    """Budget B in USD for this configuration (spec §4.3).
+
+    ``budget.mode = fixed`` returns ``budget.fixed_usd``. ``fraction_of_all_on``
+    returns ``fraction`` times the mean voucher spend per budget period of the
+    all_on pilot (warm-up excluded), passed as ``RunResult.spent_by_period_usd``.
+    """
+    b = cfg.budget
+    if b.mode == "fixed":
+        return float(b.fixed_usd)
+    if pilot_spent_by_period_usd is None:
+        raise ValueError("budget.mode = fraction_of_all_on needs the pilot's spent_by_period_usd")
+    spent = np.asarray(pilot_spent_by_period_usd, dtype=np.float64)
+    if spent.size == 0:
+        raise ValueError("pilot spent_by_period_usd is empty")
+    return float(b.fraction * spent.mean())
 
 
 def usd_to_cents(usd: float) -> int:
@@ -47,6 +68,8 @@ class BudgetLedger:
             raise ValueError("budget.enforce is true but no budget B was given")
         if period_s <= 0 or n_periods < 1:
             raise ValueError("period_s must be > 0 and n_periods >= 1")
+        if warmup_s < 0:
+            raise ValueError("warmup_s must be >= 0")
         self.enforce = bool(enforce)
         self.budget_cents = None if budget_cents is None else int(budget_cents)
         self.window_start_s = float(window_start_s)
@@ -163,7 +186,9 @@ class BudgetLedger:
     # --- reporting -----------------------------------------------------------
 
     def check_invariant(self) -> None:
-        """Raise AssertionError if any period exceeds its budget (hard rule 8)."""
+        """Raise AssertionError if any period exceeds its budget (hard rule 8) or a total went negative."""
+        if (self._reserved < 0).any() or (self._committed < 0).any() or (self._spent < 0).any():
+            raise AssertionError("negative spent/committed/reserved total")
         if not self.enforce:
             return
         used = self._spent + self._committed + self._reserved
@@ -171,8 +196,6 @@ class BudgetLedger:
         if bad.any():
             p = int(np.flatnonzero(bad)[0]) - 1
             raise AssertionError(f"budget invariant violated in period {p}: used {used[p + 1]} > {self._limit[p + 1]}")
-        if (self._reserved < 0).any() or (self._committed < 0).any():
-            raise AssertionError("negative reserved/committed total")
 
     def spent_by_period_usd(self) -> np.ndarray:
         """Spent voucher value of periods 0..n_periods-1 in USD (warm-up excluded)."""
