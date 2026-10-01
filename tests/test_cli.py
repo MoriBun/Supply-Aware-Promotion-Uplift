@@ -65,11 +65,12 @@ def test_throughput_curve_writes_results(capsys, tiny_layers, tmp_path):
 
 
 def test_gte_and_sweep_with_real_demand(capsys, tiny_layers, tmp_path):
-    # Real sessions flow through quote and choice; nothing is matched yet, so N = 0 but the modes run.
+    # Real sessions flow through every step of the loop (core steps are real since Integration 1).
     assert main(["run", "--mode", "gte"] + _configs(tiny_layers) + SMALL + ["--out", str(tmp_path / "gte")]) == 0
     gte = pd.read_parquet(tmp_path / "gte" / "results" / "policy_results.parquet")
     assert gte["policy"].tolist() == ["all_on", "all_off"] and (gte["n_sessions"] > 0).all()
-    assert gte["n_requests"][0] > gte["n_requests"][1]        # vouchers raise bookings
+    assert (gte["N_completed"] > 0).all()
+    assert gte["voucher_spent_usd"][0] > 0 and gte["voucher_spent_usd"][1] == 0   # only all_on spends
     assert "GTE=" in capsys.readouterr().out
     assert main(["run", "--mode", "sweep_theta"] + _configs(tiny_layers) + SMALL + ["--out", str(tmp_path / "sw")]) == 0
     sweep = pd.read_parquet(tmp_path / "sw" / "results" / "theta_sweep.parquet")

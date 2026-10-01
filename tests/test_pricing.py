@@ -425,21 +425,24 @@ def test_quote_keeps_session_randomness_identical_across_policies(quoted_off, qu
 
 
 def test_engine_runs_with_real_demand_through_the_voucher_layer(tiny_cfg):
-    # B3: all_off through the layer behaves like the stub run (no voucher anywhere); all_on reserves and
-    # commits; both runs are deterministic and share their sessions (CRN). Core steps are still stubs,
-    # so no order is ever matched: all of them are truncated when cool-down ends.
+    # B3: all_off through the layer grants no voucher anywhere; all_on reserves, commits and settles; both
+    # runs are deterministic and share their sessions (CRN). Since Integration 1 the core steps are real,
+    # so orders are matched and completed (before that they all stayed Waiting and were truncated).
     world = stub_world(tiny_cfg)
     off = run(tiny_cfg, world, FixedPolicy(False, 7), Rng.from_config(tiny_cfg), enforce_budget=False, log_level="full")
     on = run(tiny_cfg, world, FixedPolicy(True, 7), Rng.from_config(tiny_cfg), enforce_budget=False, log_level="full")
     again = run(tiny_cfg, world, FixedPolicy(False, 7), Rng.from_config(tiny_cfg), enforce_budget=False)
     assert off.n_sessions == on.n_sessions == again.n_sessions > 100
-    assert off.N_completed == on.N_completed == 0 and off.V_profit_usd == 0.0 and on.voucher_spent_usd == 0.0
-    assert (off.n_requests, off.n_abandoned, off.n_truncated_orders) == (again.n_requests, again.n_abandoned, again.n_truncated_orders)
-    assert on.n_requests > off.n_requests
-    assert on.n_truncated_orders == on.orders.n >= on.n_requests        # every order (warm-up included) stays Waiting
+    assert off.N_completed > 0 and on.N_completed > 0
+    assert off.voucher_spent_usd == 0.0 and on.voucher_spent_usd > 0.0 and on.V_profit_usd < off.V_profit_usd
+    assert (off.N_completed, off.V_profit_usd, off.n_requests, off.n_abandoned, off.n_cancelled) == (
+        again.N_completed, again.V_profit_usd, again.n_requests, again.n_abandoned, again.n_cancelled)
+    assert off.n_truncated_orders == on.n_truncated_orders == 0          # every order ends before the cool-down cap
     assert not off.sessions.col("arm").any() and on.sessions.col("arm").all()
     assert (on.sessions.col("in_window") == off.sessions.col("in_window")).all()
     clock = Clock.from_config(tiny_cfg)
-    assert off.sim_end_s == clock.window_end_s + clock.cooldown_max_s   # Waiting orders never close before the cap
+    assert clock.window_end_s <= off.sim_end_s <= clock.window_end_s + clock.cooldown_max_s
     np.testing.assert_array_equal(off.spent_by_period_usd, [0.0])
-    assert len(on.offer_score) == on.n_sessions and not on.offer_completed.any()   # offered = in-window sessions
+    assert on.spent_by_period_usd.sum() > 0.0
+    # offered = in-window sessions; without a budget every completed in-window order carried a voucher
+    assert len(on.offer_score) == on.n_sessions and on.offer_completed.sum() == on.N_completed
