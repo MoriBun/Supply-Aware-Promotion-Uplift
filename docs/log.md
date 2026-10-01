@@ -96,7 +96,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S2. H2.1 `matching.py` xong (commit trên `develop2`, PR cuối sprint). Tiếp theo: H2.2 `trips.py`, `cancel.py`.
+**Đang làm:** S2. H2.1, H2.2 xong (commit trên `develop2`, PR cuối sprint). Tiếp theo: H2.3 `reposition.py`.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -181,3 +181,12 @@ Mẫu:
 - Lệch spec / quyết định mới: H-09 trong `decisions.md`
 - Bàn giao: không
 - Còn lại / bước tiếp: H2.2 `trips.py`, `cancel.py`
+
+### 2026-10-01 · H2.2 · trips.py (M6), cancel.py (M7) · xong
+- Nhánh/PR: commit trên `develop2`; PR `develop2 → develop` cuối S2, review: Tình
+- Đã làm: `sim/trips.py` (`advance`: đón, trả, thanh toán, `ledger.settle`, xe repositioning tới nơi); `sim/cancel.py` (`expire_waiting`: bỏ chờ quá `max_wait`; `en_route`: hủy theo hazard tích lũy so với `e_cancel`, xe rảnh tại ô xuất phát hoặc ô khách; `cancel_hazard_per_min`); `tests/test_trips_cancel.py` (+16)
+- Test: `pytest -q` → 353 passed (py3.12, `.venv`); test chậm: không chạy
+- Lệch spec / quyết định mới: H-10 trong `decisions.md`
+- Bàn giao: không
+- Số liệu tham khảo (chưa phải CAL hay gate; 1 ngày + 3 giờ cool-down, cấu hình mặc định, không voucher, không repositioning, giá và ETA báo tự điền bằng `base_fare_usd` và `space.quote_eta` thay cho `pricing.quote`): 30.397 session, 3.956 request (13,0%); 2.659 hoàn thành (67,2%), 255 bỏ chờ, 1.042 hủy khi xe đang đến (26,3%); ETA đón trung bình 9,6 phút; slack trung bình 0,40; 6,3% session được báo `no_supply`; tỷ lệ hoàn thành theo giờ đặt: 03h 91%, 07h 33%, 08h 37%, 12h 70%, 18h 51%, 21h 78%. Thời gian chạy 2,1 giây (spawn 1,39; quote 0,30; match 0,13; decide 0,11; advance 0,05; en_route 0,04)
+- Còn lại / bước tiếp: H2.3 `reposition.py`
