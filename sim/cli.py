@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -26,9 +27,34 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--out", type=Path, default=None,
                      help="output directory (default runs/<mode>-<config_hash>)")
     run.add_argument("--log-level", choices=("minimal", "full"), default="minimal",
-                     help="full also writes session and order tables in evaluate/sweep_theta/gte")
+                     help="full also keeps session and order tables in evaluate/sweep_theta/gte")
     run.add_argument("--profile", action="store_true", help="print time spent per engine step")
     return parser
+
+
+def summarize(mode: str, table: pd.DataFrame) -> str:
+    """Console summary of a mode's headline table."""
+    if mode == "throughput_curve":
+        return runner.summarize_throughput(table).to_string(index=False)
+    if mode == "sweep_theta":
+        return table.to_string(index=False)
+    if mode == "gte":
+        s = runner.gte_summary(table)
+        return (f"N_on={s['N_on']:.1f} N_off={s['N_off']:.1f} GTE={s['GTE']:.1f} "
+                f"(se={s['GTE_se']:.1f}, n_seeds={s['n_seeds']})")
+    if mode == "calibrate_budget":
+        row = table.iloc[0]
+        return f"budget_B_usd={row['budget_B_usd']:.2f} per period (mode={row['mode']}, fraction={row['fraction']})"
+    if mode in ("evaluate", "generate"):
+        n = len(table)
+        se = table["N_completed"].std(ddof=1) / math.sqrt(n) if n > 1 else float("nan")
+        line = (f"policy={table['policy'].iloc[0]} n_seeds={n} N_mean={table['N_completed'].mean():.1f} "
+                f"(se={se:.1f}) V_mean={table['V_profit_usd'].mean():.1f} "
+                f"spent_mean={table['voucher_spent_usd'].mean():.1f} B={table['budget_B_usd'].iloc[0]}")
+        if mode == "generate":
+            line += "\nobserved/hidden/market tables: task T3.2 (logger)"
+        return line
+    return table.to_string(index=False)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -45,11 +71,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         table = runner.run_mode(args.mode, cfg, out_dir, log_level=args.log_level, profile=args.profile)
     except NotImplementedError as exc:
-        print(f"mode '{args.mode}' is not implemented yet ({exc})", file=sys.stderr)
+        print(f"mode '{args.mode}' is not implemented for this config ({exc})", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
         return 1
 
     print(f"out={out_dir}")
-    if args.mode == "throughput_curve":
-        with pd.option_context("display.width", 160, "display.max_columns", 20, "display.precision", 3):
-            print(runner.summarize_throughput(table).to_string(index=False))
+    with pd.option_context("display.width", 160, "display.max_columns", 20, "display.precision", 3):
+        print(summarize(args.mode, table))
     return 0

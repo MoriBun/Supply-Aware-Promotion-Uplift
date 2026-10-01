@@ -55,6 +55,10 @@ Quy ước:
 | 2026-10-01 | H-07 | **Đổi mô hình nhánh.** `develop` là nhánh chung; Tình code trên `develop1`, Hoàng trên `develop2`; mỗi người PR từ nhánh của mình vào `develop`, gộp bằng merge commit, không squash; gate gộp `develop → main`. Bỏ nhánh riêng cho từng task (`hoang/<task>`, `tinh/<task>`). | Hai người thống nhất ngày 01/10. Không squash vì nhánh cá nhân được dùng lại cho nhiều PR. | Hoàng, Tình |
 | 2026-10-01 | H-08 | **Cung (H1.4) và nhịp PR.** (a) `supply.update` chạy ở bước 2: trước hết cho xe **đang rảnh** và đã quá `shift_end` rời hệ thống, sau đó cho xe đến giờ vào ca. Xe bận khi hết ca không bị đụng tới; `trips.advance` (bước 1) trả xe về rảnh, rồi bước 2 của cùng tick cho xe rời. (b) Xe rời muộn nhận ca kế tiếp là ca đầu tiên chưa kết thúc, đúng giờ cũ. (c) `on_shift`, `online_by_hour`, `describe_world` đặt trong `population.py`. (d) Mỗi sprint một PR từ nhánh cá nhân vào `develop`, mỗi task một commit; bàn giao mà người kia đang chờ thì PR sớm (sửa H-07). | (a) Thứ tự bước của engine đã đủ để thỏa "chỉ rời khi rảnh" mà không cần cờ riêng. (c) `supply.py` import `population.py`, nên hàm dùng cho bảng tóm tắt phải nằm ở `population.py` để tránh import vòng. (d) Hai người thống nhất ngày 01/10. | Hoàng (chờ Tình review PR) |
 | 2026-10-01 | T-21 | **Giao diện hàm điểm (`policies/scores.py`, T1.3).** `score_fn(batch, s_hat) -> float[n]`: `s_hat` là ŝ của ô đón **từng session** (float [n], NaN khi chính sách không dự báo); kết quả một số thực mỗi session, cao hơn = ưu tiên phát; `score_batch` kiểm hình dạng, kiểu số và ép float32. `random` trả `u_score` rút sẵn (T-07), `heuristic_low_freq` trả `−x_freq`; chuỗi `"module:function"` nạp bằng `import_callable`, hàm này cũng nạp engine cho `runner` (spec §7, tiến trình con spawn). | Spec §6 viết `score_fn(SessionBatch, ŝ)` mà không nói ŝ theo ô hay theo session; theo session thì B8 (Hoàng) chỉ cần nối cột của batch, không cần biết ô. Một loader cho cả score_fn và engine để hai chỗ không lệch nhau. | Tình |
+| 2026-10-01 | T-22 | **Chốt Q17:** mode `evaluate` chạy `sweep.n_seeds` seed. | Bảng N(π)/V(π) tuần 5 so các chính sách dưới cùng B nên cần cùng số seed với `sweep_theta`; không phải thêm khóa config (file chung). | Tình |
+| 2026-10-01 | T-23 | **ThresholdPolicy và κ auto (T2.3, T2.4).** (a) Chỉ `indicator = slack` được cài; `utilization`/`eta` → `NotImplementedError` (Q19). (b) ŝ NaN (chưa có snapshot) hoặc inf → ô bật, vì `promo_on = not (ŝ < θ)`; với `forecast = ar`, inf thay bằng `monitor.slack_cap` trước khi lấy trung bình trọng số, và khi `slack_lag_day` chưa có (ngày đầu) dùng `slack_lag_slot` đã chặn trần. (c) Hysteresis: trạng thái khởi đầu của mọi ô là bật. (d) Điểm NaN → không phát; `propensity` = 1/0 theo offer (quyết định tất định), `propensity_true` NaN. (e) κ auto: pilot threshold với κ = −∞, không ngân sách, seed `run_seed + pilot_seed_offset + chỉ_số_θ`; chi tiêu kỳ vọng của một session được phát = voucher nếu order hoàn thành, 0 nếu không; κ = điểm nhỏ nhất sao cho tổng chi tiêu của các session có điểm ≥ κ ≤ B × số kỳ trong cửa sổ; +∞ nếu session điểm cao nhất cũng không vừa, −∞ nếu tất cả vừa; không có ngân sách → κ = −∞. (f) Pilot tính B: all_on, không ngân sách, seed `run_seed + pilot_seed_offset`; `generate` tính B trên cửa sổ gốc (B theo kỳ, không cần chạy 28 ngày). | (b) Nếu để NaN thì `ar` bật mọi ô suốt ngày đầu. (e) T-03 định nghĩa κ auto theo "chi tiêu trung bình mỗi kỳ ≤ B"; `pilot_seed_offset` hiểu là độ lệch so với `run_seed` (với `run_seed = 0` thì trùng). | Tình |
+| 2026-10-01 | T-24 | **LegacyPolicy (T2.3).** (a) Mỗi (ô, slot) rút 2 số đều từ CELLSLOT `(LEGACY_EPS, 0, cell, slot)`: số thứ nhất quyết định có dùng ε hay không, số thứ hai là đồng xu `epsilon_p_on`. (b) Slot chưa có snapshot (lag NaN): `rule_on = False`; slack inf ≥ `slack_on` → bật. (c) Session trong ô tắt và không thuộc lát explore: không phát, `propensity = propensity_true = 0`; session explore: `propensity = propensity_true = explore_p`; session nhắm theo rider trong ô bật: `propensity = NaN`, `propensity_true = p_target`. (d) `assign_mechanism` của session explore là `explore`, còn lại theo cơ chế của ô (`legacy_rule`/`legacy_eps`). | Spec §6 không nói propensity của ô tắt; 0 là xác suất đúng và tránh chia cho NaN khi IPW. | Tình |
+| 2026-10-01 | T-25 | **M10 và ExperimentPolicy (T2.2, T2.3).** (a) `cluster_id` cấp 7 là thứ hạng của ô tâm (0..6, tâm sắp theo `cell_id`); `global_switchback` = switchback một cụm (`cluster_level` hiệu dụng `all`, mã 0 trong khóa CELLSLOT). (b) Switchback: `cell_propensity = propensity = propensity_true = p_on` cho mọi session (xác suất của thiết kế); `rider_ab`: mọi ô bật, `cell_propensity = 1`, `cluster_id = −1`, `propensity = p_on`, arm từ RIDER `(rider_id)`. (c) `in_burnin` của snapshot tính tại đầu slot, của session tính theo `open_time` (`pricing.quote`), chỉ khi `block ≥ 0`. (d) Lượt `generate` với `policy = experiment` áp ngân sách theo `experiment.budget_enforce` (false); với `legacy` theo `budget.enforce`. | Spec §4.10: "propensity cấp ô bằng p_on"; theo session cũng bằng p_on để IPW đúng. `block_min` là bội của `slot_min` nên cờ theo slot và theo session chỉ lệch khi `burnin_min` không phải bội của `slot_min`. | Tình |
 
 ---
 
@@ -113,16 +117,21 @@ Quy ước:
 ### Q16. P8 thiếu bộ dữ liệu `rider_ab`
 - **Quyết định (T-16):** thêm.
 
+### Q17. Mode `evaluate` dùng `n_seeds` nào?
+- YAML chỉ có `sweep.n_seeds`, `gte.n_seeds`, `throughput.n_seeds`; thêm khóa mới cần PR chung.
+- **Quyết định (T-22, Tình 01/10):** `sweep.n_seeds`, để bảng so sánh chính sách dưới cùng B có cùng số seed với `sweep_theta`.
+
 ---
 
 ## Câu hỏi mở
 
 Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
 
-### Q17. Mode `evaluate` dùng `n_seeds` nào?
-- Bối cảnh: spec §7 ghi `evaluate` = "1 chính sách × `n_seeds`", nhưng YAML chỉ có `sweep.n_seeds`, `gte.n_seeds`, `throughput.n_seeds`. Thêm khóa mới cần PR chung (`config.py`).
-- Đề xuất (Tình): `evaluate` dùng `sweep.n_seeds`, vì bảng N(π)/V(π) tuần 5 so các chính sách dưới cùng B và cần cùng số seed với `sweep_theta`.
-- Mốc bị chặn: T2.4 (`runner.evaluate`). Không chặn T1.4 (`throughput_curve` có `throughput.n_seeds` riêng).
+### Q19. Hướng cắt ô khi `policy.threshold.indicator` là `utilization` hoặc `eta`
+- Bối cảnh: spec §6 chỉ định nghĩa quy tắc cho slack (`promo_on = not (ŝ < θ)`: cắt khi slack *thấp*). Với utilization và eta, "căng" là giá trị *cao* nên hướng so sánh phải đảo và `sweep.theta_grid` (0–2) không còn ý nghĩa.
+- Hiện tại: `ThresholdPolicy` báo `NotImplementedError` cho hai chỉ số này (T-23a). D4 đã chốt slack là mặc định (T-17); hai chỉ số kia chỉ dành cho phân tích độ nhạy.
+- Đề xuất (Tình, 01/10): nếu tuần 5 cần, cài `promo_on = not (ŝ > θ)` cho utilization/eta kèm lưới θ riêng cho từng chỉ số; nếu không cần thì bỏ hai giá trị này khỏi YAML.
+- Mốc bị chặn: không.
 
 ### Q18. `supply.early_exit_enabled = true` chưa được cài (không chặn mốc nào)
 - Spec §4.8: khi bật, xe rảnh ở thời điểm ≥ **2 giờ** vào ca mà `earnings_today / giờ_đã_làm < reservation_wage` thì rời. Con số 2 giờ không có khóa trong `default.yaml`, nên cài vào code là vi phạm quy tắc cứng 1. Spec cũng chưa nói `earnings_today` reset lúc nào.

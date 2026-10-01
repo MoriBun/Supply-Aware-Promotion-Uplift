@@ -1,13 +1,14 @@
 """M3 PricingAndPromotion: base fare, voucher value, and the voucher layer of step 5.
 
-Spec: docs/spec.md §4.3, §6. Milestone: P2 (task T2.1); budget wiring P4.
+Spec: docs/spec.md §4.3, §6. Milestone: P2 (task T2.1).
 
-Sprint-0 contract (decisions L12): step 5 has one voucher layer for every
-policy. ``start_slot`` asks the policy for its cell decision when the slot
-changes, ``decide`` asks it for offers on a batch and then applies the budget in
-``session_id`` order, so all policies are budgeted the same way.
-``quote`` (building the batch from the session buffer: fares, quoted ETA) is
-task T2.1.
+Decisions L12: step 5 has one voucher layer for every policy. ``start_slot``
+asks the policy for its cell decision when the slot changes; ``quote`` prices
+the sessions of the tick (fare from ``T[pu, do, h]``, quoted ETA from the M5
+search rule without holding a driver), builds the observed ``SessionBatch``,
+and ``decide`` asks the policy for offers and then applies the budget in
+``session_id`` order, so all policies are budgeted the same way. The outcome is
+written back to the session columns of step "quote" (docs/schema.md).
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from sim import experiment
 from sim.budget import BudgetLedger, CENTS_PER_USD
 from sim.config import Config
 from sim.policies.base import CellDecision, OfferDecision, Policy, SessionBatch, SnapshotView
@@ -107,10 +109,61 @@ class VoucherLayer:
         )
 
     def quote(self, ctx, t: float) -> None:
-        """Engine step 5: fares and quoted ETA for the sessions of this tick, then ``decide``.
-
-        Task T2.1. The Sprint-0 stub only handles ticks without new sessions.
-        """
+        """Engine step 5: price this tick's sessions, ask the policy, apply the budget, write the columns."""
         start, stop = ctx.tick_sessions
-        if stop > start:
-            raise NotImplementedError("pricing.quote: task T2.1")
+        if stop <= start:
+            return
+        if self.cell_dec is None:
+            raise RuntimeError("start_slot must be called before quote")
+        s, space, riders = ctx.sessions, ctx.world.space, ctx.world.riders
+        rows = slice(start, stop)
+        pu, do, hour = s.pu_cell[rows], s.do_cell[rows], s.hour[rows]
+
+        fare = base_fare_usd(self.cfg, space.T[pu, do, hour])
+        eta, no_supply = quote_eta_by_cell(space, pu, int(hour[0]), ctx.cells.idle)
+        s.quoted_fare_usd[rows] = fare
+        s.quoted_eta_min[rows] = eta
+        s.no_supply[rows] = no_supply
+
+        rider = s.rider_id[rows]
+        batch = SessionBatch(
+            session_id=s.session_id[rows], rider_id=rider, open_time_s=s.open_time_s[rows],
+            day=s.day[rows], hour=hour, slot=s.slot[rows], slot_of_day=s.slot_of_day[rows],
+            pu_cell=pu, do_cell=do,
+            x_freq=riders.x_freq[rider], x_tenure=riders.x_tenure[rider], x_segment=riders.x_segment[rider],
+            quoted_fare_usd=fare, quoted_eta_min=eta, no_supply=no_supply,
+            u_target=s.u_target[rows], u_explore=s.u_explore[rows], u_explore_arm=s.u_explore_arm[rows],
+            u_score=s.u_score[rows],
+        )
+        out = self.decide(batch)
+        cd, dec = self.cell_dec, out.decision
+
+        s.voucher_cents[rows] = out.voucher_cents
+        s.voucher_value_usd[rows] = (out.voucher_cents / CENTS_PER_USD).astype(np.float32)
+        s.arm[rows] = out.arm
+        s.budget_blocked[rows] = out.budget_blocked
+        s.budget_period[rows] = out.budget_period
+        s.promo_on_cell[rows] = out.promo_on_cell
+        s.cell_propensity[rows] = out.cell_propensity
+        s.slack_hat[rows] = out.slack_hat
+        s.assign_mechanism[rows] = dec.mechanism
+        s.propensity[rows] = dec.propensity
+        s.score[rows] = dec.score
+        s.propensity_true[rows] = dec.propensity_true
+        s.cluster_id[rows] = cd.cluster_id[pu]
+        s.block[rows] = cd.block
+        s.in_burnin[rows] = experiment.in_burnin(self.cfg, s.open_time_s[rows]) if cd.block >= 0 else False
+        ctx.monitor.on_offers(ctx.slot_counters, pu[out.arm == 1])
+
+
+def quote_eta_by_cell(space, pu_cell: np.ndarray, hour: int, idle_count: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Quoted ETA (float32 [n]) and ``no_supply`` (bool [n]) of sessions, one M5 search per distinct cell."""
+    n = len(pu_cell)
+    eta = np.empty(n, dtype=np.float32)
+    no_supply = np.empty(n, dtype=bool)
+    for cell in np.unique(pu_cell):
+        e, ns = space.quote_eta(int(cell), hour, idle_count)
+        mask = pu_cell == cell
+        eta[mask] = e
+        no_supply[mask] = ns
+    return eta, no_supply

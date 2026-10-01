@@ -160,7 +160,7 @@ Người nhận **kiểm tra trước khi dùng**. Khi giao xong, người giao 
 | B0 | cả hai | PR hợp đồng + khung | cuối S0 | `pytest -q`; engine stub chạy all_off (`tests/test_engine.py`); tên cột khớp `schema.md` (`tests/test_schema_contract.py`) | chưa vào S1 | PR 30/09, chờ review |
 | B1 | Hoàng → Tình | `space.py` | giữa S1 | `test_space` pass; cụm R = 3 ra [3,3,4,6,7,7,7] | Tình làm T2.3 trước T2.2 | 01/10 (PR #2) |
 | B2 | Tình → Hoàng | `budget.py` đầy đủ | cuối S1 | test ledger pass; API đúng hợp đồng | Hoàng dùng `enforce=false` | 01/10 (`develop1` 3cf004d) |
-| B3 | Tình → Hoàng | `pricing.py` + `fixed` + `monitor.py` | giữa S2 | all_off cho N, V `==` stub; SnapshotView báo lỗi khi nhìn trước | Hoàng test bằng stub, dời tích hợp 1 | ☐ |
+| B3 | Tình → Hoàng | `pricing.py` + `fixed` + `monitor.py` | giữa S2 | all_off cho N, V `==` stub; SnapshotView báo lỗi khi nhìn trước | Hoàng test bằng stub, dời tích hợp 1 | 01/10 (`develop1`, PR S2) |
 | B4 | Tình → Hoàng | mode `throughput_curve` | cuối S1 | chạy với engine giả, đúng cột `results/throughput_curve` | dời Gate P2 | 01/10 (`develop1`) |
 | B5 | Hoàng → Tình | `engine.run` thật | cuối S2 | 4 test tích hợp pass; RunResult đủ trường | Tình tiếp tục với engine giả | ☐ |
 | B6 | Hoàng → Tình | `default.yaml` đã hiệu chỉnh | cuối S3 | A1, A5, CAL đạt; bảng hiệu chỉnh trong `decisions.md`; `config_hash` mới | không chạy P6/P8 | ☐ |
