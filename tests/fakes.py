@@ -7,6 +7,7 @@ fake never depends on the other person's module.
 from __future__ import annotations
 
 import dataclasses
+import math
 
 import numpy as np
 
@@ -143,6 +144,33 @@ def make_run_result(**overrides) -> RunResult:
     return RunResult(**base)
 
 
+FAKE_VOUCHER_USD = 3.5   # voucher value of every offered session in the fake engine
+
+
+def fake_offered_share(cfg, policy) -> tuple[float, float]:
+    """``(share of sessions offered, share of cells off)`` the fake engine attributes to a policy.
+
+    Threshold: cells on fall linearly from all (theta = 0) to half (theta >= 2); the
+    rider tier keeps the share ``1 - kappa`` of a Uniform(0, 1) score.
+    """
+    name = policy.name
+    if name == "all_on":
+        return 1.0, 0.0
+    if name == "all_off":
+        return 0.0, 1.0
+    if name == "experiment":
+        return float(cfg.experiment.p_on), 0.0
+    if name == "threshold":
+        theta, kappa = float(policy.theta), float(policy.kappa)
+        share_on = 1.0 - min(max(theta, 0.0), 2.0) / 4.0
+        if math.isfinite(kappa):
+            share_score = min(max(1.0 - kappa, 0.0), 1.0)
+        else:
+            share_score = 1.0 if kappa < 0 else 0.0
+        return share_on * share_score, 1.0 - share_on
+    return 0.3, 0.5   # legacy
+
+
 def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bool = False,
              budget_usd: float | None = None, enforce_budget: bool | None = None) -> RunResult:
     """Deterministic stand-in for ``engine.run`` with a WGC-like throughput hump (docs/phan_cong.md T1.4, B4).
@@ -150,28 +178,42 @@ def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bo
     Completed trips per hour rise with demand, peak when requests match the fleet's
     capacity and fall beyond it; slack falls and pickup ETA rises with demand. The
     seed jitter is drawn from the DEMAND stream, so it is identical for every
-    policy (CRN). ``profile`` records what the engine was given, so runner tests can
-    check the config transforms.
+    policy (CRN). Vouchers raise the booking rate in proportion to the share of
+    sessions offered (:func:`fake_offered_share`); a threshold policy also gets a
+    mild optimum at theta = 0.5 and the ``offer_*`` arrays kappa-auto needs
+    (scores Uniform on [max(kappa, 0), 1), every other offered order completed).
+    ``profile`` records what the engine was given, so runner tests can check the
+    config transforms.
     """
     clock = Clock.from_config(cfg)
     window_h = clock.window_s / 3600.0
     d, sp = cfg.demand, cfg.supply
+    offered, share_off = fake_offered_share(cfg, policy)
+    theta = float(getattr(policy, "theta", NAN))
+    kappa = float(getattr(policy, "kappa", NAN))
+
     sessions_per_h = d.base_sessions_per_cell_h * d.demand_scale * world.n_cells * float(np.mean(d.hour_profile))
-    p_book = 0.15 * (1.5 if policy.name == "all_on" else 1.0)
+    p_book = 0.15 * (1.0 + 0.5 * offered)
     requests_per_h = p_book * sessions_per_h
     capacity_per_h = 3.0 * sp.fleet_size
     x = requests_per_h / capacity_per_h
     jitter = 1.0 + 0.01 * float(rng.rng_for(Stream.DEMAND, 0, 0, 0).standard_normal())
     completed_per_h = capacity_per_h * 2.0 * x / (1.0 + x * x) * jitter
+    if policy.name == "threshold":
+        completed_per_h *= 1.0 + 0.05 * (1.0 - min(abs(theta - 0.5), 1.0))
 
     n_sessions = int(round(sessions_per_h * window_h))
     n_requests = int(round(requests_per_h * window_h))
     n_completed = min(n_requests, int(round(completed_per_h * window_h)))
     n_abandoned = n_requests - n_completed
-    voucher = 3.5 * n_completed if policy.name == "all_on" else 0.0
+    voucher = FAKE_VOUCHER_USD * n_completed * offered
     enforce = cfg.budget.enforce if enforce_budget is None else bool(enforce_budget)
     if enforce and budget_usd is not None:
         voucher = min(voucher, float(budget_usd) * clock.n_periods)
+
+    n_offered = int(round(n_sessions * offered))
+    lo = max(kappa, 0.0) if math.isfinite(kappa) else 0.0
+    offer_score = np.linspace(lo, 1.0, n_offered, endpoint=False, dtype=np.float32)
     markers = {
         "demand_scale": float(d.demand_scale),
         "always_on": float(sp.shift_mode == "always_on"),
@@ -179,16 +221,19 @@ def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bo
         "speed_const": float(len(set(cfg.space.speed_factor_by_hour)) == 1),
         "enforce": float(enforce),
         "run_seed": float(cfg.meta.run_seed),
+        "theta": theta, "kappa": kappa, "offered": offered,
     }
     return make_run_result(
         policy=policy.name, N_completed=n_completed, V_profit_usd=5.0 * n_completed - voucher,
         voucher_spent_usd=voucher, budget_B_usd=NAN if budget_usd is None else float(budget_usd),
         n_sessions=n_sessions, n_requests=n_requests, n_abandoned=n_abandoned, n_cancelled=0,
-        mean_pickup_eta_min=2.0 + 6.0 * x, share_cells_off=0.0 if policy.name == "all_on" else 1.0,
+        mean_pickup_eta_min=2.0 + 6.0 * x, share_cells_off=share_off,
         mean_slack=(1.0 / x) if x > 0 else float("inf"),
         completed_per_h=n_completed / window_h, requests_per_h=n_requests / window_h,
         abandon_rate=(n_abandoned / n_requests) if n_requests else NAN, cancel_rate=0.0 if n_requests else NAN,
         window_start_s=float(clock.window_start_s), window_end_s=float(clock.window_end_s),
         sim_end_s=float(clock.window_end_s), runtime_s=0.001,
         spent_by_period_usd=np.full(clock.n_periods, voucher / clock.n_periods), profile=markers,
+        offer_score=offer_score, offer_voucher_usd=np.full(n_offered, FAKE_VOUCHER_USD, dtype=np.float32),
+        offer_completed=(np.arange(n_offered) % 2 == 0),
     )

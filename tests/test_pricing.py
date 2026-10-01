@@ -3,13 +3,16 @@
 import numpy as np
 import pytest
 
+from sim import choice, demand
 from sim.budget import BudgetLedger, LedgerState, cents_to_usd, resolve_budget_usd, usd_to_cents
 from sim.config import load_config
+from sim.engine import run
 from sim.policies.base import SnapshotStore, SnapshotView
 from sim.policies.fixed import FixedPolicy
-from sim.pricing import VoucherLayer, base_fare_usd, voucher_cents
-from sim.state import Clock
-from tests.fakes import make_batch, make_ledger
+from sim.pricing import VoucherLayer, base_fare_usd, quote_eta_by_cell, voucher_cents
+from sim.rng import Rng
+from sim.state import Clock, Mechanism
+from tests.fakes import make_batch, make_context, make_ledger, stub_world
 
 
 # --- prices (docs/tests.md M3: p_s = a_f + b_f*T; v_s = 0,2*p_s) ---------------------
@@ -313,3 +316,130 @@ def test_layer_rejects_wrong_slot_or_length(default_yaml):
     layer = VoucherLayer(cfg, FixedPolicy(True, 7), make_ledger(), n_cells=5)
     with pytest.raises(ValueError):
         layer.start_slot(4, SnapshotView(SnapshotStore(7, 96), 4))   # policy built for 7 cells, layer for 5
+
+
+# --- step 5 on the real session buffer: quote (task T2.1, B3) --------------------------------
+
+
+def quote_ticks(cfg, ticks, *, on: bool, **ctx_kw):
+    """spawn -> start_slot (new slot) -> quote -> decide, as the engine does; returns (ctx, tick row ranges)."""
+    ctx = make_context(cfg, on=on, **ctx_kw)
+    ranges = []
+    for tick in ticks:
+        t = tick * ctx.clock.tick_s
+        slot = ctx.clock.slot_of(t)
+        if slot != ctx.current_slot:
+            ctx.current_slot = slot
+            ctx.layer.start_slot(slot, SnapshotView(ctx.monitor.store, slot))   # FixedPolicy ignores snapshots
+        demand.spawn(ctx, t)
+        ctx.layer.quote(ctx, t)
+        choice.decide(ctx, t)
+        ranges.append(ctx.tick_sessions)
+    return ctx, ranges
+
+
+@pytest.fixture
+def quoted_off(default_yaml):
+    return quote_ticks(load_config(default_yaml), range(8 * 60, 8 * 60 + 20), on=False)[0]
+
+
+@pytest.fixture
+def quoted_on(default_yaml):
+    return quote_ticks(load_config(default_yaml), range(8 * 60, 8 * 60 + 20), on=True, enforce_budget=False)[0]
+
+
+def test_quote_writes_fare_eta_and_policy_columns_all_off(default_yaml, quoted_off):
+    cfg, ctx = load_config(default_yaml), quoted_off
+    s, space = ctx.sessions, ctx.world.space
+    assert s.n > 300
+    pu, do, hour = s.col("pu_cell"), s.col("do_cell"), s.col("hour")
+    np.testing.assert_array_equal(s.col("quoted_fare_usd"), base_fare_usd(cfg, space.T[pu, do, hour]))
+    # Every driver is a stub (offline): no supply anywhere, quoted ETA = max_pickup_eta_min (spec §4.1).
+    assert s.col("no_supply").all() and (s.col("quoted_eta_min") == cfg.matching.max_pickup_eta_min).all()
+    assert (s.col("arm") == 0).all() and (s.col("voucher_cents") == 0).all() and (s.col("voucher_value_usd") == 0).all()
+    assert not s.col("budget_blocked").any() and ctx.ledger.n_entries == 0
+    assert (s.col("assign_mechanism") == int(Mechanism.FIXED)).all() and not s.col("promo_on_cell").any()
+    assert (s.col("cell_propensity") == 0.0).all() and (s.col("propensity") == 0.0).all()
+    assert (s.col("cluster_id") == -1).all() and (s.col("block") == -1).all() and not s.col("in_burnin").any()
+    assert np.isnan(s.col("score")).all() and np.isnan(s.col("slack_hat")).all() and np.isnan(s.col("propensity_true")).all()
+    np.testing.assert_array_equal(s.col("budget_period"), [ctx.ledger.period_of(t) for t in s.col("open_time_s")])
+    assert (s.col("budget_period") == 0).all()                      # 08:00 is inside the first budget period
+    assert s.col("requested").sum() > 0 and ctx.orders.n == s.col("requested").sum()
+
+
+def test_quote_eta_by_cell_uses_live_idle_counts(tiny_cfg):
+    space = stub_world(tiny_cfg).space
+    idle = np.zeros(space.n_cells, dtype=np.int32)
+    idle[3] = 2
+    eta, no_supply = quote_eta_by_cell(space, np.array([3, 0, 3], dtype=np.int16), 9, idle)
+    assert eta.dtype == np.float32 and no_supply.dtype == bool
+    assert eta[0] == eta[2] == pytest.approx(space.eta_in(2, 9)) and not no_supply.any()   # R = 1: cell 3 reaches cell 0
+    assert eta[1] == pytest.approx(float(space.T[3, 0, 9]))
+    eta0, ns0 = quote_eta_by_cell(space, np.array([0, 1]), 9, np.zeros(space.n_cells, dtype=np.int32))
+    assert ns0.all() and (eta0 == space.max_pickup_eta_min).all()
+
+
+def test_quote_all_on_grants_vouchers_and_counts_offers(default_yaml, quoted_on):
+    cfg, ctx = load_config(default_yaml), quoted_on
+    s = ctx.sessions
+    cents = voucher_cents(cfg, s.col("quoted_fare_usd"))
+    assert (s.col("arm") == 1).all() and (cents > 0).all()
+    np.testing.assert_array_equal(s.col("voucher_cents"), cents)
+    np.testing.assert_array_equal(s.col("voucher_value_usd"), (cents / 100.0).astype(np.float32))
+    assert s.col("promo_on_cell").all() and (s.col("cell_propensity") == 1.0).all() and (s.col("propensity") == 1.0).all()
+    assert ctx.ledger.n_entries == s.n                               # every session reserved, then committed / released
+    assert not s.col("budget_blocked").any()
+    np.testing.assert_array_equal(ctx.slot_counters.n_offers, np.bincount(s.col("pu_cell"), minlength=ctx.n_cells))
+    states = {ctx.ledger.entry(int(sid))[2] for sid in s.col("session_id")}
+    assert states <= {LedgerState.COMMITTED, LedgerState.RELEASED}
+    ctx.ledger.check_invariant()
+
+
+def test_quote_applies_budget_in_session_id_order_and_marks_blocked(tiny_cfg):
+    # No driver is online (stubs), so the quoted ETA is 30 min and few riders book: only committed
+    # vouchers stay on the books, hence a small B is needed to see blocking within two hours.
+    ctx, ranges = quote_ticks(tiny_cfg, range(60, 180), on=True, budget_usd=3.0, enforce_budget=True)
+    s = ctx.sessions
+    blocked, granted = s.col("budget_blocked"), s.col("arm") == 1
+    assert blocked.any() and granted.any() and not (blocked & granted).any()
+    assert (s.col("voucher_cents")[blocked] == 0).all() and (s.col("voucher_cents")[granted] > 0).all()
+    assert (s.col("promo_on_cell")).all()                           # blocked sessions were still in an on cell
+    ids = s.col("session_id")
+    for start, stop in ranges:                                       # within a tick: smallest ids win (spec §4.3, L12)
+        g, b = granted[start:stop], blocked[start:stop]
+        if g.any() and b.any():
+            assert ids[start:stop][g].max() < ids[start:stop][b].min()
+    ctx.ledger.check_invariant()
+    period = ctx.ledger.period_of(float(s.col("open_time_s")[-1]))
+    assert ctx.ledger.used_cents(period) <= ctx.ledger.limit_cents(period) == 300
+
+
+def test_quote_keeps_session_randomness_identical_across_policies(quoted_off, quoted_on):
+    # A2(c): same session_id, rider, destination and pre-drawn numbers under two policies.
+    a, b = quoted_off.sessions, quoted_on.sessions
+    assert a.n == b.n
+    for name in ("session_id", "rider_id", "pu_cell", "do_cell", "u_book", "u_score", "quoted_fare_usd",
+                 "quoted_eta_min", "no_supply", "budget_period"):
+        np.testing.assert_array_equal(a.col(name), b.col(name), err_msg=name)
+    assert b.col("requested").sum() > a.col("requested").sum()      # vouchers raise bookings
+
+
+def test_engine_runs_with_real_demand_through_the_voucher_layer(tiny_cfg):
+    # B3: all_off through the layer behaves like the stub run (no voucher anywhere); all_on reserves and
+    # commits; both runs are deterministic and share their sessions (CRN). Core steps are still stubs,
+    # so no order is ever matched: all of them are truncated when cool-down ends.
+    world = stub_world(tiny_cfg)
+    off = run(tiny_cfg, world, FixedPolicy(False, 7), Rng.from_config(tiny_cfg), enforce_budget=False, log_level="full")
+    on = run(tiny_cfg, world, FixedPolicy(True, 7), Rng.from_config(tiny_cfg), enforce_budget=False, log_level="full")
+    again = run(tiny_cfg, world, FixedPolicy(False, 7), Rng.from_config(tiny_cfg), enforce_budget=False)
+    assert off.n_sessions == on.n_sessions == again.n_sessions > 100
+    assert off.N_completed == on.N_completed == 0 and off.V_profit_usd == 0.0 and on.voucher_spent_usd == 0.0
+    assert (off.n_requests, off.n_abandoned, off.n_truncated_orders) == (again.n_requests, again.n_abandoned, again.n_truncated_orders)
+    assert on.n_requests > off.n_requests
+    assert on.n_truncated_orders == on.orders.n >= on.n_requests        # every order (warm-up included) stays Waiting
+    assert not off.sessions.col("arm").any() and on.sessions.col("arm").all()
+    assert (on.sessions.col("in_window") == off.sessions.col("in_window")).all()
+    clock = Clock.from_config(tiny_cfg)
+    assert off.sim_end_s == clock.window_end_s + clock.cooldown_max_s   # Waiting orders never close before the cap
+    np.testing.assert_array_equal(off.spent_by_period_usd, [0.0])
+    assert len(on.offer_score) == on.n_sessions and not on.offer_completed.any()   # offered = in-window sessions
