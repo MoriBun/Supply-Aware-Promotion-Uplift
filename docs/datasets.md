@@ -80,6 +80,43 @@ Mỗi bộ `generate` chạy 4–5 phút trên một lõi (đo: 240–272 giây)
 
 ---
 
-## B7b (T4.3, chưa sinh)
+## B7b (T4.3): sweep θ, bản tạm chờ Gate P6
 
-Sweep tham chiếu `sweep_theta` (12 θ × 10 seed, cùng B, κ auto) sau Gate P6; sinh lại `legacy_28d` nếu B đổi; gắn tag commit. Sẽ bổ sung vào file này.
+**Chưa chốt.** Gate P6 chưa đạt trên lưới θ mặc định (câu hỏi mở Q23 trong `decisions.md`). Nếu mentor giữ B = 5.545,80 thì sweep dưới đây là sweep tham chiếu và `legacy_28d` không phải sinh lại; nếu B đổi thì sinh lại cả hai.
+
+### Sweep tham chiếu (`runs/p6/sweep_theta`, sinh ngày 02/10/2026)
+
+`python -m sim run --mode sweep_theta --config config/default.yaml --out runs/p6/sweep_theta` (271 giây, 8 tiến trình). Chính sách `threshold`, hàm điểm `heuristic_low_freq`, dự báo `persistence`, không hysteresis; 12 θ × 10 seed (0–9) × 1 ngày; cùng B = 5.545,80 USD/kỳ; κ auto riêng cho từng θ (pilot seed 9000 + chỉ số θ). `config_hash = cb27f5348011`, commit `930875e`.
+
+| θ | N trung bình | SE | V trung bình (USD) | Chi voucher (USD) | % (ô, slot) tắt | κ |
+|---|---|---|---|---|---|---|
+| 0 | 3.844,6 | 19,7 | 12.321,0 | 5.545,2 | 0 | −2,349 |
+| 0,1 | 3.877,0 | 19,3 | 12.483,1 | 5.545,2 | 24,8 | −2,584 |
+| 0,2 | 3.883,0 | 23,4 | 12.489,7 | 5.545,2 | 27,2 | −2,589 |
+| 0,3 | 3.883,7 | 18,8 | 12.499,0 | 5.545,1 | 30,0 | −2,708 |
+| 0,4 | 3.888,1 | 20,4 | 12.506,2 | 5.545,2 | 31,4 | −2,708 |
+| 0,5 | 3.890,0 | 17,4 | 12.503,3 | 5.545,1 | 32,8 | −2,767 |
+| 0,6 | 3.892,6 | 18,4 | 12.534,1 | 5.545,2 | 34,7 | −2,821 |
+| 0,8 | 3.892,5 | 19,2 | 12.525,8 | 5.545,1 | 37,4 | −2,951 |
+| 1,0 | 3.892,7 | 17,6 | 12.535,8 | 5.545,3 | 38,9 | −2,995 |
+| 1,25 | 3.888,4 | 15,8 | 12.503,6 | 5.545,5 | 42,6 | −3,206 |
+| 1,5 | 3.899,3 | 15,6 | 12.547,8 | 5.525,1 | 44,9 | −3,101 |
+| 2,0 | 3.893,8 | 17,7 | 12.519,4 | 5.545,1 | 47,8 | −3,404 |
+
+Mốc so sánh (cùng seed 0–9, `runs/b7a/gte`): `all_off` 3.439,6; `all_on` không ngân sách 4.652,5. `all_on` có ngân sách B (20 seed, đo ở A2(b)): 3.700,4.
+
+File: `results/policy_results.parquet` (120 lượt), `results/theta_sweep.parquet`, `meta/run_metadata.parquet` (κ của từng lượt), `results/theta_sweep.png` (vẽ bằng `python -m analysis.plots theta_sweep runs/p6/sweep_theta --gte runs/b7a/gte`).
+
+### Sweep chẩn đoán cho Gate P6 (`runs/p6/sens_*`, 5 seed mỗi bộ)
+
+Lệnh: như trên, thêm `--set sweep.n_seeds=5` và override ghi ở cột đầu.
+
+| Thư mục | Override | B (USD/kỳ) | N tại θ = 0 | N lớn nhất (θ) | N tại θ cuối lưới | Dạng đường |
+|---|---|---|---|---|---|---|
+| `sens_fraction_0p1` | `budget.fraction=0.1` | 1.848,6 | 3.576 | 3.595 (1,25) | 3.589 | phẳng |
+| `sens_fraction_0p6` | `budget.fraction=0.6` | 11.091,6 | 4.228 | 4.283 (0,4) | 4.187 | cực đại bên trong, giảm khi θ ≥ 1,25 |
+| `sens_voucher_0p3` | `voucher.pct_of_fare=0.3` | 9.076,3 | 3.940 | 4.014 (1,5) | 4.012 | tăng một bậc rồi phẳng |
+| `sens_demand_1p5` | `demand.demand_scale=1.5` | 6.430,7 | 5.381 | 5.623 (2) | 5.623 | tăng đều tới mép lưới |
+| `sens_theta_wide` | `sweep.theta_grid=[0, 1, 2, 3, 5, 10, 30]` | 5.545,8 | 3.834 | 3.885 (2) | 3.694 (θ = 30) | phẳng tới θ = 5, giảm từ θ = 10 |
+
+Các sweep này chỉ để chẩn đoán, không phải dữ liệu bàn giao.
