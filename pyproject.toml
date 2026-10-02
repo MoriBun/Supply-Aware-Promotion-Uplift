@@ -17,6 +17,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+analysis = ["matplotlib>=3.8"]   # gate plots in analysis/plots.py (decisions T-13); sim/ never imports it
 
 [tool.setuptools.packages.find]
 include = ["sim*"]

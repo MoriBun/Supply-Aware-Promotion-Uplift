@@ -6,6 +6,7 @@ all_on pilot. Policies: a smoke day for legacy, threshold and experiment on top 
 all_off days of tests/test_integration.py. CRN: same seed, same run; policies face the same sessions.
 """
 
+import dataclasses
 from unittest import mock
 
 import numpy as np
@@ -18,7 +19,9 @@ from sim.engine import run
 from sim.policies.fixed import FixedPolicy
 from sim.population import build_world
 from sim.rng import Rng
-from sim.runner import DEFAULT_ENGINE, Job, calibrate_budget, execute_job, with_policy
+from sim.runner import (
+    DEFAULT_ENGINE, Job, budget_for, calibrate_budget, execute_job, resolve_kappa, run_jobs, seeds_for, with_policy,
+)
 from sim.state import Clock, Mechanism, OrderStatus
 from tests.conftest import ROOT
 
@@ -242,3 +245,83 @@ def test_a2c_policies_face_the_same_sessions(policy_days):
         for col in ("session_id", "rider_id", "pu_cell", "do_cell", "u_book", "u_target", "u_score", "e_cancel",
                     "trip_noise", "quoted_fare_usd"):
             np.testing.assert_array_equal(other.col(col), base.col(col), err_msg=f"{name}.{col}")
+
+
+# --- slow acceptance on default.yaml (task T4.2): kappa-auto, A2(b), A3 -----------------------
+# Run with: pytest -q -m slow tests/test_acceptance.py. The measuring functions are also what the
+# numbers in docs/log.md come from.
+
+
+def threshold_jobs(cfg, theta: float, seeds, *, hysteresis_h: float | None = None):
+    """``(budget, kappa, jobs)``: threshold policy at ``theta`` under B with kappa-auto, one job per seed."""
+    th = with_policy(cfg, "threshold")
+    if hysteresis_h is not None:
+        th = dataclasses.replace(th, policy=dataclasses.replace(
+            th.policy, threshold=dataclasses.replace(th.policy.threshold, hysteresis_h=float(hysteresis_h))))
+    budget = budget_for(th)
+    kappa = resolve_kappa(th, theta, 0, budget)
+    return budget, kappa, [Job(cfg=th, seed=s, theta=theta, kappa=kappa, budget_usd=budget, enforce_budget=True)
+                           for s in seeds]
+
+
+def kappa_auto_spend(cfg, n_seeds: int = 3) -> dict:
+    """Spend of the default threshold policy with kappa-auto, relative to B per period."""
+    budget, kappa, jobs = threshold_jobs(cfg, float(cfg.policy.threshold.theta), seeds_for(cfg, n_seeds))
+    results = run_jobs(jobs)
+    n_periods = Clock.from_config(cfg).n_periods
+    return {"budget": budget, "kappa": kappa, "spent": [r.voucher_spent_usd for r in results],
+            "ratio": [r.voucher_spent_usd / (budget * n_periods) for r in results],
+            "N": [r.N_completed for r in results]}
+
+
+def a2b_variances(cfg, n_seeds: int = 20, theta: float = 0.3) -> dict:
+    """A2(b): Var(N(all_on with B) - N(threshold theta with B)) with common seeds and with independent seeds."""
+    seeds = seeds_for(cfg, n_seeds)
+    budget, kappa, th_same = threshold_jobs(cfg, theta, seeds)
+    _, _, th_other = threshold_jobs(cfg, theta, [s + n_seeds for s in seeds])
+    on = with_policy(cfg, "all_on")
+    on_jobs = [Job(cfg=on, seed=s, budget_usd=budget, enforce_budget=True) for s in seeds]
+    results = run_jobs(on_jobs + th_same + th_other)
+    n = np.array([r.N_completed for r in results], dtype=float)
+    n_on, n_same, n_other = n[:n_seeds], n[n_seeds:2 * n_seeds], n[2 * n_seeds:]
+    crn, indep = n_on - n_same, n_on - n_other
+    return {"budget": budget, "kappa": kappa, "n_seeds": n_seeds, "mean_on": float(n_on.mean()),
+            "mean_threshold": float(n_same.mean()), "mean_diff": float(crn.mean()),
+            "var_crn": float(crn.var(ddof=1)), "var_indep": float(indep.var(ddof=1)),
+            "ratio": float(crn.var(ddof=1) / indep.var(ddof=1))}
+
+
+def a3_switches(cfg, hysteresis_h: float, n_seeds: int = 5, theta: float = 0.35) -> dict:
+    """A3: on/off switches per cell and day of pi_theta, per seed."""
+    budget, kappa, jobs = threshold_jobs(cfg, theta, seeds_for(cfg, n_seeds), hysteresis_h=hysteresis_h)
+    results = run_jobs(jobs)
+    switches = [r.n_switches_per_cell_day for r in results]
+    return {"hysteresis_h": hysteresis_h, "switches": switches, "median": float(np.median(switches)),
+            "N_mean": float(np.mean([r.N_completed for r in results])),
+            "share_cells_off": float(np.mean([r.share_cells_off for r in results])), "kappa": kappa}
+
+
+@pytest.mark.slow
+def test_kappa_auto_spend_is_between_85_and_100_percent_of_budget():
+    # docs/tests.md "Chính sách": with kappa-auto the evaluation run spends within [0.85 B, 1.0 B].
+    m = kappa_auto_spend(load_config(DEFAULT))
+    assert np.isfinite(m["kappa"]) and m["budget"] > 0
+    assert all(0.85 <= r <= 1.0 + 1e-9 for r in m["ratio"]), m
+
+
+@pytest.mark.slow
+def test_a2b_common_random_numbers_halve_the_variance_of_the_policy_difference():
+    m = a2b_variances(load_config(DEFAULT))
+    assert m["var_crn"] <= 0.5 * m["var_indep"], m
+
+
+@pytest.mark.slow
+def test_a3_switches_per_cell_day_and_hysteresis():
+    # Informational (docs/tests.md A3): report the switches; when the median exceeds 12 per cell and day,
+    # compare with h = 0.1. The only property asserted is that hysteresis reduces switching.
+    cfg = load_config(DEFAULT)
+    plain = a3_switches(cfg, 0.0)
+    assert all(np.isfinite(s) and s >= 0 for s in plain["switches"])
+    if plain["median"] > 12:
+        damped = a3_switches(cfg, 0.1)
+        assert damped["median"] < plain["median"], (plain, damped)

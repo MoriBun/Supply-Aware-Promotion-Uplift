@@ -164,7 +164,7 @@ Người nhận **kiểm tra trước khi dùng**. Khi giao xong, người giao 
 | B4 | Tình → Hoàng | mode `throughput_curve` | cuối S1 | chạy với engine giả, đúng cột `results/throughput_curve` | dời Gate P2 | 01/10 (`develop1`) |
 | B5 | Hoàng → Tình | `engine.run` thật | cuối S2 | 4 test tích hợp pass; RunResult đủ trường | Tình tiếp tục với engine giả | 01/10 (`develop2`) |
 | B6 | Hoàng → Tình | `default.yaml` đã hiệu chỉnh | cuối S3 | A1, A5, CAL đạt; bảng hiệu chỉnh trong `decisions.md`; `config_hash` mới | không chạy P6/P8 | 01/10 (`develop2`, `config_hash = cb27f5348011`) |
-| B7 | Tình → Hoàng | (a) switchback, `rider_ab`, `gte`, legacy; (b) sweep + `datasets.md` | (a) đầu S4, (b) cuối S4 | test schema + no-leak pass trên dữ liệu; `config_hash` khớp `datasets.md` | Hoàng dùng dữ liệu 2 ngày từ T3.2 | ☐ |
+| B7 | Tình → Hoàng | (a) switchback, `rider_ab`, `gte`, legacy; (b) sweep + `datasets.md` | (a) đầu S4, (b) cuối S4 | test schema + no-leak pass trên dữ liệu; `config_hash` khớp `datasets.md` | Hoàng dùng dữ liệu 2 ngày từ T3.2 | (a) 02/10 (`runs/b7a`, `docs/datasets.md`); (b) ☐ |
 | B8 | Hoàng → Tình | score_fn τ̂ + parquet dự đoán | ngày đầu S5 | nạp được trong tiến trình con; tất định; chỉ đọc cột của batch | Tình chạy random/heuristic | ☐ |
 
 ---
