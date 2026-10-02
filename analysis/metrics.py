@@ -14,6 +14,7 @@ targeted (x in [0, 1]) so runs of different size are comparable.
 from __future__ import annotations
 
 import math
+from statistics import NormalDist
 
 import numpy as np
 import pandas as pd
@@ -71,6 +72,96 @@ def bootstrap_mean_ci(values, *, n_boot: int = 2000, alpha: float = 0.05, seed: 
     gen = np.random.default_rng(seed)
     means = gen.choice(x, size=(n_boot, len(x)), replace=True).mean(axis=1)
     return float(np.quantile(means, alpha / 2)), float(np.quantile(means, 1 - alpha / 2))
+
+
+def _by_seed(policy_results: pd.DataFrame, metric: str) -> pd.DataFrame:
+    """Sweep results as a seed x theta table of ``metric`` (seeds missing for some theta are dropped)."""
+    wide = policy_results.pivot_table(index="seed", columns="theta", values=metric, aggfunc="first")
+    return wide.astype(float).dropna().sort_index(axis=1)
+
+
+def t_quantile(p: float, df: int) -> float:
+    """Student-t quantile from the Cornish-Fisher expansion around the normal quantile.
+
+    Accurate to about 0.01 for df >= 3 (2.262 for p = 0.975, df = 9), which is enough for
+    confidence bounds; it avoids a scipy dependency.
+    """
+    z = NormalDist().inv_cdf(p)
+    g1 = (z**3 + z) / 4
+    g2 = (5 * z**5 + 16 * z**3 + 3 * z) / 96
+    g3 = (3 * z**7 + 19 * z**5 + 17 * z**3 - 15 * z) / 384
+    g4 = (79 * z**9 + 776 * z**7 + 1482 * z**5 - 1920 * z**3 - 945 * z) / 92160
+    return z + g1 / df + g2 / df**2 + g3 / df**3 + g4 / df**4
+
+
+def theta_star_set(policy_results: pd.DataFrame, *, metric: str = "N_completed", alpha: float = 0.05) -> pd.DataFrame:
+    """Which thetas of a sweep are statistically as good as the best one (decisions T-31).
+
+    Multiple comparisons with the best: for every theta, the paired difference ``best - theta`` by
+    seed (common random numbers), its SE, and a simultaneous one-sided lower bound ``gap_lo`` =
+    gap - crit x SE with ``crit`` the Student-t quantile at ``1 - alpha / (k - 1)`` (Bonferroni
+    over the k - 1 comparisons, df = seeds - 1). ``in_set`` = the bound is <= 0: theta cannot be
+    told from the best at family-wise level ``alpha``. When N(pi_theta) has a plateau, theta* is
+    this set, not a point; more seeds shrink it.
+    """
+    wide = _by_seed(policy_results, metric)
+    means = wide.mean()
+    best = float(means.idxmax())
+    n, k = len(wide), len(wide.columns)
+    crit = t_quantile(1.0 - alpha / max(k - 1, 1), n - 1) if n > 1 else float("nan")
+    rows = []
+    for theta in wide.columns:
+        diff = wide[best] - wide[theta]
+        gap = float(diff.mean())
+        se = float(diff.std(ddof=1) / math.sqrt(n)) if n > 1 else float("nan")
+        rows.append({"theta": float(theta), "mean": float(means[theta]), "gap_to_best": gap, "gap_se": se,
+                     "gap_lo": gap - crit * se, "gap_hi": gap + crit * se,
+                     "in_set": bool(theta == best or gap - crit * se <= 0.0), "n_seeds": n, "crit": crit})
+    return pd.DataFrame(rows)
+
+
+def theta_star_interval(star: pd.DataFrame) -> tuple[float, float, float]:
+    """``(best theta, lower end, upper end)``: the hull of the ``in_set`` thetas of :func:`theta_star_set`.
+
+    The hull, not the contiguous run around the best: kappa-auto takes each theta's kappa from its
+    own pilot run, which adds a theta-specific error that the paired-by-seed SE does not see, so a
+    single theta inside the plateau can drop out of the set (:func:`theta_star_gaps` lists them).
+    """
+    s = star.sort_values("theta")
+    inside = s.loc[s["in_set"], "theta"]
+    return float(s.loc[s["mean"].idxmax(), "theta"]), float(inside.min()), float(inside.max())
+
+
+def theta_star_gaps(star: pd.DataFrame) -> list[float]:
+    """Thetas inside the hull of the theta* set that are not themselves in the set."""
+    _, lo, hi = theta_star_interval(star)
+    s = star.sort_values("theta")
+    return [float(t) for t in s.loc[(s["theta"] > lo) & (s["theta"] < hi) & ~s["in_set"], "theta"]]
+
+
+def sweep_regret(policy_results: pd.DataFrame, theta_hat: float, *, metric: str = "N_completed",
+                 alpha: float = 0.05) -> dict:
+    """Regret of running pi_theta at ``theta_hat`` instead of the sweep's best theta: ``N(best) - N(theta_hat)``.
+
+    This, not ``|theta_hat - theta*|``, scores an estimated threshold (D1: the criterion is N):
+    inside a plateau the regret is about 0 whatever the distance. On a grid point it is the paired
+    difference by seed; between grid points each seed's curve is interpolated linearly in theta;
+    outside the grid it is an error. The CI is a two-sided Student-t interval for this one
+    comparison (``theta_hat`` is fixed in advance, so no multiplicity correction).
+    """
+    wide = _by_seed(policy_results, metric)
+    thetas = wide.columns.to_numpy(dtype=float)
+    if not thetas.min() <= theta_hat <= thetas.max():
+        raise ValueError(f"theta_hat {theta_hat} is outside the sweep grid [{thetas.min()}, {thetas.max()}]")
+    best = float(wide.mean().idxmax())
+    at_hat = np.array([np.interp(theta_hat, thetas, row) for row in wide.to_numpy()])
+    diff = wide[best].to_numpy() - at_hat
+    n = len(diff)
+    mean = float(diff.mean())
+    se = float(diff.std(ddof=1) / math.sqrt(n)) if n > 1 else float("nan")
+    crit = t_quantile(1.0 - alpha / 2.0, n - 1) if n > 1 else float("nan")
+    return {"theta_hat": float(theta_hat), "theta_best": best, "regret": mean, "se": se, "lo": mean - crit * se,
+            "hi": mean + crit * se, "relative": mean / float(wide[best].mean()), "n_seeds": n}
 
 
 def uplift_curve(y, t, score) -> pd.DataFrame:

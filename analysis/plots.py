@@ -60,12 +60,14 @@ def vn(value: float, digits: int = 0) -> str:
 
 def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | None = None,
                      baselines: dict[str, float] | None = None, share_cells_off=None,
-                     title: str | None = None) -> Path:
+                     star_interval: tuple[float, float] | None = None, title: str | None = None) -> Path:
     """N(pi_theta) with a 95% CI over seeds, zoomed on the sweep; below, how much each theta cuts.
 
     The y-axis of the top panel covers the sweep only, so the shape is readable;
     the baselines (all_off, all_on without budget) and the spend against B are
-    given as a note, because drawn to scale they would flatten the curve. The
+    given as a note, because drawn to scale they would flatten the curve.
+    ``star_interval`` (lower and upper theta of ``metrics.theta_star_interval``)
+    is shaded as the range of thetas not significantly worse than the best. The
     lower panel shows the share of (cell, slot) switched off when
     ``share_cells_off`` (one value per theta) is given, else the mean spend.
     """
@@ -73,11 +75,23 @@ def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | Non
     theta = sweep["theta"].to_numpy(dtype=float)
     n_mean, n_se = sweep["N_mean"].to_numpy(dtype=float), np.nan_to_num(sweep["N_se"].to_numpy(dtype=float))
     spent = sweep["spent_mean"].to_numpy(dtype=float)
+    # A grid that spans two orders of magnitude (0 ... 30) is drawn with evenly spaced grid points:
+    # on a linear axis the dozen thetas below 2 would collapse into the left edge.
+    gaps = np.diff(theta)
+    ordinal = len(theta) > 2 and theta.max() / max(float(np.median(gaps)), 1e-9) > 40
+    x = np.arange(len(theta), dtype=float) if ordinal else theta
     fig, (ax_n, ax_s) = plt.subplots(2, 1, figsize=(9, 7.4), sharex=True, height_ratios=[3, 2])
 
-    _line(ax_n, theta, n_mean, n_mean - Z95 * n_se, n_mean + Z95 * n_se)
+    if star_interval is not None:
+        lo, hi = star_interval
+        x_lo, x_hi = float(np.interp(lo, theta, x)), float(np.interp(hi, theta, x))
+        pad = 0.3 if ordinal else 0.03 * (theta.max() - theta.min())
+        ax_n.axvspan(x_lo - pad, x_hi + pad, color=INK, alpha=0.05, linewidth=0)
+        ax_n.annotate(f"khoảng θ*: {lo:g}–{hi:g} (không kém θ tốt nhất, 95%)", xy=((x_lo + x_hi) / 2, 0.03),
+                      xycoords=("data", "axes fraction"), ha="center", va="bottom", color=INK_2, fontsize=9)
+    _line(ax_n, x, n_mean, n_mean - Z95 * n_se, n_mean + Z95 * n_se)
     best = int(np.argmax(n_mean))
-    ax_n.annotate(f"lớn nhất: θ = {theta[best]:g}\nN = {vn(n_mean[best])}", xy=(theta[best], n_mean[best]),
+    ax_n.annotate(f"lớn nhất: θ = {theta[best]:g}\nN = {vn(n_mean[best])}", xy=(x[best], n_mean[best]),
                   xytext=(0, 26), textcoords="offset points", ha="center", va="bottom", color=INK, fontsize=9,
                   fontweight="bold")
     ax_n.set_ylabel("Số chuyến hoàn thành / ngày")
@@ -94,19 +108,20 @@ def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | Non
     ax_n.margins(y=0.35)
 
     if share_cells_off is not None:
-        _line(ax_s, theta, np.asarray(share_cells_off, dtype=float) * 100.0)
+        _line(ax_s, x, np.asarray(share_cells_off, dtype=float) * 100.0)
         ax_s.set_ylabel("% (ô, slot) bị tắt")
         ax_s.set_title("Mức cắt của tầng ô: tỷ lệ (ô, slot) tắt khuyến mãi")
         ax_s.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
     else:
-        _line(ax_s, theta, spent)
+        _line(ax_s, x, spent)
         ax_s.set_ylabel("Chi voucher (USD / ngày)")
         ax_s.set_title("Chi tiêu voucher trung bình")
         ax_s.yaxis.set_major_formatter(lambda v, _: vn(v))
     ax_s.set_ylim(bottom=0)
     ax_s.margins(y=0.2)
-    ax_s.set_xlabel("θ: tắt khuyến mãi ở ô có slack dự báo < θ")
-    ax_s.set_xticks(theta)
+    ax_s.set_xlabel("θ: tắt khuyến mãi ở ô có slack dự báo < θ"
+                    + (" (lưới không đều; các mốc đặt cách đều trên trục)" if ordinal else ""))
+    ax_s.set_xticks(x)
     ax_s.set_xticklabels([f"{t:g}" for t in theta], fontsize=8)
 
     fig.tight_layout()
@@ -175,8 +190,16 @@ def main(argv: list[str]) -> int:
     runs = pd.read_parquet(run_dir / "results" / "policy_results.parquet")
     baselines = gte_baselines(Path(argv[argv.index("--gte") + 1])) if "--gte" in argv else None
     off = runs.groupby("theta", sort=True)["share_cells_off"].mean().to_numpy()
+    from analysis.metrics import theta_star_gaps, theta_star_interval, theta_star_set
+    star = theta_star_set(runs)
+    best, lo, hi = theta_star_interval(star)
     out = plot_theta_sweep(sweep, run_dir / "results" / "theta_sweep.png",
-                           budget_usd=float(runs["budget_B_usd"].iloc[0]), baselines=baselines, share_cells_off=off)
+                           budget_usd=float(runs["budget_B_usd"].iloc[0]), baselines=baselines, share_cells_off=off,
+                           star_interval=(lo, hi))
+    print(star.round(2).to_string(index=False))
+    gaps = theta_star_gaps(star)
+    print(f"theta tốt nhất = {best:g}; khoảng θ* (không kém θ tốt nhất, 95% đồng thời, ghép cặp theo seed): "
+          f"[{lo:g}, {hi:g}]" + (f"; mốc bị loại bên trong: {gaps}" if gaps else ""))
     print(out)
     return 0
 

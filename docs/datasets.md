@@ -80,43 +80,85 @@ Mỗi bộ `generate` chạy 4–5 phút trên một lõi (đo: 240–272 giây)
 
 ---
 
-## B7b (T4.3): sweep θ, bản tạm chờ Gate P6
+## B7b (T4.3, sinh ngày 02/10/2026): sweep θ tham chiếu
 
-**Chưa chốt.** Gate P6 chưa đạt trên lưới θ mặc định (câu hỏi mở Q23 trong `decisions.md`). Nếu mentor giữ B = 5.545,80 thì sweep dưới đây là sweep tham chiếu và `legacy_28d` không phải sinh lại; nếu B đổi thì sinh lại cả hai.
+Theo quyết định T-31 (chốt Q23; quyết định của Tình, **mentor chưa xác nhận**): giữ B = 5.545,80 USD/kỳ nên các bộ B7a ở trên **không phải sinh lại**; sweep tham chiếu dùng lưới θ kéo dài và 30 seed.
 
-### Sweep tham chiếu (`runs/p6/sweep_theta`, sinh ngày 02/10/2026)
+### Sweep tham chiếu (`runs/b7b/sweep_theta_ref`)
 
-`python -m sim run --mode sweep_theta --config config/default.yaml --out runs/p6/sweep_theta` (271 giây, 8 tiến trình). Chính sách `threshold`, hàm điểm `heuristic_low_freq`, dự báo `persistence`, không hysteresis; 12 θ × 10 seed (0–9) × 1 ngày; cùng B = 5.545,80 USD/kỳ; κ auto riêng cho từng θ (pilot seed 9000 + chỉ số θ). `config_hash = cb27f5348011`, commit `930875e`.
+- Chính sách `threshold`, hàm điểm `heuristic_low_freq`, dự báo `persistence`, không hysteresis.
+- 16 mốc θ (lớp phủ `config/sweep_reference.yaml`) × 30 seed (0–29) × 1 ngày = 480 lượt; cùng B; κ auto riêng cho từng θ (pilot seed 9000 + chỉ số θ).
+- `config_hash` của lượt: `c27ac66f7c2c` (= `default.yaml` + lớp phủ + `sweep.n_seeds=30`); hash gốc `default.yaml` vẫn `cb27f5348011`; commit `c62800e`.
+- 120 lượt chung với sweep 12 θ × 10 seed chạy trước đó (`runs/p6/sweep_theta`) cho N và V giống hệt.
 
-| θ | N trung bình | SE | V trung bình (USD) | Chi voucher (USD) | % (ô, slot) tắt | κ |
-|---|---|---|---|---|---|---|
-| 0 | 3.844,6 | 19,7 | 12.321,0 | 5.545,2 | 0 | −2,349 |
-| 0,1 | 3.877,0 | 19,3 | 12.483,1 | 5.545,2 | 24,8 | −2,584 |
-| 0,2 | 3.883,0 | 23,4 | 12.489,7 | 5.545,2 | 27,2 | −2,589 |
-| 0,3 | 3.883,7 | 18,8 | 12.499,0 | 5.545,1 | 30,0 | −2,708 |
-| 0,4 | 3.888,1 | 20,4 | 12.506,2 | 5.545,2 | 31,4 | −2,708 |
-| 0,5 | 3.890,0 | 17,4 | 12.503,3 | 5.545,1 | 32,8 | −2,767 |
-| 0,6 | 3.892,6 | 18,4 | 12.534,1 | 5.545,2 | 34,7 | −2,821 |
-| 0,8 | 3.892,5 | 19,2 | 12.525,8 | 5.545,1 | 37,4 | −2,951 |
-| 1,0 | 3.892,7 | 17,6 | 12.535,8 | 5.545,3 | 38,9 | −2,995 |
-| 1,25 | 3.888,4 | 15,8 | 12.503,6 | 5.545,5 | 42,6 | −3,206 |
-| 1,5 | 3.899,3 | 15,6 | 12.547,8 | 5.525,1 | 44,9 | −3,101 |
-| 2,0 | 3.893,8 | 17,7 | 12.519,4 | 5.545,1 | 47,8 | −3,404 |
+| θ | N trung bình | SE | V (USD) | Chi voucher (USD) | % (ô, slot) tắt | κ | Kém θ tốt nhất (± SE ghép cặp) | Thuộc tập θ\* |
+|---|---|---|---|---|---|---|---|---|
+| 0 | 3.848,4 | 10,9 | 12.335,3 | 5.545,3 | 0 | −2,35 | 53,3 ± 4,8 | không |
+| 0,1 | 3.877,4 | 10,4 | 12.455,1 | 5.545,3 | 25 | −2,58 | 24,2 ± 4,5 | không |
+| 0,2 | 3.882,2 | 11,3 | 12.465,2 | 5.545,2 | 27 | −2,59 | 19,5 ± 5,5 | không |
+| 0,3 | 3.884,7 | 10,7 | 12.503,1 | 5.545,1 | 30 | −2,71 | 17,0 ± 4,5 | không |
+| 0,4 | 3.889,8 | 10,5 | 12.498,2 | 5.545,2 | 31 | −2,71 | 11,9 ± 4,2 | **có** |
+| 0,5 | 3.891,8 | 10,2 | 12.508,5 | 5.545,2 | 33 | −2,77 | 9,9 ± 3,9 | **có** |
+| 0,6 | 3.893,0 | 10,2 | 12.518,5 | 5.545,2 | 35 | −2,82 | 8,6 ± 4,6 | **có** |
+| 0,8 | 3.893,5 | 11,0 | 12.517,5 | 5.545,3 | 38 | −2,95 | 8,2 ± 3,8 | **có** |
+| 1,0 | 3.894,3 | 10,2 | 12.536,5 | 5.545,3 | 39 | −3,00 | 7,3 ± 3,4 | **có** |
+| 1,25 | 3.887,9 | 9,5 | 12.492,3 | 5.545,4 | 43 | −3,21 | 13,8 ± 2,9 | không (xem Q24) |
+| **1,5** | **3.901,7** | 10,3 | 12.535,9 | 5.533,8 | 45 | −3,10 | 0 (tốt nhất) | **có** |
+| 2,0 | 3.897,4 | 9,9 | 12.528,1 | 5.545,2 | 47 | −3,40 | 4,2 ± 3,6 | **có** |
+| 3,0 | 3.889,5 | 10,7 | 12.471,2 | 5.544,7 | 53 | −3,79 | 12,1 ± 4,0 | không |
+| 5,0 | 3.883,2 | 10,8 | 12.450,5 | 5.543,4 | 61 | −4,93 | 18,4 ± 4,4 | không |
+| 10 | 3.837,2 | 10,0 | 12.539,1 | 5.233,8 | 69 | −∞ | 64,4 ± 4,8 | không |
+| 30 | 3.693,0 | 9,8 | 13.579,8 | 3.436,3 | 75 | −∞ | 208,6 ± 4,3 | không |
 
-Mốc so sánh (cùng seed 0–9, `runs/b7a/gte`): `all_off` 3.439,6; `all_on` không ngân sách 4.652,5. `all_on` có ngân sách B (20 seed, đo ở A2(b)): 3.700,4.
+**Đọc bảng:**
+- Đường N(π_θ) có ba đoạn: tăng (θ từ 0 đến 0,4), phẳng (0,4 đến 2), giảm (từ 3 trở đi, rõ từ 10 khi không tiêu hết B). Cực đại nằm bên trong lưới.
+- **Khoảng θ\* = [0,4; 2]**: tập các θ không kém θ tốt nhất ở mức 95% đồng thời (so sánh bội với cái tốt nhất, hiệu ghép cặp theo seed, Bonferroni trên 15 phép so, phân vị t với 29 bậc tự do, hệ số 2,922). Mốc 1,25 nằm trong khoảng nhưng bị loại do nhiễu của κ auto (câu hỏi mở Q24).
+- Regret theo N khi dùng θ khác (hiệu ghép cặp, CI 95%): θ = 0 (không cắt ô): +53,3 ± 4,8 (1,37%); θ mặc định 0,35: +14,4 ± 4,1 (0,37%); θ = 0,5: +9,9 ± 3,9 (0,25%); θ = 10: +64,4 ± 4,8 (1,65%); θ = 30: +208,6 ± 4,3 (5,35%).
+- Mốc so sánh (`runs/b7a/gte`, seed 0–9): `all_off` 3.439,6; `all_on` không ngân sách 4.652,5. `all_on` có ngân sách B (20 seed, A2(b)): 3.700,4.
 
-File: `results/policy_results.parquet` (120 lượt), `results/theta_sweep.parquet`, `meta/run_metadata.parquet` (κ của từng lượt), `results/theta_sweep.png` (vẽ bằng `python -m analysis.plots theta_sweep runs/p6/sweep_theta --gte runs/b7a/gte`).
+File: `results/policy_results.parquet` (480 lượt), `results/theta_sweep.parquet`, `meta/run_metadata.parquet` (κ, B của từng lượt), `results/theta_sweep.png`.
 
-### Sweep chẩn đoán cho Gate P6 (`runs/p6/sens_*`, 5 seed mỗi bộ)
+### Phân tích độ nhạy (`runs/b7b/sens_*`, 16 θ × 10 seed mỗi bộ)
 
-Lệnh: như trên, thêm `--set sweep.n_seeds=5` và override ghi ở cột đầu.
+| Thư mục | Override | B (USD/kỳ) | N tại θ = 0 | N lớn nhất (θ) | N tại θ = 30 | Khoảng θ\* | Regret của θ = 0 |
+|---|---|---|---|---|---|---|---|
+| `sens_fraction_0p1` | `budget.fraction=0.1` | 1.848,6 | 3.584 | 3.601,9 (0,6) | 3.573 | [0; 10] | +18,0 ± 5,5 (0,50%) |
+| `sens_fraction_0p6` | `budget.fraction=0.6` | 11.091,6 | 4.235 | 4.299,0 (0,4) | 3.685 | [0,2; 1] | +64,2 ± 8,2 (1,49%) |
+| `sens_voucher_0p3` | `voucher.pct_of_fare=0.3` | 9.076,3 | 3.956 | 4.025,8 (1,5) | 3.775 | [0,3; 5] | +70,3 ± 5,5 (1,75%) |
+| `sens_demand_1p5` | `demand.demand_scale=1.5` | 6.430,7 | 5.400 | 5.630,4 (2) | 5.347 | [0,4; 2], loại 0,5; 0,8; 1,0 | +230,9 ± 16,3 (4,10%) |
 
-| Thư mục | Override | B (USD/kỳ) | N tại θ = 0 | N lớn nhất (θ) | N tại θ cuối lưới | Dạng đường |
-|---|---|---|---|---|---|---|
-| `sens_fraction_0p1` | `budget.fraction=0.1` | 1.848,6 | 3.576 | 3.595 (1,25) | 3.589 | phẳng |
-| `sens_fraction_0p6` | `budget.fraction=0.6` | 11.091,6 | 4.228 | 4.283 (0,4) | 4.187 | cực đại bên trong, giảm khi θ ≥ 1,25 |
-| `sens_voucher_0p3` | `voucher.pct_of_fare=0.3` | 9.076,3 | 3.940 | 4.014 (1,5) | 4.012 | tăng một bậc rồi phẳng |
-| `sens_demand_1p5` | `demand.demand_scale=1.5` | 6.430,7 | 5.381 | 5.623 (2) | 5.623 | tăng đều tới mép lưới |
-| `sens_theta_wide` | `sweep.theta_grid=[0, 1, 2, 3, 5, 10, 30]` | 5.545,8 | 3.834 | 3.885 (2) | 3.694 (θ = 30) | phẳng tới θ = 5, giảm từ θ = 10 |
+- Ở cả bốn biến thể đường có đủ ba đoạn tăng, phẳng, giảm trên lưới kéo dài.
+- θ = 0,4 và θ = 0,6 thuộc tập θ\* ở cả năm kịch bản (kể cả cấu hình chuẩn): kết luận về ngưỡng bền với mức ngân sách, cường độ voucher và độ căng thị trường.
+- Lợi ích của tầng ô tăng theo độ căng (0,5% khi ngân sách rất chặt, 1,4% ở cấu hình chuẩn, 4,1% khi cầu gấp rưỡi); θ\* nhọn dần khi ngân sách lớn hơn.
+- Các bộ này là phân tích độ nhạy, không phải cấu hình chính: `fraction` 0,6 làm chính sách cũ hết bị ngân sách ràng buộc, `demand_scale` 1,5 nằm ngoài hiệu chỉnh P3.
 
-Các sweep này chỉ để chẩn đoán, không phải dữ liệu bàn giao.
+### Lệnh sinh lại (PowerShell)
+
+```powershell
+$py = ".venv\Scripts\python.exe"
+$ref = @("--config", "config/default.yaml", "--config", "config/sweep_reference.yaml")
+& $py -m sim run --mode sweep_theta @ref --set sweep.n_seeds=30 --out runs/b7b/sweep_theta_ref
+& $py -m sim run --mode sweep_theta @ref --set budget.fraction=0.1 --out runs/b7b/sens_fraction_0p1
+& $py -m sim run --mode sweep_theta @ref --set budget.fraction=0.6 --out runs/b7b/sens_fraction_0p6
+& $py -m sim run --mode sweep_theta @ref --set voucher.pct_of_fare=0.3 --out runs/b7b/sens_voucher_0p3
+& $py -m sim run --mode sweep_theta @ref --set demand.demand_scale=1.5 --out runs/b7b/sens_demand_1p5
+# đồ thị, bảng θ* và kiểm tra
+& $py -m analysis.plots theta_sweep runs/b7b/sweep_theta_ref --gte runs/b7a/gte
+& $py -m analysis.check_dataset runs/b7b/sweep_theta_ref runs/b7b/sens_fraction_0p1 runs/b7b/sens_fraction_0p6 runs/b7b/sens_voucher_0p3 runs/b7b/sens_demand_1p5
+```
+
+Thời gian (8 tiến trình): sweep tham chiếu 30 seed 702 giây; mỗi sweep độ nhạy 5 đến 6 phút. `check_dataset` ngày 02/10: cả 5 thư mục OK. Cần `pip install -e ".[analysis]"` để vẽ đồ thị.
+
+### Dùng cho phân tích tuần 5
+
+```python
+import pandas as pd
+from analysis.metrics import theta_star_set, theta_star_interval, sweep_regret
+runs = pd.read_parquet("runs/b7b/sweep_theta_ref/results/policy_results.parquet")
+theta_star_interval(theta_star_set(runs))      # (1.5, 0.4, 2.0)
+sweep_regret(runs, theta_hat=0.8)              # regret theo N của một ngưỡng ước lượng θ̂
+```
+
+Ước lượng θ̂ được chấm bằng regret theo N, không bằng khoảng cách tới θ\* (T-31): trong đoạn phẳng regret gần 0 dù θ̂ lệch xa θ = 1,5.
+
+`runs/p6/` (sweep 12 θ × 10 seed và các sweep chẩn đoán 5 seed dùng để ra quyết định T-31) đã được thay bằng các bộ trên; có thể xóa.
