@@ -168,7 +168,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S3 xong; đã gộp `develop` (S3 của Tình) vào `develop2`; PR `develop2 → develop` chờ Tình review (B6, Gate P3). Tiếp theo: S4, H4.1 đo lại A5 với chính sách mặc định.
+**Đang làm:** S4. H4.1 (A5 với chính sách mặc định) xong. Tiếp theo: H4.2 ước lượng, chờ B7a (dữ liệu 28 ngày của Tình); trong lúc chờ có thể dựng trên dữ liệu `generate` 2 ngày.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -350,3 +350,12 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: không
 - Còn lại / bước tiếp: Tình review PR, xác nhận H-14 (đổi `monitor.py`) và chạy lại `calibrate_budget` với `config_hash = cb27f5348011`; hai người ghi kết quả Gate P3
+
+### 2026-10-02 · H4.1 · A5 với chính sách mặc định (threshold, κ auto) · xong
+- Nhánh/PR: commit trên `develop2`; PR `develop2 → develop` cuối S4, review: Tình
+- Đã làm: `tests/test_acceptance_core.py`: thêm `evaluate_job` (dựng đúng job của `runner.evaluate`: B từ pilot, κ auto) và chạy `test_a5_one_simulated_day_within_the_time_limit` cho cả `all_on` và `threshold`
+- Test: `pytest -q -m slow tests/test_acceptance_core.py` → 4 passed (py3.12, `.venv`). A5, `config_hash = cb27f5348011`, 1 tiến trình, 3 lần: `threshold` (θ = 0,35, `heuristic_low_freq`, κ auto = −2,748, B = 5.545,80 USD/kỳ): 6,61; 6,47; 6,53 giây, trung vị **6,53 giây** ≤ 30. `all_on` có ngân sách: 3,11; 2,53; 2,69 giây, trung vị 2,69 giây. Hai pilot (B và κ) mất 13,0 giây, không tính vào A5
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Số liệu tham khảo (1 seed, cùng B): `threshold` N = 3.980, 4.214 request, V = 12.977 USD, voucher 5.545 USD, 31,3% (ô, slot) tắt, 25,97 lần đổi trạng thái mỗi ô mỗi ngày; `all_on` N = 3.759, 4.176 request, V = 11.774 USD, voucher 5.544 USD; `all_off` N = 3.506
+- Còn lại / bước tiếp: H4.2 (cần B7a)
