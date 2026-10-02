@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S4 xong về code, dữ liệu và tài liệu (T4.1, T4.2, T4.3); phần mới nhất **chưa commit** (Tình tự commit). Gate P6 đạt theo quyết định T-31 của Tình, **chờ mentor xác nhận**. Còn lại của S4: Tình commit, gắn tag dữ liệu, PR `develop1 → develop`; báo mentor T-31, Q24. Tiếp theo: S5, T5.1 bảng N/V dưới cùng B (random, heuristic; τ̂ khi có B8).
+**Đang làm:** S4 đã gộp vào `develop` (PR #12; PR #13 của Hoàng cũng đã gộp, `develop1` ở `723a994`). Gate P6 đạt theo quyết định T-31 của Tình, **chờ mentor xác nhận**. Rà soát kết quả simulator xong: ba câu hỏi mở Q26–Q28 chờ Tình, Hoàng và mentor; mục log và `decisions.md` của lần rà soát **chưa commit** (Tình tự commit). Còn lại của S4: gắn tag dữ liệu; báo mentor T-31, Q24, Q26–Q28. Tiếp theo: S5, T5.1 bảng N/V dưới cùng B (random, heuristic; τ̂ khi có B8).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -216,6 +216,16 @@ Mẫu:
 - Lệch spec / quyết định mới: T-31
 - Bàn giao: giao B7b; người nhận kiểm tra: sinh lại theo lệnh trong `docs/datasets.md` (cần `pip install -e ".[analysis]"` để vẽ), `check_dataset` báo OK, N theo θ khớp bảng
 - Còn lại / bước tiếp: Tình commit rồi gắn tag dữ liệu (ví dụ `data-b7-cb27f5348011`); `runs/p6/` là bản chẩn đoán cũ, xóa được
+
+### 2026-10-02 · rà soát · tính hợp lý của kết quả simulator · xong (chờ quyết định Q26–Q28)
+- Nhánh/PR: `develop1` (`723a994`, sau PR #12 và #13); chỉ thêm vào `docs/log.md` và `docs/decisions.md`, chưa commit (Tình commit)
+- Đã làm: 6 script chẩn đoán **ngoài repo** ở `runs/audit/scripts`, kết quả ở `runs/audit/out` (không commit); không đổi code, config, dữ liệu. Điểm oracle trong script đọc tham số ẩn, chỉ để chẩn đoán, không phải chính sách của dự án
+- Test: `pytest -q` → 477 passed, 8 deselected (py3.11, 114 s); test chậm không chạy
+- Đạt (`config_hash = cb27f5348011`): thời gian xe theo trạng thái cộng đủ (rảnh 42,2%; đi đón 13,1%; chở 28,4%; điều chuyển 16,4%); ETA báo 3,64 so với ETA lúc ghép 3,81 phút; tỷ lệ hủy tăng đều theo ETA đón (0,7% dưới 3 phút → 61,1% từ 12 phút); điểm tốt hơn cho N cao hơn (so với `random`, θ = 0, 10 seed: oracle +259,4 ± 10,3; `heuristic_low_freq` +48,8 ± 8,4; oracle đảo −172,7 ± 5,9); độ chệch thiết kế đúng thứ tự (rider A/B +1.647; cụm 1: +1.633; cụm 7: +1.513; toàn hệ +1.313; GTE +1.212,9); `legacy_28d` không trôi (−0,71 chuyến/ngày trên 3.871,8). Độ nhạy điều chuyển xe, `stay` so với `static_weights` (5 seed): N `all_off` 3.413,8 so với 3.437,0; GTE +1.193,8 ± 22,3 so với +1.198,8 ± 27,1; slack trung bình 4,78 so với 3,38. 0,70% chuyến hoàn thành bắt đầu khi chuyến trước của cùng rider chưa xong
+- Cần quyết: κ auto một lượt pilot chi 1,113 × B khi không chặn, ngân sách cạn từ khoảng 22h (**Q26**). Bậc thang dưới cùng B: `all_on` có ngân sách 3.682,5 → điểm `random` +113,3 ± 3,3 → `heuristic_low_freq` +48,8 ± 8,4 → tầng ô θ = 0,5: +36,6 ± 4,7; lợi ích tầng ô là dồn ngân sách và mất khi hàm điểm đủ tốt; slack theo ô dự báo mức phục vụ kém hơn slack cụm và toàn hệ (**Q27**). Hai dải CAL về tỷ lệ căng/dư và giá mỗi phút không có nguồn dữ liệu (**Q28**, nối Q25)
+- Lệch spec / quyết định mới: không quyết định gì; ba câu hỏi mở Q26, Q27, Q28
+- Bàn giao: không
+- Còn lại / bước tiếp: Tình, Hoàng và mentor xem Q26–Q28 trước S5; nếu đồng ý Q26 thì sửa `runner.kappa_auto`, thêm test, chạy lại sweep B7b
 
 ---
 
