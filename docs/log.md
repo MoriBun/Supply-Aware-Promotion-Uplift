@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S4. T4.1 xong (dữ liệu B7a trong `runs/b7a`, `docs/datasets.md`), trên `develop1`, **chưa commit** (Tình tự commit). Tiếp theo: T4.2 P6 (κ auto trên engine thật, A2(b), A3, sweep 12 θ × 10 seed, đường N(π_θ) → Gate P6), rồi T4.3.
+**Đang làm:** S4, trên `develop1`, **chưa commit** (Tình tự commit). T4.1 xong (B7a). T4.2: κ auto, A2(b), A3, sweep và đồ thị xong; **Gate P6 không đạt trên lưới θ mặc định (đường phẳng), dừng chờ mentor (Q23)**. T4.3 dở, chờ Gate P6. Tiếp theo: gửi mentor Q23 kèm đồ thị; trong lúc chờ có thể làm T5.1 với score random/heuristic.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -181,11 +181,29 @@ Mẫu:
 - Bàn giao: giao B7a; người nhận kiểm tra: sinh lại theo lệnh trong `docs/datasets.md` (hoặc nhận bản sao `runs/b7a`), `python -m analysis.check_dataset …` báo OK, số session/order/N khớp bảng. Sự cố: lệnh nền đầu tiên sai cú pháp shell làm 4 bộ thí nghiệm không khởi động; phát hiện sau ~1 phút qua log, chạy lại bằng script, không có dữ liệu sai nào được ghi
 - Còn lại / bước tiếp: T4.2 (κ auto, A2(b), A3, sweep θ, Gate P6); T4.3 sinh lại legacy nếu B đổi, B7b
 
+### 2026-10-02 · T4.2 · P6: κ auto, A2(b), A3, sweep θ, đường N(π_θ) · dở (chờ mentor, Q23) · gate P6 không đạt
+- Nhánh/PR: `develop1`, chưa commit (Tình commit); PR S4
+- Đã làm: `tests/test_acceptance.py` +3 test `slow` và hàm đo (`kappa_auto_spend`, `a2b_variances`, `a3_switches`); `analysis/plots.py` (`plot_theta_sweep`, `plot_throughput`, CLI) + 1 test; `pyproject.toml` thêm extra `analysis = ["matplotlib>=3.8"]` (file chung, T-30, chờ Hoàng duyệt). Chạy sweep tham chiếu `runs/p6/sweep_theta` (12 θ × 10 seed, 271 s) và 5 sweep chẩn đoán `runs/p6/sens_*` (5 seed)
+- Test: `pytest -q` → 456 passed, 6 deselected (py3.11, 108 s); `pytest -q -m slow tests/test_acceptance.py` → 3 passed (190 s)
+- Nghiệm thu (`config_hash = cb27f5348011`, B = 5.545,80): **κ auto đạt**: κ = −2,748, chi/B = 0,99991; 0,99995; 0,99999 (yêu cầu 0,85–1,0). **A2(b) đạt** (20 seed, all_on có B so với threshold θ = 0,3 có B): Var CRN 1.434,45; Var seed độc lập 5.925,40; tỷ lệ 0,242 ≤ 0,5; N trung bình 3.700,4 so với 3.891,8. **A3 (thông tin):** θ = 0,35, h = 0: 25,97; 26,97; 26,16; 26,08; 23,97 lần/ô/ngày, trung vị 26,08 > 12 → h = 0,1: trung vị 25,38 (N 3.882,8 → 3.886,6): hysteresis 0,1 gần như không giảm dao động
+- **Gate P6 không đạt trên lưới mặc định:** N(π_θ) = 3.844,6 (θ = 0); 3.877,0 (0,1); 3.883–3.893 (0,2–1,25); 3.899,3 (1,5, lớn nhất); 3.893,8 (2,0); SE 16–23. Ghép cặp theo seed: θ = 1,5 hơn θ = 0 là +54,7 ± 7,9, hơn θ = 2 chỉ +5,5 ± 4,1 → tăng một bậc rồi phẳng, không có cực đại bên trong lưới; chi/B = 1,00 ở mọi θ. Bậc tăng trùng với việc tắt 24,8% (ô, slot) không có xe rảnh. Chẩn đoán: lưới tới 30 → giảm từ θ = 10 (3.828) và θ = 30 (3.694); `fraction` 0,6 → cực đại tại θ = 0,4 (4.283 so với 4.187 ở θ = 2); `fraction` 0,1 và voucher 30% → phẳng; `demand_scale` 1,5 → tăng đều tới mép lưới (+242 ± 31)
+- Lệch spec / quyết định mới: T-30; câu hỏi mở **Q23** (3 phương án, đề xuất giữ B và kéo dài `sweep.theta_grid`). Không nới tiêu chí, không tự chọn θ\*
+- Bàn giao: không
+- Còn lại / bước tiếp: dừng, chờ mentor trả lời Q23 (theo `phan_cong.md` §7); Hoàng xem đồ thị `runs/p6/sweep_theta/results/theta_sweep.png` (sinh lại bằng `python -m analysis.plots theta_sweep runs/p6/sweep_theta --gte runs/b7a/gte`)
+
+### 2026-10-02 · T4.3 · sweep tham chiếu, B7b · dở (chờ Gate P6)
+- Nhánh/PR: `develop1`, chưa commit
+- Đã làm: ghi sweep `runs/p6/sweep_theta` vào `docs/datasets.md` như **bản tạm** của B7b (bảng 12 θ, κ, lệnh sinh lại) cùng bảng 5 sweep chẩn đoán
+- Test: `python -m analysis.check_dataset runs/p6/sweep_theta` → OK (thư mục chỉ có results + meta)
+- Lệch spec / quyết định mới: không
+- Bàn giao: chưa giao B7b
+- Còn lại / bước tiếp: sau khi mentor chốt Q23: nếu B giữ nguyên thì sweep này (hoặc bản lưới kéo dài) là sweep tham chiếu và `legacy_28d` giữ nguyên; nếu B đổi thì chạy lại `calibrate_budget`, sinh lại `legacy_28d` và sweep; gắn tag commit + `config_hash`, điền cột B7(b)
+
 ---
 
 ## 2. Hoàng
 
-**Đang làm:** S4 của Hoàng xong (H4.1, H4.2, H4.3). Gate P6 không đạt trên lưới θ mặc định, chờ mentor trả lời Q23 của Tình. Tiếp theo: gộp `develop` (`c62800e`) vào `develop2`; S5: H5.1 giao B8, H5.2 DR-learner.
+**Đang làm:** S4 của Hoàng xong (H4.1, H4.2, H4.3); đã gộp `develop` (`c62800e`) vào `develop2`; PR `develop2 → develop` chờ Tình review. Gate P6 không đạt trên lưới θ mặc định, chờ mentor trả lời Q23. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -425,3 +443,11 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: B7b chưa nhận (Tình chưa giao, chờ Gate P6)
 - Còn lại / bước tiếp: mentor trả lời Q23; khi có B7b thì làm phần θ̂ so với θ\* của H5.3
+
+### 2026-10-02 · S4 · gộp `develop` vào `develop2` · xong
+- Nhánh/PR: merge `origin/develop` (`c62800e`, PR #11: T4.2, T4.3 của Tình) vào `develop2`; PR `develop2 → develop` (H4.1, H4.2, H4.3 + hai lần gộp), review: Tình
+- Đã làm: gộp tự động, không conflict (chỉ `docs/datasets.md`, `docs/decisions.md`, `docs/log.md` đổi). Số câu hỏi mở không còn trùng: Q23 của Tình (Gate P6, còn mở), Q24 của Hoàng (TLC, đã chốt bằng H-20)
+- Test: `pytest -q` → 472 passed, 1 skipped (py3.12, `.venv`, 117 giây)
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: gửi mentor Q23; S5

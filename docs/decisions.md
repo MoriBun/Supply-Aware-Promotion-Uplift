@@ -167,6 +167,19 @@ Quy ước:
 
 Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
 
+### Q23. Gate P6: đường N(π_θ) phẳng trên lưới θ mặc định, chọn hướng nào? (chờ mentor)
+- **Bối cảnh:** sweep tham chiếu `runs/p6/sweep_theta` (12 θ × 10 seed, B = 5.545,80 USD/kỳ, κ auto, `config_hash = cb27f5348011`): N = 3.844,6 ở θ = 0 và 3.877–3.899 ở mọi θ ≥ 0,1. Ghép cặp theo seed: θ tốt nhất (1,5) hơn θ = 0 là +54,7 ± 7,9, hơn θ = 0,1 là +22,3 ± 7,5, hơn θ = 2 chỉ +5,5 ± 4,1. Không có cực đại bên trong lưới 0–2; ngân sách tiêu hết (chi/B = 1,00) ở mọi θ.
+- **Chẩn đoán** (lớp config phủ, 5 seed mỗi biến thể, `runs/p6/sens_*`; không sửa `default.yaml`):
+  - lưới θ kéo dài tới 30: N phẳng tới θ = 5 (3.870), giảm ở θ = 10 (3.828; tiêu 95% B) và θ = 30 (3.694; tiêu 64% B). Có cực đại, nhưng là một đoạn phẳng khoảng 0,4–5;
+  - `budget.fraction = 0,6` (B = 11.091,6): **cực đại bên trong** tại θ = 0,4 (4.283); θ = 0: 4.228; θ = 2: 4.187 (kém đỉnh 96 ± 16);
+  - `budget.fraction = 0,1` (B = 1.848,6): phẳng (3.576–3.595);
+  - `voucher.pct_of_fare = 0,3`: phẳng sau bậc đầu (3.940 → 4.014);
+  - `demand.demand_scale = 1,5`: tăng đều tới mép lưới (5.381 → 5.623, +242 ± 31), 72% (ô, slot) bị tắt ở θ = 2.
+- **Cách đọc:** với B = 0,3 × chi tiêu all_on, ngân sách luôn bị tiêu hết nên tầng ô chỉ chuyển voucher sang ô khác; phần lợi đến từ việc tắt khoảng 25% (ô, slot) không có xe rảnh (slack = 0, H-14). Vế giảm chỉ xuất hiện khi cắt nhiều đến mức không tiêu hết B.
+- **Phương án:** (A) giữ B, kéo dài `sweep.theta_grid` (thêm 3, 5, 10, 30) và báo cáo θ\* là một khoảng; dữ liệu B7a giữ nguyên. (B) tăng `budget.fraction` lên 0,6 để có cực đại rõ trong lưới hiện tại; phải sinh lại `legacy_28d` và sweep vì B đổi. (C) làm thị trường căng hơn; không khuyến nghị vì CAL của P3 đã đạt.
+- **Đề xuất (Tình, 02/10):** (A). Theo `phan_cong.md` §7 mentor quyết mức B và cường độ voucher.
+- **Mốc bị chặn:** Gate P6, T4.3 (B7b), P8.
+
 ### Q19. Hướng cắt ô khi `policy.threshold.indicator` là `utilization` hoặc `eta`
 - Bối cảnh: spec §6 chỉ định nghĩa quy tắc cho slack (`promo_on = not (ŝ < θ)`: cắt khi slack *thấp*). Với utilization và eta, "căng" là giá trị *cao* nên hướng so sánh phải đảo và `sweep.theta_grid` (0–2) không còn ý nghĩa.
 - Hiện tại: `ThresholdPolicy` báo `NotImplementedError` cho hai chỉ số này (T-23a). D4 đã chốt slack là mặc định (T-17); hai chỉ số kia chỉ dành cho phân tích độ nhạy.
