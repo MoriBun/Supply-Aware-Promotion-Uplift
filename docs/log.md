@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S4, trên `develop1`, **chưa commit** (Tình tự commit). T4.1 xong (B7a). T4.2: κ auto, A2(b), A3, sweep và đồ thị xong; **Gate P6 không đạt trên lưới θ mặc định (đường phẳng), dừng chờ mentor (Q23)**. T4.3 dở, chờ Gate P6. Tiếp theo: gửi mentor Q23 kèm đồ thị; trong lúc chờ có thể làm T5.1 với score random/heuristic.
+**Đang làm:** S4 xong về code, dữ liệu và tài liệu (T4.1, T4.2, T4.3); phần mới nhất **chưa commit** (Tình tự commit). Gate P6 đạt theo quyết định T-31 của Tình, **chờ mentor xác nhận**. Còn lại của S4: Tình commit, gắn tag dữ liệu, PR `develop1 → develop`; báo mentor T-31, Q24. Tiếp theo: S5, T5.1 bảng N/V dưới cùng B (random, heuristic; τ̂ khi có B8).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -199,11 +199,29 @@ Mẫu:
 - Bàn giao: chưa giao B7b
 - Còn lại / bước tiếp: sau khi mentor chốt Q23: nếu B giữ nguyên thì sweep này (hoặc bản lưới kéo dài) là sweep tham chiếu và `legacy_28d` giữ nguyên; nếu B đổi thì chạy lại `calibrate_budget`, sinh lại `legacy_28d` và sweep; gắn tag commit + `config_hash`, điền cột B7(b)
 
+### 2026-10-02 · T4.2 · đính chính: Gate P6 trên lưới θ tham chiếu · xong · gate P6 đạt (quyết định T-31 của Tình, chờ mentor xác nhận)
+- Nhánh/PR: `develop1` (fast-forward lên `c62800e`), chưa commit (Tình commit); PR S4
+- Đã làm: chốt Q23 bằng T-31 (giữ B, lưới θ kéo dài, θ\* là tập, regret theo N); mục "gate P6 không đạt" ở trên chỉ đúng cho lưới mặc định 0–2. Thêm `config/sweep_reference.yaml` (16 mốc θ tới 30, không sửa `default.yaml`); `analysis/metrics.py`: `t_quantile`, `theta_star_set` (so sánh bội với cái tốt nhất, Bonferroni, phân vị t), `theta_star_interval`, `theta_star_gaps`, `sweep_regret`; `analysis/plots.py`: tô khoảng θ\*, trục đặt mốc cách đều khi lưới trải rộng; `tests/test_analysis.py` +4
+- Test: `pytest -q` → 460 passed, 6 deselected (py3.11, 93 s); test chậm không chạy lại (`sim/` không đổi kể từ lần 3 passed)
+- Số liệu (sweep tham chiếu 16 θ × 30 seed, B = 5.545,80, 480 lượt, 702 s): N = 3.848,4 (θ = 0); 3.889,8 (0,4); 3.894,3 (1,0); **3.901,7 (1,5, lớn nhất)**; 3.897,4 (2); 3.889,5 (3); 3.883,2 (5); 3.837,2 (10); 3.693,0 (30). Tập θ\* (95% đồng thời) = {0,4; 0,5; 0,6; 0,8; 1,0; 1,5; 2,0}, bao [0,4; 2], loại 1,25 (Q24). Regret: θ = 0: +53,3 ± 4,8 (1,37%); θ = 0,35: +14,4 ± 4,1 (0,37%); θ = 30: +208,6 ± 4,3 (5,35%). Với 10 seed tập là [0,1; 5]. 120 lượt chung với sweep cũ cho N, V giống hệt
+- Lệch spec / quyết định mới: T-31 (sweep tham chiếu 16 θ × 30 seed thay cho 12 θ × 10 seed của plan P6); câu hỏi mở Q24 (nhiễu κ auto theo θ). **Mentor chưa xác nhận T-31**; quyết định không đổi B nên không thuộc phần `phan_cong.md` §7 giao cho mentor, nhưng kết luận gate cần mentor xem
+- Bàn giao: không
+- Còn lại / bước tiếp: báo mentor và Hoàng T-31, Q24 kèm `runs/b7b/sweep_theta_ref/results/theta_sweep.png`
+
+### 2026-10-02 · T4.3 · sweep tham chiếu + độ nhạy, B7b · xong (chưa commit, chưa gắn tag)
+- Nhánh/PR: `develop1`, chưa commit; PR S4
+- Đã làm: `runs/b7b/sweep_theta_ref` (16 θ × 30 seed) và 4 sweep độ nhạy 16 θ × 10 seed: `sens_fraction_0p1`, `sens_fraction_0p6`, `sens_voucher_0p3`, `sens_demand_1p5`; `docs/datasets.md` mục B7b bản chính thức (bảng theo θ, tập θ\*, regret, lệnh sinh lại, cách dùng). B không đổi (5.545,80) nên **không sinh lại `legacy_28d`**
+- Test: `python -m analysis.check_dataset` trên 5 thư mục `runs/b7b/*` → OK
+- Số liệu độ nhạy (θ tốt nhất; khoảng θ\*; regret của θ = 0): `fraction` 0,1: 0,6; [0; 10]; +18,0 ± 5,5 (0,50%). `fraction` 0,6: 0,4; [0,2; 1]; +64,2 ± 8,2 (1,49%). Voucher 30%: 1,5; [0,3; 5]; +70,3 ± 5,5 (1,75%). `demand_scale` 1,5: 2; [0,4; 2]; +230,9 ± 16,3 (4,10%). θ = 0,4 và 0,6 thuộc tập θ\* ở cả năm kịch bản
+- Lệch spec / quyết định mới: T-31
+- Bàn giao: giao B7b; người nhận kiểm tra: sinh lại theo lệnh trong `docs/datasets.md` (cần `pip install -e ".[analysis]"` để vẽ), `check_dataset` báo OK, N theo θ khớp bảng
+- Còn lại / bước tiếp: Tình commit rồi gắn tag dữ liệu (ví dụ `data-b7-cb27f5348011`); `runs/p6/` là bản chẩn đoán cũ, xóa được
+
 ---
 
 ## 2. Hoàng
 
-**Đang làm:** S4 của Hoàng xong (H4.1, H4.2, H4.3); đã gộp `develop` (`c62800e`) vào `develop2`; PR `develop2 → develop` chờ Tình review. Gate P6 không đạt trên lưới θ mặc định, chờ mentor trả lời Q23. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner.
+**Đang làm:** S4 xong (H4.1, H4.2, H4.3; đã nhận B7a, B7b); đã gộp `develop` (`fb354b1`) vào `develop2`; PR `develop2 → develop` chờ Tình review. Gate P6: đồng ý về số liệu, chờ mentor xác nhận T-31. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner, H5.3.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -451,3 +469,29 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: không
 - Còn lại / bước tiếp: gửi mentor Q23; S5
+
+### 2026-10-02 · T4.3 · sweep tham chiếu B7b · nhận B7b
+- Nhánh/PR: `origin/develop` (`fb354b1`, PR #12: T4.2 đính chính, T4.3) đã gộp vào `develop2`; conflict ở `docs/decisions.md` (H-19, H-20 và T-31 cùng thêm vào cuối bảng), giữ cả ba dòng
+- Đã làm: sinh lại sweep tham chiếu `python -m sim run --mode sweep_theta --config config/default.yaml --config config/sweep_reference.yaml --set sweep.n_seeds=30 --out runs/b7b/sweep_theta_ref` (16 θ × 30 seed = 480 lượt); chạy `analysis.check_dataset`; tính lại tập θ\* bằng `analysis.metrics.theta_star_set`. Chưa sinh lại 4 sweep độ nhạy `sens_*`
+- Test: `pytest -q` → 476 passed, 1 skipped (py3.12, `.venv`, 111 giây). `check_dataset runs/b7b/sweep_theta_ref` → OK. N trung bình của cả 16 θ trùng bảng trong `docs/datasets.md` (lệch lớn nhất 0,0): 3.848,4 (θ = 0); 3.889,8 (0,4); 3.901,7 (1,5, lớn nhất); 3.837,2 (10); 3.693,0 (30). `config_hash = c27ac66f7c2c`, B = 5.545,80. Tập θ\* = {0,4; 0,5; 0,6; 0,8; 1,0; 1,5; 2,0}, khoảng [0,4; 2], mốc bị loại bên trong: 1,25: trùng với Tình
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B7b (phần sweep tham chiếu)
+- Còn lại / bước tiếp: H5.3 so θ̂ với θ\*
+
+### 2026-10-02 · Gate P6 · ý kiến của Hoàng về T-31 · gate P6 đạt trên lưới tham chiếu (chờ mentor xác nhận)
+- Nhánh/PR: `develop2`
+- Đã làm: đọc T-31, Q24 của Tình và bảng B7b; đối chiếu với kết quả H4.2
+- Test: xem mục "nhận B7b"
+- Ý kiến: (1) Trên lưới tham chiếu 0–30, đường N(π_θ) có đủ ba đoạn tăng, phẳng, giảm và cực đại nằm bên trong lưới, nên tiêu chí của Gate P6 trong `plan.md` thỏa. (2) Đồng ý báo cáo θ\* là một tập và chấm θ̂ bằng regret theo N. (3) T-31 thay lưới θ và số seed của plan P6 (12 θ × 10 seed thành 16 θ × 30 seed), nên kết luận gate cần mentor xác nhận; không đổi B, không sinh lại B7a. (4) Đồng ý với Q24 của Tình rằng chênh lệch khoảng 10 chuyến/ngày giữa các θ lân cận trong đoạn phẳng là nhiễu của κ auto
+- Số liệu liên quan H4.2: θ̂ không ngân sách = 0 [0; 0,289] nằm **ngoài** tập θ\*. Regret theo N (`analysis.metrics.sweep_regret`, 30 seed): θ = 0: 53,27 ± 4,82 chuyến/ngày (1,37%); θ = 0,3: 17,00 ± 4,52; θ = 0,35 (mặc định): 14,43 ± 4,10; θ = 0,4: 11,87 ± 4,22
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: Tình và Hoàng báo mentor T-31 và Gate P6
+
+### 2026-10-02 · đính chính · số câu hỏi mở của Hoàng về TLC là Q25
+- Nhánh/PR: `develop2`
+- Đã làm: Q24 trên `develop` là câu hỏi của Tình về nhiễu κ auto. Câu hỏi của Hoàng về hình dạng cung cầu theo giờ so với NYC TLC (đã chốt bằng H-20) đổi thành **Q25** trong `decisions.md` và `analysis/tlc_hourly.py`. Các mục log của Hoàng ở trên ghi "Q24" cho câu hỏi này: đọc là Q25
+- Test: không đổi code chạy
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: không

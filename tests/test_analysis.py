@@ -9,7 +9,10 @@ import pytest
 from analysis import check_budget
 from analysis.check_dataset import check_run_dir, markdown_row
 from analysis.io import HIDDEN_TABLES, completed_outcome, load_hidden, load_run
-from analysis.metrics import bootstrap_mean_ci, paired_difference, qini_auuc, uplift_curve, value_table
+from analysis.metrics import (
+    bootstrap_mean_ci, paired_difference, qini_auuc, sweep_regret, t_quantile, theta_star_gaps, theta_star_interval,
+    theta_star_set, uplift_curve, value_table,
+)
 from sim.config import load_config
 from sim.runner import evaluate, generate, gte
 from tests.conftest import ROOT
@@ -66,6 +69,72 @@ def test_bootstrap_ci_contains_the_mean_and_is_deterministic():
     lo, hi = bootstrap_mean_ci(x, n_boot=500, seed=1)
     assert lo <= x.mean() <= hi and (lo, hi) == bootstrap_mean_ci(x, n_boot=500, seed=1)
     assert all(math.isnan(v) for v in bootstrap_mean_ci([]))
+
+
+# --- theta* as a set, and regret of an estimated threshold (decisions T-31) --------------------
+
+
+def sweep_results() -> pd.DataFrame:
+    """4 seeds x 4 thetas: 0.5 is best, 1.0 is on the plateau, 0 and 5 are clearly worse."""
+    base = np.array([100.0, 110.0, 105.0, 120.0])
+    by_theta = {0.0: base - 10 + np.array([0, 1, -1, 0]), 0.5: base + np.array([1, -1, 0, 1]),
+                1.0: base + np.array([0, 1, 1, -2]), 5.0: base - 20 + np.array([1, 0, -1, 0])}
+    return pd.DataFrame([{"policy": "threshold", "theta": theta, "seed": seed, "N_completed": values[seed]}
+                         for theta, values in by_theta.items() for seed in range(4)])
+
+
+def test_t_quantile_matches_table_values():
+    assert t_quantile(0.975, 9) == pytest.approx(2.262, abs=0.005)
+    assert t_quantile(0.975, 29) == pytest.approx(2.045, abs=0.005)
+    assert t_quantile(0.95, 4) == pytest.approx(2.132, abs=0.01)
+    assert t_quantile(0.975, 1000) == pytest.approx(1.962, abs=0.002)        # tends to the normal quantile
+
+
+def test_theta_star_set_corrects_for_comparing_many_thetas_with_the_best():
+    # A theta whose gap would fail a single 95% test stays in the set under the simultaneous bound.
+    gen = np.random.default_rng(5)
+    seeds = 10
+    noise = {theta: gen.normal(0.0, 6.0, seeds) for theta in range(8)}
+    rows = [{"policy": "threshold", "theta": float(theta), "seed": s,
+             "N_completed": 1000.0 + (0.0 if theta else -60.0) + noise[theta][s]}
+            for theta in range(8) for s in range(seeds)]
+    star = theta_star_set(pd.DataFrame(rows))
+    assert star["crit"].iloc[0] == pytest.approx(t_quantile(1 - 0.05 / 7, 9)) and star["crit"].iloc[0] > 3.0
+    assert not star["in_set"].iloc[0]                                           # theta 0 is 60 below: out
+    assert star["in_set"].iloc[1:].all()                                        # the seven equal thetas: all in
+    assert theta_star_interval(star)[1:] == (1.0, 7.0)
+    assert (star["gap_lo"] <= star["gap_to_best"]).all() and (star["gap_to_best"] >= 0).all()
+
+
+def test_theta_star_set_keeps_the_plateau_and_drops_the_clearly_worse():
+    star = theta_star_set(sweep_results())
+    assert star["theta"].tolist() == [0.0, 0.5, 1.0, 5.0] and (star["n_seeds"] == 4).all()
+    assert star["in_set"].tolist() == [False, True, True, False]
+    row0 = star.iloc[0]
+    assert row0["gap_to_best"] == pytest.approx(10.25) and row0["gap_se"] == pytest.approx(0.75)
+    assert row0["gap_lo"] > 0                                                    # significantly worse than the best
+    assert star.iloc[1]["gap_to_best"] == 0.0 and star.iloc[2]["gap_to_best"] == pytest.approx(0.25)
+    assert star.iloc[2]["gap_lo"] < 0 < star.iloc[2]["gap_hi"]
+    assert theta_star_interval(star) == (0.5, 0.5, 1.0) and theta_star_gaps(star) == []
+    # The interval is the hull of the set: a theta dropped inside the plateau is reported as a gap.
+    holed = star.copy()
+    holed["theta"] = [0.0, 0.5, 0.75, 1.0]
+    holed["in_set"] = [False, True, False, True]
+    assert theta_star_interval(holed) == (0.5, 0.5, 1.0) and theta_star_gaps(holed) == [0.75]
+
+
+def test_sweep_regret_on_grid_between_grid_points_and_outside():
+    results = sweep_results()
+    on_plateau = sweep_regret(results, 1.0)
+    assert on_plateau["theta_best"] == 0.5 and on_plateau["regret"] == pytest.approx(0.25)
+    assert on_plateau["lo"] < 0 < on_plateau["hi"]                               # no measurable regret
+    assert sweep_regret(results, 0.5)["regret"] == 0.0
+    assert sweep_regret(results, 0.0)["regret"] == pytest.approx(10.25)
+    halfway = sweep_regret(results, 0.25)                                        # interpolated per seed
+    assert halfway["regret"] == pytest.approx(10.25 / 2) and halfway["n_seeds"] == 4
+    assert halfway["relative"] == pytest.approx(halfway["regret"] / 109.0)
+    with pytest.raises(ValueError):
+        sweep_regret(results, 6.0)
 
 
 # --- Qini / AUUC --------------------------------------------------------------------------------
@@ -190,6 +259,10 @@ def test_gate_plots_write_png_files(tmp_path):
     png = plot_theta_sweep(sweep, tmp_path / "plots" / "sweep.png", budget_usd=50.0,
                            baselines={"all_off": 90.0, "all_on không ngân sách": 105.0})
     assert png.exists() and png.stat().st_size > 10_000 and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    wide = sweep.assign(theta=[0.0, 0.5, 5.0, 30.0])                           # two orders of magnitude: ordinal axis
+    png = plot_theta_sweep(wide, tmp_path / "plots" / "wide.png", share_cells_off=[0.0, 0.3, 0.6, 0.75],
+                           star_interval=(0.5, 5.0))
+    assert png.exists() and png.stat().st_size > 10_000
     curve = pd.DataFrame({"demand_scale": np.repeat([0.5, 1.0, 2.0, 4.0], 2), "seed": [0, 1] * 4,
                           "completed_per_h": [100, 104, 190, 196, 240, 236, 200, 204],
                           "mean_slack": [5.0, 5.2, 1.0, 1.1, 0.2, 0.25, 0.05, 0.06],
