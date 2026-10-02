@@ -52,7 +52,7 @@ def summarize(mode: str, table: pd.DataFrame) -> str:
                 f"(se={se:.1f}) V_mean={table['V_profit_usd'].mean():.1f} "
                 f"spent_mean={table['voucher_spent_usd'].mean():.1f} B={table['budget_B_usd'].iloc[0]}")
         if mode == "generate":
-            line += "\nobserved/hidden/market tables: task T3.2 (logger)"
+            line += "\nwritten: observed/, market/, hidden/, results/, meta/ (docs/schema.md)"
         return line
     return table.to_string(index=False)
 

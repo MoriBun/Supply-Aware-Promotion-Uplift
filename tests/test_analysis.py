@@ -6,10 +6,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from analysis import check_budget
+from analysis.check_dataset import check_run_dir, markdown_row
 from analysis.io import HIDDEN_TABLES, completed_outcome, load_hidden, load_run
 from analysis.metrics import bootstrap_mean_ci, paired_difference, qini_auuc, uplift_curve, value_table
 from sim.config import load_config
-from sim.runner import evaluate
+from sim.runner import evaluate, generate, gte
 from tests.conftest import ROOT
 
 TINY = [ROOT / "config" / "default.yaml", ROOT / "tests" / "fixtures" / "tiny.yaml"]
@@ -134,3 +136,79 @@ def test_load_run_never_returns_hidden_tables(tmp_path):
     x_freq = run["riders"].set_index("rider_id").loc[run["sessions"]["rider_id"], "x_freq"].to_numpy()
     assert len(x_freq) == len(y)
     assert math.isnan(qini_auuc(y, run["sessions"]["arm"], x_freq)["qini_coef"])   # no control arm under all_on
+
+
+# --- data set validation before a handoff (B7) ------------------------------------------------
+
+
+def test_check_dataset_accepts_generated_data_and_catches_a_leak(tmp_path):
+    cfg = load_config(TINY, ["policy.name=legacy", "generate.days=1", "runner.n_procs=1"])
+    generate(cfg, tmp_path / "gen")
+    problems, summary = check_run_dir(tmp_path / "gen")
+    assert problems == []
+    assert summary["mode"] == "generate" and summary["policy"] == "legacy" and summary["days"] == 1.0
+    assert summary["sessions"] > 0 and summary["N_completed"] > 0 and summary["budget_B_usd"] > 0
+    assert 0 < summary["share_arm"] < 1 and summary["truncated"] == 0
+    assert markdown_row(summary).startswith("| `gen` | generate | legacy | 1 |")
+    # A hidden column smuggled into observed/ must be reported.
+    path = tmp_path / "gen" / "observed" / "sessions.parquet"
+    leaked = pd.read_parquet(path)
+    leaked["u_latent"] = 0.0
+    leaked.to_parquet(path, index=False)
+    problems, _ = check_run_dir(tmp_path / "gen")
+    assert any("observed/sessions" in p for p in problems)
+
+
+def test_check_budget_audits_legacy_and_all_on_runs(tmp_path, capsys):
+    # Legacy with a small fixed B: sessions are blocked, including explore sessions of cells that are off.
+    legacy = load_config(TINY, ["policy.name=legacy", "generate.days=1", "runner.n_procs=1",
+                                "budget.mode=fixed", "budget.fixed_usd=4", "policy.legacy.explore_frac=0.3"])
+    generate(legacy, tmp_path / "legacy")
+    assert check_budget.main(["check_budget", str(tmp_path / "legacy")]) == 0
+    out = capsys.readouterr().out
+    assert "mọi kỳ trong ngân sách" in out and "bị chặn" in out and "VI PHẠM" not in out
+    sessions = pd.read_parquet(tmp_path / "legacy" / "observed" / "sessions.parquet")
+    blocked_off = sessions[sessions["budget_blocked"] & ~sessions["promo_on_cell"]]
+    assert len(blocked_off) > 0 and (blocked_off["assign_mechanism"] == "explore").all()
+    # Several seeds with a full log: one folder per run, each audited.
+    on = load_config(TINY, ["policy.name=all_on", "sweep.n_seeds=2", "runner.n_procs=1",
+                            "budget.mode=fixed", "budget.fixed_usd=4"])
+    evaluate(on, tmp_path / "on", log_level="full")
+    assert check_budget.main(["check_budget", str(tmp_path / "on")]) == 0
+    assert capsys.readouterr().out.count("policy=all_on") == 2
+    assert check_budget.main(["check_budget"]) == 2
+
+
+def test_gate_plots_write_png_files(tmp_path):
+    pytest.importorskip("matplotlib")
+    from analysis.plots import plot_theta_sweep, plot_throughput
+
+    sweep = pd.DataFrame({"theta": [0.0, 0.2, 0.5, 1.0], "N_mean": [100.0, 110.0, 108.0, 95.0],
+                          "N_se": [2.0, 2.5, 2.0, 3.0], "V_mean": [1.0, 2.0, 3.0, 4.0], "V_se": [0.1] * 4,
+                          "spent_mean": [50.0, 50.0, 48.0, 30.0], "n_seeds": [10] * 4,
+                          "is_argmax": [False, True, False, False]})
+    png = plot_theta_sweep(sweep, tmp_path / "plots" / "sweep.png", budget_usd=50.0,
+                           baselines={"all_off": 90.0, "all_on không ngân sách": 105.0})
+    assert png.exists() and png.stat().st_size > 10_000 and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
+    curve = pd.DataFrame({"demand_scale": np.repeat([0.5, 1.0, 2.0, 4.0], 2), "seed": [0, 1] * 4,
+                          "completed_per_h": [100, 104, 190, 196, 240, 236, 200, 204],
+                          "mean_slack": [5.0, 5.2, 1.0, 1.1, 0.2, 0.25, 0.05, 0.06],
+                          "mean_pickup_eta_min": [2.0, 2.1, 3.0, 3.1, 6.0, 6.2, 9.0, 9.1]})
+    png = plot_throughput(curve, tmp_path / "plots" / "throughput.png")
+    assert png.exists() and png.stat().st_size > 10_000
+
+
+def test_check_dataset_on_results_only_and_experiment_dirs(tmp_path):
+    cfg = load_config(TINY, ["gte.n_seeds=2", "runner.n_procs=1"])
+    gte(cfg, tmp_path / "gte")
+    problems, summary = check_run_dir(tmp_path / "gte")
+    assert problems == [] and summary["mode"] == "gte" and summary["n_runs"] == 4 and summary["seeds"] == "0–1"
+    assert "sessions" not in summary and summary["policy"] == "all_off/all_on" and summary["N_mean"] > 0
+    exp = load_config(TINY, ["policy.name=experiment", "experiment.cluster_level=all", "generate.days=1",
+                             "runner.n_procs=1"])
+    generate(exp, tmp_path / "exp")
+    problems, summary = check_run_dir(tmp_path / "exp")
+    assert problems == [] and "cluster_switchback, cụm all" in summary["design"]
+    assert math.isnan(summary["budget_B_usd"]) and summary["share_blocked"] == 0.0
+    problems, _ = check_run_dir(tmp_path / "missing")
+    assert problems and "missing" in problems[0]
