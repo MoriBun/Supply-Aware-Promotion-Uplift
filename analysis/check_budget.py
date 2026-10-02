@@ -49,8 +49,10 @@ def audit_run(run_id: str, folder: Path, meta: pd.DataFrame) -> bool:
           f"bị chặn {int(win['budget_blocked'].sum())}"
           + (f" ({win['budget_blocked'].sum() / n_on:.1%} của ô bật)" if n_on else ""))
     if win["budget_blocked"].any():
-        first = win.loc[win["budget_blocked"], "open_time_s"].min() / 3600
-        print(f"  ngân sách bắt đầu chặn lúc {int(first):02d}:{int(first % 1 * 60):02d} (giờ mô phỏng)")
+        first = float(win.loc[win["budget_blocked"], "open_time_s"].min())
+        day, rest = divmod(first, 86400.0)
+        print(f"  ngân sách bắt đầu chặn: ngày {int(day)}, {int(rest // 3600):02d}:{int(rest % 3600 // 60):02d} "
+              f"(giờ mô phỏng)")
     if budget != budget:                                    # NaN: no budget
         print("  không áp ngân sách")
 
@@ -65,10 +67,14 @@ def audit_run(run_id: str, folder: Path, meta: pd.DataFrame) -> bool:
 
     blocked = win[win["budget_blocked"]]
     if len(blocked):
-        clean = bool((blocked["arm"] == 0).all() and (blocked["voucher_value_usd"] == 0).all()
-                     and blocked["promo_on_cell"].all())
-        ok &= clean
-        print(f"  session bị chặn: arm = 0, voucher = 0, ô vẫn bật: {'OK' if clean else 'SAI'}")
+        clean = bool((blocked["arm"] == 0).all() and (blocked["voucher_value_usd"] == 0).all())
+        # A blocked session is one the policy wanted to treat: its cell is on, or it is in the
+        # explore slice of the legacy policy, which offers whatever the cell state (spec §6).
+        off_cell = blocked[~blocked["promo_on_cell"]]
+        explore_only = bool((off_cell["assign_mechanism"] == "explore").all())
+        ok &= clean and explore_only
+        print(f"  session bị chặn: arm = 0 và voucher = 0: {'OK' if clean else 'SAI'}; "
+              f"{len(off_cell)} session ở ô tắt, đều thuộc lát explore: {'OK' if explore_only else 'SAI'}")
 
     with_voucher = s[s["voucher_value_usd"] > 0]
     fate = with_voucher.merge(o[["session_id", "status"]], on="session_id", how="left")

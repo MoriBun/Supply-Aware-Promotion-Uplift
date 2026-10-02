@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S3 của Tình xong về code + test (T3.1–T3.3), trên `develop1`, **chưa commit** (Tình tự commit) và chưa PR. Tiếp theo: commit theo task, PR `develop1 → develop`; chờ B6 (Hoàng hiệu chỉnh, Gate P3) rồi S4: T4.1 `generate` 28 ngày, T4.2 P6 (κ auto, A2(b), A3, sweep).
+**Đang làm:** S4. T4.1 xong (dữ liệu B7a trong `runs/b7a`, `docs/datasets.md`), trên `develop1`, **chưa commit** (Tình tự commit). Tiếp theo: T4.2 P6 (κ auto trên engine thật, A2(b), A3, sweep 12 θ × 10 seed, đường N(π_θ) → Gate P6), rồi T4.3.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -163,6 +163,23 @@ Mẫu:
 - Lệch spec / quyết định mới: T-27; chỉ dùng numpy/pandas, chưa thêm extras `[analysis]` (pyproject là file chung, để khi cần sklearn/lightgbm ở S5)
 - Bàn giao: không
 - Còn lại / bước tiếp: PR S3; S4: T4.1 (cần B6), T4.2
+
+### 2026-10-02 · S3 · nhận B6 (`default.yaml` đã hiệu chỉnh, PR #9) và Gate P3 · nhận B6, gate P3 đạt (ý kiến Tình)
+- Nhánh/PR: fast-forward `develop` (`930875e`) vào `develop1`
+- Đã làm: chạy phần "Người nhận kiểm tra" của B6; đọc H-14…H-18 và thay đổi của Hoàng trong file của tôi (`monitor.py`: slack = 0 khi ô không có xe rảnh; 3 test bỏ giá trị ghi cứng). Rà `threshold.py`, `legacy.py` với H-14: không phải sửa code (ŝ = 0 < θ → tắt; θ = 0 vẫn không cắt ô nào), ghi T-28 đính chính T-23b/T-24b
+- Test: `pytest -q` → 452 passed, 3 deselected (py3.11, 102 s); `pytest -q -m slow tests/test_acceptance_core.py` → 3 passed (A1, A5, CAL; 204 s vì chạy cùng lúc với việc sinh dữ liệu; phần A5 gồm pilot + 3 lượt hết 27 s). `config_hash(default.yaml) = cb27f5348011` khớp H-17
+- Lệch spec / quyết định mới: T-28; đồng ý H-14…H-18
+- Bàn giao: nhận B6. Gate P3: A1 đạt 4/4, A5 và CAL trong khoảng trên máy tôi → **Tình: gate P3 đạt**
+- Còn lại / bước tiếp: T4.1
+
+### 2026-10-02 · T4.1 · calibrate_budget lại + sinh dữ liệu B7a · xong (chưa commit)
+- Nhánh/PR: `develop1`, chưa commit (Tình commit); PR S4 `develop1 → develop`
+- Đã làm: `calibrate_budget` trên config mới → **B = 5.545,80 USD/kỳ** (pilot all_on seed 9000). `generate` 28 ngày, `run_seed = 0`, vào `runs/b7a/`: `legacy_28d` (có B), `switchback_c1_28d`, `switchback_c7_28d`, `switchback_all_28d`, `rider_ab_28d` (không ngân sách); `gte` 10 seed. Mới: `analysis/check_dataset.py` (schema + kiểu trên đĩa, không rò cột ẩn, khớp chéo session/order/results, `config_hash`; in bảng markdown), `analysis/check_budget.py` (báo cáo chi tiêu theo kỳ so với B; sửa giả định sai "session bị chặn thì ô phải bật": lát explore của legacy phát bất kể ô), `docs/datasets.md` (bảng bộ dữ liệu, lệnh sinh lại, cách kiểm), `tests/test_analysis.py` +3, `sim/cli.py` sửa một dòng thông báo cũ
+- Test: `pytest -q --basetemp=$LOCALAPPDATA/Temp/pytest-tình` → 455 passed, 3 deselected (89 s). `check_dataset` trên 7 thư mục: OK. `check_budget` trên `legacy_28d`: 28 kỳ đều ≤ B (lớn nhất 5.545,68), 450 session bị chặn
+- Số liệu: mọi bộ `generate` có 718.749 session (CRN giữa các thiết kế), không order Truncated. N hoàn thành trong 28 ngày: legacy 108.410 (chi 152.342,5 USD, phát 23,2%); switchback cụm 1: 114.932; cụm 7: 114.040; all: 113.990; rider_ab: 115.116. GTE (10 seed, 1 ngày): N_on 4.652,5, N_off 3.439,6, **GTE = +1.212,9** (SE 14,2). Thời gian: 240–272 giây mỗi bộ, 5 bộ song song; tổng 266 MB
+- Lệch spec / quyết định mới: T-29 (quy ước B7a: cùng seed, thư mục, cách tái lập)
+- Bàn giao: giao B7a; người nhận kiểm tra: sinh lại theo lệnh trong `docs/datasets.md` (hoặc nhận bản sao `runs/b7a`), `python -m analysis.check_dataset …` báo OK, số session/order/N khớp bảng. Sự cố: lệnh nền đầu tiên sai cú pháp shell làm 4 bộ thí nghiệm không khởi động; phát hiện sau ~1 phút qua log, chạy lại bằng script, không có dữ liệu sai nào được ghi
+- Còn lại / bước tiếp: T4.2 (κ auto, A2(b), A3, sweep θ, Gate P6); T4.3 sinh lại legacy nếu B đổi, B7b
 
 ---
 
