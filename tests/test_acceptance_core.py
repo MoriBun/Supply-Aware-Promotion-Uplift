@@ -11,7 +11,10 @@ import numpy as np
 import pytest
 
 from sim.config import load_config
-from sim.runner import DEFAULT_ENGINE, Job, budget_for, execute_job, run_jobs, throughput_curve_table, throughput_jobs, with_policy
+from sim.runner import (
+    DEFAULT_ENGINE, Job, budget_for, execute_job, resolve_kappa, run_jobs, throughput_curve_table, throughput_jobs,
+    with_policy,
+)
 from sim.state import OrderStatus
 from tests.conftest import ROOT
 
@@ -22,18 +25,31 @@ pytestmark = pytest.mark.slow
 # --- A5: run time ----------------------------------------------------------------
 
 
-def measure_runtime(cfg, policy: str, n_runs: int = 3) -> list[float]:
-    """Engine run time (seconds) of one evaluate job, ``n_runs`` times, one process (docs/tests.md A5)."""
+def evaluate_job(cfg, policy: str) -> Job:
+    """The job that ``runner.evaluate`` runs for one seed: budget B from the pilot, kappa-auto for threshold."""
     cfg = with_policy(cfg, policy)
     budget = budget_for(cfg)
-    job = Job(cfg=cfg, seed=cfg.meta.run_seed, budget_usd=budget, enforce_budget=cfg.budget.enforce)
+    theta = float(cfg.policy.threshold.theta) if policy == "threshold" else float("nan")
+    kappa = resolve_kappa(cfg, theta, 0, budget)
+    return Job(cfg=cfg, seed=cfg.meta.run_seed, theta=theta, kappa=kappa, budget_usd=budget,
+               enforce_budget=cfg.budget.enforce)
+
+
+def measure_runtime(cfg, policy: str, n_runs: int = 3) -> list[float]:
+    """Engine run time (seconds) of one evaluate job, ``n_runs`` times, one process (docs/tests.md A5).
+
+    The pilots that set B and kappa are not timed: A5 is about one simulated day.
+    """
+    job = evaluate_job(cfg, policy)
     return [execute_job(DEFAULT_ENGINE, job).runtime_s for _ in range(n_runs)]
 
 
-def test_a5_one_simulated_day_within_the_time_limit():
-    # S3 measures all_on (docs/phan_cong.md, H3.1); the default policy is measured again in S4 (H4.1).
+@pytest.mark.parametrize("policy", ["all_on", "threshold"])
+def test_a5_one_simulated_day_within_the_time_limit(policy):
+    # all_on was measured before calibration (H3.1); threshold with kappa-auto is the default policy (H4.1).
     cfg = load_config(DEFAULT)
-    times = measure_runtime(cfg, "all_on")
+    assert cfg.policy.name == "threshold" and cfg.policy.threshold.kappa == "auto"
+    times = measure_runtime(cfg, policy)
     assert statistics.median(times) <= cfg.performance.max_seconds_per_sim_day, times
 
 

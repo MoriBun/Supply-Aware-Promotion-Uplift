@@ -221,7 +221,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S3 xong; đã gộp `develop` (S3 của Tình) vào `develop2`; PR `develop2 → develop` chờ Tình review (B6, Gate P3). Tiếp theo: S4, H4.1 đo lại A5 với chính sách mặc định.
+**Đang làm:** S4 xong (H4.1, H4.2, H4.3; đã nhận B7a, B7b); đã gộp `develop` (`fb354b1`) vào `develop2`; PR `develop2 → develop` chờ Tình review. Gate P6: đồng ý về số liệu, chờ mentor xác nhận T-31. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner, H5.3.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -403,3 +403,95 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: không
 - Còn lại / bước tiếp: Tình review PR, xác nhận H-14 (đổi `monitor.py`) và chạy lại `calibrate_budget` với `config_hash = cb27f5348011`; hai người ghi kết quả Gate P3
+
+### 2026-10-02 · H4.1 · A5 với chính sách mặc định (threshold, κ auto) · xong
+- Nhánh/PR: commit trên `develop2`; PR `develop2 → develop` cuối S4, review: Tình
+- Đã làm: `tests/test_acceptance_core.py`: thêm `evaluate_job` (dựng đúng job của `runner.evaluate`: B từ pilot, κ auto) và chạy `test_a5_one_simulated_day_within_the_time_limit` cho cả `all_on` và `threshold`
+- Test: `pytest -q -m slow tests/test_acceptance_core.py` → 4 passed (py3.12, `.venv`). A5, `config_hash = cb27f5348011`, 1 tiến trình, 3 lần: `threshold` (θ = 0,35, `heuristic_low_freq`, κ auto = −2,748, B = 5.545,80 USD/kỳ): 6,61; 6,47; 6,53 giây, trung vị **6,53 giây** ≤ 30. `all_on` có ngân sách: 3,11; 2,53; 2,69 giây, trung vị 2,69 giây. Hai pilot (B và κ) mất 13,0 giây, không tính vào A5
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Số liệu tham khảo (1 seed, cùng B): `threshold` N = 3.980, 4.214 request, V = 12.977 USD, voucher 5.545 USD, 31,3% (ô, slot) tắt, 25,97 lần đổi trạng thái mỗi ô mỗi ngày; `all_on` N = 3.759, 4.176 request, V = 11.774 USD, voucher 5.544 USD; `all_off` N = 3.506
+- Còn lại / bước tiếp: H4.2 (cần B7a)
+
+### 2026-10-02 · T4.1 · bộ dữ liệu B7a · nhận B7a
+- Nhánh/PR: `develop` (`364136b`, PR #10) đã gộp vào `develop2`, không conflict
+- Đã làm: sinh lại 7 thư mục `runs/b7a/` bằng đúng lệnh trong `docs/datasets.md` (5 bộ `generate` chạy song song, mỗi bộ 198–200 giây); chạy `analysis.check_dataset` và `analysis.check_budget`
+- Test: `check_dataset` 7/7 OK. Khớp bảng của Tình ở mọi bộ: 718.749 session; order 115.232 / 124.374 / 123.841 / 124.043 / 124.557; N hoàn thành 108.410 / 114.932 / 114.040 / 113.990 / 115.116; `config_hash` trong metadata trùng; GTE = +1.212,9 (SE 14,2); B = 5.545,80 USD. `check_budget`: mọi kỳ trong ngân sách
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B7a
+- Ghi chú cho Tình: `python -m analysis.check_dataset` báo `UnicodeEncodeError` trên console Windows mặc định (cp1252) khi in tiếng Việt; phải đặt `PYTHONIOENCODING=utf-8`
+- Còn lại / bước tiếp: H4.2
+
+### 2026-10-02 · H4.2 · ước lượng trên B7a: hiệu ứng theo slack, A4, θ̂, τ̂(x) nền · xong
+- Nhánh/PR: commit trên `develop2`; PR `develop2 → develop` cuối S4, review: Tình
+- Đã làm: `analysis/estimate.py` (`experiment_frame`, `effect_by_bin` với bootstrap theo đơn vị (cụm, block), `sign_changes`, `theta_hat`, `naive_total_effect`); `analysis/scores.py` (`fit_tau_strata` trên lát explore của legacy, hai hàm điểm `tau_x_baseline` và `tau_per_dollar_baseline`) và bảng `analysis/models/tau_x_baseline.json`; `tests/test_estimate.py` (+17 nhanh, +1 chậm cho A4)
+- Test: `pytest -q` → 472 passed, 1 skipped (py3.12, `.venv`, 109 giây); `pytest -q -m slow tests/test_estimate.py` → 1 passed
+- A4 (`switchback_c7_28d`, tứ phân vị của `slack_lag_slot`, bỏ burn-in): hiệu ứng lên tỷ lệ hoàn thành mỗi session +0,0500; +0,0645; +0,0751; +0,0813, **0 lần đổi dấu**. Tỷ lệ session ở nhánh bật trong 4 nhóm: 57,1%; 58,2%; 47,6%; 35,9% (thiết kế là 50%): `slack_lag_slot` đã bị chính nhánh của block tác động. Với slack ngay trước block (`cell_pre`): +0,0440; +0,0533; +0,0678; +0,0643, tỷ lệ bật 48,4–51,0%, 0 lần đổi dấu
+- Hiệu ứng theo slack toàn hệ trước block (`switchback_all_28d`): +0,0042 [−0,0134; +0,0196] ở slack < 0,05; +0,0334 [0,0153; 0,0506] ở 0,6–1; +0,0680 [0,0525; 0,0825] ở slack ≥ 5; 0 lần đổi dấu
+- θ̂ (điểm hiệu ứng cắt 0, không ngân sách): 0,0, khoảng tin cậy [0; 0,289] với slack toàn hệ trên switchback toàn hệ (58,8% mẫu bootstrap cho 0); 0,0 [0; 0] với slack theo ô ở cả ba thiết kế
+- So thiết kế, hiệu ứng tổng quy ra chuyến/ngày (GTE thật +1.212,9): cụm 1: +1.633,2 [1.576,4; 1.691,3]; cụm 7: +1.513,0 [1.420,0; 1.601,7]; toàn hệ: +1.312,7 [1.101,7; 1.513,6]
+- Confounding trong `legacy_28d`: hiệu ứng lên tỷ lệ hoàn thành, so thô có/không voucher = +0,1018; trên lát explore (35.993 session ngẫu nhiên hóa) = +0,0695 (SE 0,0039)
+- Hàm điểm dưới cùng B = 5.545,80 USD, π_θ với θ = 0,35, κ auto, 5 seed, N trung bình: `tau_per_dollar_baseline` 3.896,0; `heuristic_low_freq` 3.882,8; `tau_x_baseline` 3.862,4; `random` 3.813,4
+- Lệch spec / quyết định mới: H-19 trong `decisions.md`
+- Bàn giao: hàm điểm cho B8 đã sẵn (`analysis.scores:tau_x_baseline`, `analysis.scores:tau_per_dollar_baseline`); giao chính thức ở H5.1 kèm parquet dự đoán
+- Còn lại / bước tiếp: H4.3; ở S5 hai người chốt định nghĩa ŝ và chỉ số căng cung dùng chung cho θ̂ và θ\*
+
+### 2026-10-02 · thăm dò · cung cầu theo giờ so với NYC TLC · xong (chờ quyết định Q24)
+- Nhánh/PR: `develop2`; đi cùng PR cuối S4
+- Đã làm: `analysis/tlc_hourly.py` (đọc `runs/tlc/fhvhv_tripdata_2024-03.parquet`, 508 MB, không commit; so đường cầu, thời gian chờ, số xe bận theo giờ với 5 ngày `all_off` của simulator). Không đổi tham số nào
+- Test: không thêm test (script phụ thuộc file dữ liệu ngoài); `python -m analysis.tlc_hourly` chạy hết, ghi `runs/tlc/hourly_comparison.csv`
+- Số liệu: xem Q24 trong `decisions.md`. Tóm tắt: chờ trung bình 3,54 phút (TLC) so với 3,52 (sim); cầu theo giờ tương quan 0,85 (0,92 với ngày thường); chờ theo giờ thực tế 2,76–4,85 phút, simulator 2,11–8,28 phút; cung lúc 7h bằng 70% đỉnh (TLC) so với 25% (sim)
+- Lệch spec / quyết định mới: câu hỏi mở Q24
+- Bàn giao: không
+- Còn lại / bước tiếp: Hoàng, Tình và mentor chốt Q24 trước S5
+
+### 2026-10-02 · quyết định · chốt Q24 · xong
+- Nhánh/PR: `develop2`; đi cùng PR cuối S4
+- Đã làm: chốt Q24 theo phương án giữ nguyên (H-20): không đổi `hour_profile`, lịch ca, `default.yaml`, hay bộ B7a
+- Test: không đổi code
+- Lệch spec / quyết định mới: H-20
+- Bàn giao: không
+- Còn lại / bước tiếp: ghi hạn chế này vào báo cáo (S6); H4.3 chờ T4.2, T4.3 của Tình
+
+### 2026-10-02 · H4.3 · review P6 và P8 · xong
+- Nhánh/PR: đọc `origin/develop` (`c62800e`, PR #11: T4.2, T4.3 của Tình); chưa gộp vào `develop2` vì lần merge trước (`364136b`) chưa commit
+- Đã làm: (P8) nhận B7a, xem mục riêng. (P6) chạy lại sweep tham chiếu `python -m sim run --mode sweep_theta --config config/default.yaml --out runs/p6/sweep_theta` và đối chiếu với bảng trong `docs/datasets.md`; chạy 3 test `slow` của T4.2; đọc Q23 của Tình, 5 sweep chẩn đoán, thay đổi `pyproject.toml` (T-30). Đổi câu hỏi mở của Hoàng về TLC từ Q23 thành **Q24** vì trùng số với Q23 của Tình
+- Test: `pytest -q -m slow tests/test_acceptance.py` → 3 passed (92 giây): κ auto, A2(b), A3. Sweep tái lập: N trung bình của cả 12 θ trùng bảng của Tình đến 0,1 chuyến (3.844,6 ở θ = 0 … 3.899,3 ở θ = 1,5 … 3.893,8 ở θ = 2); hiệu ghép cặp θ = 1,5 trừ θ = 0: +54,7 ± 7,9; trừ θ = 0,1: +22,3 ± 7,5; trừ θ = 2: +5,5 ± 4,1; κ từng θ trùng (−2,349 … −3,404); `config_hash = cb27f5348011`, B = 5.545,80
+- Ý kiến review: đồng ý kết luận "Gate P6 không đạt trên lưới mặc định" và cách đọc của Tình (ngân sách tiêu hết ở mọi θ; bậc tăng duy nhất đến từ việc tắt 24,8% (ô, slot) không có xe rảnh). Khớp với H4.2: hiệu ứng voucher dương và giảm đều theo độ căng, θ̂ không ngân sách = 0 [0; 0,289]. Với Q23 của Tình: ủng hộ phương án (A), và đề nghị đưa bảng chẩn đoán (`fraction` 0,1 / 0,3 / 0,6; `demand_scale` 1,0 / 1,5) thành kết quả chính "θ\* phụ thuộc B và độ căng thị trường", thay vì chỉ báo một khoảng θ\*. Duyệt T-30 (`matplotlib` trong extra `[analysis]`)
+- Lệch spec / quyết định mới: không
+- Bàn giao: B7b chưa nhận (Tình chưa giao, chờ Gate P6)
+- Còn lại / bước tiếp: mentor trả lời Q23; khi có B7b thì làm phần θ̂ so với θ\* của H5.3
+
+### 2026-10-02 · S4 · gộp `develop` vào `develop2` · xong
+- Nhánh/PR: merge `origin/develop` (`c62800e`, PR #11: T4.2, T4.3 của Tình) vào `develop2`; PR `develop2 → develop` (H4.1, H4.2, H4.3 + hai lần gộp), review: Tình
+- Đã làm: gộp tự động, không conflict (chỉ `docs/datasets.md`, `docs/decisions.md`, `docs/log.md` đổi). Số câu hỏi mở không còn trùng: Q23 của Tình (Gate P6, còn mở), Q24 của Hoàng (TLC, đã chốt bằng H-20)
+- Test: `pytest -q` → 472 passed, 1 skipped (py3.12, `.venv`, 117 giây)
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: gửi mentor Q23; S5
+
+### 2026-10-02 · T4.3 · sweep tham chiếu B7b · nhận B7b
+- Nhánh/PR: `origin/develop` (`fb354b1`, PR #12: T4.2 đính chính, T4.3) đã gộp vào `develop2`; conflict ở `docs/decisions.md` (H-19, H-20 và T-31 cùng thêm vào cuối bảng), giữ cả ba dòng
+- Đã làm: sinh lại sweep tham chiếu `python -m sim run --mode sweep_theta --config config/default.yaml --config config/sweep_reference.yaml --set sweep.n_seeds=30 --out runs/b7b/sweep_theta_ref` (16 θ × 30 seed = 480 lượt); chạy `analysis.check_dataset`; tính lại tập θ\* bằng `analysis.metrics.theta_star_set`. Chưa sinh lại 4 sweep độ nhạy `sens_*`
+- Test: `pytest -q` → 476 passed, 1 skipped (py3.12, `.venv`, 111 giây). `check_dataset runs/b7b/sweep_theta_ref` → OK. N trung bình của cả 16 θ trùng bảng trong `docs/datasets.md` (lệch lớn nhất 0,0): 3.848,4 (θ = 0); 3.889,8 (0,4); 3.901,7 (1,5, lớn nhất); 3.837,2 (10); 3.693,0 (30). `config_hash = c27ac66f7c2c`, B = 5.545,80. Tập θ\* = {0,4; 0,5; 0,6; 0,8; 1,0; 1,5; 2,0}, khoảng [0,4; 2], mốc bị loại bên trong: 1,25: trùng với Tình
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B7b (phần sweep tham chiếu)
+- Còn lại / bước tiếp: H5.3 so θ̂ với θ\*
+
+### 2026-10-02 · Gate P6 · ý kiến của Hoàng về T-31 · gate P6 đạt trên lưới tham chiếu (chờ mentor xác nhận)
+- Nhánh/PR: `develop2`
+- Đã làm: đọc T-31, Q24 của Tình và bảng B7b; đối chiếu với kết quả H4.2
+- Test: xem mục "nhận B7b"
+- Ý kiến: (1) Trên lưới tham chiếu 0–30, đường N(π_θ) có đủ ba đoạn tăng, phẳng, giảm và cực đại nằm bên trong lưới, nên tiêu chí của Gate P6 trong `plan.md` thỏa. (2) Đồng ý báo cáo θ\* là một tập và chấm θ̂ bằng regret theo N. (3) T-31 thay lưới θ và số seed của plan P6 (12 θ × 10 seed thành 16 θ × 30 seed), nên kết luận gate cần mentor xác nhận; không đổi B, không sinh lại B7a. (4) Đồng ý với Q24 của Tình rằng chênh lệch khoảng 10 chuyến/ngày giữa các θ lân cận trong đoạn phẳng là nhiễu của κ auto
+- Số liệu liên quan H4.2: θ̂ không ngân sách = 0 [0; 0,289] nằm **ngoài** tập θ\*. Regret theo N (`analysis.metrics.sweep_regret`, 30 seed): θ = 0: 53,27 ± 4,82 chuyến/ngày (1,37%); θ = 0,3: 17,00 ± 4,52; θ = 0,35 (mặc định): 14,43 ± 4,10; θ = 0,4: 11,87 ± 4,22
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: Tình và Hoàng báo mentor T-31 và Gate P6
+
+### 2026-10-02 · đính chính · số câu hỏi mở của Hoàng về TLC là Q25
+- Nhánh/PR: `develop2`
+- Đã làm: Q24 trên `develop` là câu hỏi của Tình về nhiễu κ auto. Câu hỏi của Hoàng về hình dạng cung cầu theo giờ so với NYC TLC (đã chốt bằng H-20) đổi thành **Q25** trong `decisions.md` và `analysis/tlc_hourly.py`. Các mục log của Hoàng ở trên ghi "Q24" cho câu hỏi này: đọc là Q25
+- Test: không đổi code chạy
+- Lệch spec / quyết định mới: không
+- Bàn giao: không
+- Còn lại / bước tiếp: không
