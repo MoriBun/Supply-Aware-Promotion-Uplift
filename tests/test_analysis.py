@@ -137,6 +137,21 @@ def test_sweep_regret_on_grid_between_grid_points_and_outside():
         sweep_regret(results, 6.0)
 
 
+def test_sweep_by_theta_and_overview():
+    from analysis.metrics import sweep_by_theta, sweep_overview
+    results = sweep_results().assign(share_cells_off=lambda d: d["theta"] / 10, voucher_spent_usd=40.0,
+                                     budget_B_usd=50.0)
+    by = sweep_by_theta(results)
+    assert by["theta"].tolist() == [0.0, 0.5, 1.0, 5.0] and by["in_set"].tolist() == [False, True, True, False]
+    assert by["mean"].iloc[1] == pytest.approx(109.0) and by["spent_over_B"].eq(0.8).all()
+    assert by["share_cells_off"].tolist() == pytest.approx([0.0, 0.05, 0.1, 0.5])
+    over = sweep_overview({"a": results, "b": results.assign(N_completed=results["N_completed"] + 1)},
+                          theta_hats=(0.25,)).set_index("sweep")
+    assert over.loc["a", "theta_best"] == 0.5 and (over.loc["a", "star_lo"], over.loc["a", "star_hi"]) == (0.5, 1.0)
+    assert over.loc["a", "regret_0"] == pytest.approx(10.25) and over.loc["a", "regret_0.25"] == pytest.approx(5.125)
+    assert over.loc["b", "mean_theta0"] == pytest.approx(over.loc["a", "mean_theta0"] + 1)
+
+
 # --- Qini / AUUC --------------------------------------------------------------------------------
 
 

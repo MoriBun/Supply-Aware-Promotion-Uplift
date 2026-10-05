@@ -160,6 +160,17 @@ def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | Non
 
 
 def plot_throughput(table: pd.DataFrame, path: Path, *, title: str | None = None) -> Path:
+    """A1: :func:`throughput_figure` written to ``path`` (command line)."""
+    plt = _pyplot()
+    fig = throughput_figure(table, title=title)
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150)
+    plt.close(fig)
+    return path
+
+
+def throughput_figure(table: pd.DataFrame, *, title: str | None = None):
     """A1: completed trips per hour, mean slack and pickup ETA against the demand level (one panel each)."""
     plt = _pyplot()
     g = table.groupby("demand_scale")
@@ -180,7 +191,8 @@ def plot_throughput(table: pd.DataFrame, path: Path, *, title: str | None = None
         ax.margins(y=0.2)
         if col == "completed_per_h":
             peak = int(np.argmax(mean))
-            ax.annotate(f"đỉnh {vn(mean[peak])} ở mức {x[peak]:g}", xy=(x[peak], mean[peak]), xytext=(0, 12),
+            level = f"{x[peak]:g}".replace(".", ",")
+            ax.annotate(f"đỉnh {vn(mean[peak])} ở mức {level}", xy=(x[peak], mean[peak]), xytext=(0, 12),
                         textcoords="offset points", ha="center", color=INK, fontsize=9, fontweight="bold")
             _rule(ax, 0.95 * mean[peak], "0,95 × đỉnh", va="top")
         if col == "mean_slack":
@@ -188,13 +200,9 @@ def plot_throughput(table: pd.DataFrame, path: Path, *, title: str | None = None
             _rule(ax, 0.45, "ngưỡng WGC 0,45")
     axes[-1].set_xlabel("demand_scale (hệ số cầu)")
     axes[-1].set_xticks(x)
-    axes[-1].set_xticklabels([f"{v:g}" for v in x], fontsize=8)
+    axes[-1].set_xticklabels([f"{v:g}".replace(".", ",") for v in x], fontsize=8)
     fig.tight_layout()
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(path, dpi=150)
-    plt.close(fig)
-    return path
+    return fig
 
 
 def gte_baselines(gte_dir: Path) -> dict[str, float]:

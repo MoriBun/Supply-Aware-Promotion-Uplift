@@ -139,6 +139,36 @@ def theta_star_gaps(star: pd.DataFrame) -> list[float]:
     return [float(t) for t in s.loc[(s["theta"] > lo) & (s["theta"] < hi) & ~s["in_set"], "theta"]]
 
 
+def sweep_by_theta(policy_results: pd.DataFrame, *, metric: str = "N_completed", alpha: float = 0.05) -> pd.DataFrame:
+    """One row per theta of a sweep: mean and SE over seeds, share of (cell, slot) off, spend, theta* membership."""
+    g = policy_results.groupby("theta")
+    out = pd.DataFrame({"mean": g[metric].mean(), "se": g[metric].std(ddof=1) / np.sqrt(g.size()),
+                        "share_cells_off": g["share_cells_off"].mean(), "spent_mean": g["voucher_spent_usd"].mean()})
+    out["spent_over_B"] = out["spent_mean"] / float(policy_results["budget_B_usd"].iloc[0])
+    out["in_set"] = theta_star_set(policy_results, metric=metric, alpha=alpha).set_index("theta")["in_set"]
+    return out.reset_index()
+
+
+def sweep_overview(sweeps: dict[str, pd.DataFrame], *, theta_hats=(), metric: str = "N_completed") -> pd.DataFrame:
+    """Headline numbers of several sweeps (``{name: policy_results}``): best theta, theta* hull, regret.
+
+    ``regret_<theta>`` (with ``_se``) is :func:`sweep_regret` at theta = 0 and at each of ``theta_hats``.
+    """
+    rows = []
+    for name, runs in sweeps.items():
+        star = theta_star_set(runs, metric=metric)
+        best, lo, hi = theta_star_interval(star)
+        means = runs.groupby("theta")[metric].mean()
+        row = {"sweep": name, "theta_best": best, "mean_best": float(means[best]), "star_lo": lo, "star_hi": hi,
+               "star_gaps": theta_star_gaps(star), "mean_theta0": float(means.get(0.0, np.nan)),
+               "n_seeds": int(star["n_seeds"].iloc[0])}
+        for theta in (0.0, *theta_hats):
+            reg = sweep_regret(runs, theta, metric=metric)
+            row[f"regret_{theta:g}"], row[f"regret_{theta:g}_se"] = reg["regret"], reg["se"]
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
 def sweep_regret(policy_results: pd.DataFrame, theta_hat: float, *, metric: str = "N_completed",
                  alpha: float = 0.05) -> dict:
     """Regret of running pi_theta at ``theta_hat`` instead of the sweep's best theta: ``N(best) - N(theta_hat)``.

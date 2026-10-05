@@ -192,6 +192,18 @@ def summarize(runs: pd.DataFrame, *, reference: str = REFERENCE, order=None) -> 
     return out
 
 
+def paired_steps(runs: pd.DataFrame, steps, *, metric: str = "N_completed") -> pd.DataFrame:
+    """``metric(to) - metric(from)`` paired by seed for each ``(from, to)`` label pair (rungs of a ladder, H-22 i)."""
+    wide = runs.pivot(index="seed", columns="label", values=metric)
+    rows = []
+    for a, b in steps:
+        diff = (wide[b] - wide[a]).dropna()
+        mean, se = _mean_se(diff)
+        rows.append({"from": a, "to": b, "from_mean": float(wide[a].mean()), "to_mean": float(wide[b].mean()),
+                     "diff": mean, "diff_se": se, "n_seeds": int(len(diff))})
+    return pd.DataFrame(rows)
+
+
 def _vn(x: float, digits: int = 1) -> str:
     """Vietnamese number format: dot for thousands, comma for decimals, real minus sign."""
     if x is None or (isinstance(x, float) and math.isnan(x)):
