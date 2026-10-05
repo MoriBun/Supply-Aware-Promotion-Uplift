@@ -407,7 +407,7 @@ Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này 
 **ThresholdPolicy π_θ** [report M3]:
 - **Tầng ô:**
   - dự báo ŝ: `persistence` dùng `slack_lag_slot`; `ar` dùng `ar_weights · [slack_lag_slot, slack_lag_day]`, trong đó inf được thay bằng `slack_cap`.
-  - phạm vi đo (H-25): `cell` dùng slack của chính ô; `ring1` dùng (tổng `idle`) / (tổng `enroute`) của ô và các ô kề trong slot k−1 (quy tắc H-14 khi mẫu số 0, inf thay bằng `slack_cap`). Khóa YAML thêm khi cài.
+  - phạm vi đo (H-25): `cell` dùng slack của chính ô; `ring1` dùng (tổng `idle`) / (tổng `enroute`) của ô và các ô kề trong slot k−1 (quy tắc H-14 khi mẫu số 0, inf thay bằng `slack_cap`). Khóa `policy.threshold.scope: cell | ring1`, mặc định `cell` (T-35).
   - `promo_on = not (ŝ < θ)`.
   - Nếu `hysteresis_h > 0`: ô đang off chỉ bật lại khi `ŝ > θ + h`.
   - θ = 0 nghĩa là không cắt ô nào.
@@ -421,8 +421,8 @@ Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này 
 - **κ = auto:**
   1. Chạy pilot với κ = -∞, **không áp ngân sách** nhưng vẫn cắt ô theo θ.
   2. Ghi `(score, voucher_spent_session)` cho mọi session được offer.
-  3. Sắp giảm theo score; κ là score nhỏ nhất sao cho tổng chi tiêu ≤ B.
-  4. Lặp (H-21): chạy lại pilot tại κ vừa tìm, không áp ngân sách; nếu chi tiêu > B thì làm lại bước 2–3 trên các session được offer của lượt này (κ chỉ tăng). Dừng khi chi tiêu ≤ B hoặc hết số lần lặp tối đa (khóa YAML).
+  3. Sắp giảm theo score; κ là score nhỏ nhất sao cho tổng chi tiêu của các session có score ≥ κ không vượt B; các session cùng score được giữ hoặc bỏ cùng nhau (T-32).
+  4. Lặp (H-21): chạy lại pilot tại κ vừa tìm, không áp ngân sách; nếu chi tiêu > B thì làm lại bước 2–3 trên các session được offer của lượt này (κ chỉ tăng). Dừng khi chi tiêu ≤ B hoặc hết số lần lặp tối đa `policy.threshold.kappa_max_iter`; hết lượt thì giữ κ cuối cùng tìm được (T-32).
   5. Mọi θ dùng chung seed pilot `pilot_seed_offset`. Ghi κ và số lần lặp vào `run_metadata`.
 
 **ExperimentPolicy:** đọc assignment từ M10. **FixedPolicy:** `all_on` hoặc `all_off`, không áp ngân sách khi dùng cho GTE.
@@ -472,6 +472,7 @@ python -m sim run --mode <mode> --config config/default.yaml [--set a.b=c ...] [
 - `--set policy.threshold.theta=0.4` ghi đè; giá trị parse theo YAML.
 - `config_hash = sha1(json.dumps(config, sort_keys=True))[:12]`, ghi vào mọi output.
 - Khóa thêm ngày 30/09 (T-18): `time.window_min`, `supply.shift_mode`, `throughput.demand_scale_grid`, `throughput.n_seeds`, `throughput.reference_hour`, `runner.n_procs`. Ý nghĩa ghi trong `default.yaml`.
+- Khóa thêm ngày 05/10 (H-21, T-32): `policy.threshold.kappa_max_iter`; (H-25, T-35): `policy.threshold.scope`.
 - Ràng buộc thời gian thêm (H-01, H-02): `warmup_min` là bội của `experiment.block_min`; `window_min` ≤ 1440 hoặc là bội của 1440.
 - Độ dài cửa sổ đánh giá và kỳ ngân sách lấy qua `config.eval_window_min(cfg)` và `config.budget_period_min(cfg)` (H-03); không module nào tự đọc `window_min` hay `days_per_run` để tính.
 

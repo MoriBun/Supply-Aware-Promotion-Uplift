@@ -137,12 +137,14 @@ class LegacyPolicyConfig:
 @dataclass(frozen=True)
 class ThresholdPolicyConfig:
     indicator: Literal["slack", "utilization", "eta"]
+    scope: Literal["cell", "ring1"]
     theta: float
     forecast: Literal["persistence", "ar"]
     ar_weights: tuple[float, float]
     hysteresis_h: float
     score_fn: str
     kappa: Union[Literal["auto"], float]
+    kappa_max_iter: int
 
 
 @dataclass(frozen=True)
@@ -582,6 +584,7 @@ def _check_ranges(cfg: Config) -> None:
     nonneg("policy.threshold.theta", th.theta)
     nonneg("policy.threshold.hysteresis_h", th.hysteresis_h)
     need(bool(th.score_fn.strip()), "policy.threshold.score_fn", "must not be empty")
+    nonneg("policy.threshold.kappa_max_iter", th.kappa_max_iter)
 
     positive("matching.max_pickup_eta_min", cfg.matching.max_pickup_eta_min)
     if cfg.matching.max_ring is not None:

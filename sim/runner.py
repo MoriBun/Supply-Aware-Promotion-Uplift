@@ -12,9 +12,12 @@ back in job order.
 
 Budget B (USD per budget period) comes from :func:`calibrate_budget`: an all_on
 pilot without budget on seed ``run_seed + pilot_seed_offset`` (spec §4.3), unless
-``budget.mode = fixed``. kappa-auto runs one threshold pilot per theta with
-``kappa = -inf`` and no budget (seed offset + theta index) and keeps the smallest
-score whose cumulative expected spend fits ``B x n_periods`` (spec §6, T-23).
+``budget.mode = fixed``. kappa-auto (spec §6, D12, decisions H-21, T-32) is a
+fixed point: a threshold pilot without budget at ``kappa = -inf`` gives the
+smallest score whose expected spend fits ``B x n_periods``; the pilot is rerun at
+that kappa, and kappa is raised again, until the pilot's spend fits. Every theta
+uses the same pilot seed, and the pilots of all thetas run in parallel, round by
+round.
 """
 
 from __future__ import annotations
@@ -58,6 +61,7 @@ class Job:
     enforce_budget: bool | None = None
     log_level: str = "minimal"
     profile: bool = False
+    kappa_pilots: int = 0              # pilot runs kappa-auto used to set ``kappa`` (run_metadata only)
 
     @property
     def policy_name(self) -> str:
@@ -90,9 +94,12 @@ def with_policy(cfg: Config, name: str) -> Config:
     return dataclasses.replace(cfg, policy=dataclasses.replace(cfg.policy, name=name))
 
 
-def pilot_seed(cfg: Config, index: int = 0) -> int:
-    """Seed of a pilot run: ``run_seed + budget.pilot_seed_offset (+ theta index)`` (spec §4.3, §6)."""
-    return cfg.meta.run_seed + cfg.budget.pilot_seed_offset + int(index)
+def pilot_seed(cfg: Config) -> int:
+    """Seed of every pilot run, for B and for kappa-auto at any theta: ``run_seed + budget.pilot_seed_offset``.
+
+    Spec §4.3, §6; one seed for all thetas since decisions H-21 (before: offset + theta index).
+    """
+    return cfg.meta.run_seed + cfg.budget.pilot_seed_offset
 
 
 # ---------------------------------------------------------------------------
@@ -197,7 +204,7 @@ def metadata_table(mode: str, jobs: list[Job], results: list[RunResult], *,
             "git_sha": sha, "policy": res.policy, "theta": job.theta, "seed": job.seed,
             "world_seed": job.cfg.meta.world_seed,
             "budget_B_usd": res.budget_B_usd if budget_B_usd is None else budget_B_usd,
-            "kappa": NAN if job.kappa is None else float(job.kappa),
+            "kappa": NAN if job.kappa is None else float(job.kappa), "kappa_pilots": int(job.kappa_pilots),
             "window_start_s": res.window_start_s, "window_end_s": res.window_end_s, "sim_end_s": res.sim_end_s,
             "n_truncated_orders": res.n_truncated_orders, "runtime_s": res.runtime_s, "created_at": created,
         })
@@ -251,12 +258,14 @@ def budget_for(cfg: Config, *, engine: str = DEFAULT_ENGINE) -> float | None:
 
 
 def kappa_from_pilot(score, voucher_usd, completed, budget_total_usd: float) -> float:
-    """Smallest score kept so that the expected spend of the kept sessions fits the budget (spec §6, step 3).
+    """Smallest score ``kappa`` such that the sessions with ``score >= kappa`` fit the budget (spec §6, step 3).
 
     Expected spend of an offered session is its voucher when the order completed, 0
-    otherwise. Sessions are taken from the highest score down; sessions without a
-    finite score are never kept. ``+inf`` when not even the first fits, ``-inf``
-    when every session fits.
+    otherwise. Sessions with equal scores are kept or dropped together, because the
+    policy offers on ``score >= kappa`` (one rider's sessions share a score under
+    ``heuristic_low_freq``; decisions T-32). Sessions without a finite score are
+    never kept. ``+inf`` when not even the top score fits, ``-inf`` when every
+    session fits.
     """
     score = np.asarray(score, dtype=np.float64)
     spend = np.where(np.asarray(completed, dtype=bool), np.asarray(voucher_usd, dtype=np.float64), 0.0)
@@ -265,37 +274,96 @@ def kappa_from_pilot(score, voucher_usd, completed, budget_total_usd: float) -> 
     if len(score) == 0:
         return -math.inf
     order = np.argsort(-score, kind="stable")
-    cum = np.cumsum(spend[order])
-    k = int(np.searchsorted(cum, float(budget_total_usd), side="right"))   # top-k sessions that fit
-    if k == 0:
+    score, cum = score[order], np.cumsum(spend[order])
+    group_end = np.flatnonzero(np.append(score[1:] != score[:-1], True))   # last index of each tie group
+    fits = group_end[cum[group_end] <= float(budget_total_usd)]           # a prefix: cum is non-decreasing
+    if len(fits) == 0:
         return math.inf
-    if k >= len(score):
+    if fits[-1] == len(score) - 1:
         return -math.inf
-    return float(score[order][k - 1])
+    return float(score[fits[-1]])
 
 
-def kappa_auto(cfg: Config, theta: float, theta_index: int, budget_usd: float, *,
-               engine: str = DEFAULT_ENGINE) -> float:
-    """One threshold pilot with ``kappa = -inf`` and no budget, then :func:`kappa_from_pilot` on ``B x n_periods``."""
-    job = Job(cfg=with_policy(cfg, "threshold"), seed=pilot_seed(cfg, theta_index), theta=float(theta),
-              kappa=-math.inf, enforce_budget=False)
-    pilot = run_jobs([job], engine=engine, n_procs=1)[0]
-    n_periods = Clock.from_config(cfg).n_periods
-    return kappa_from_pilot(pilot.offer_score, pilot.offer_voucher_usd, pilot.offer_completed,
-                            float(budget_usd) * n_periods)
+def pilot_spend_usd(pilot: RunResult) -> float:
+    """Expected spend of a pilot: vouchers of the offered sessions (window) whose order completed."""
+    voucher = np.asarray(pilot.offer_voucher_usd, dtype=np.float64)
+    return float(voucher[np.asarray(pilot.offer_completed, dtype=bool)].sum())
 
 
-def resolve_kappa(cfg: Config, theta: float, theta_index: int, budget_usd: float | None, *,
-                  engine: str = DEFAULT_ENGINE) -> float | None:
-    """kappa for a threshold run: the config value, or kappa-auto; None for other policies."""
+@dataclass(frozen=True)
+class KappaAuto:
+    """kappa of a threshold run and how it was found (decisions H-21, T-32)."""
+
+    kappa: float
+    n_pilots: int = 0                         # pilot runs used, the kappa = -inf one included; 0 = no kappa-auto
+    pilot_kappas: tuple[float, ...] = ()      # kappa each pilot ran at (-inf first)
+    spend_ratios: tuple[float, ...] = ()      # each pilot's expected spend / (B x n_periods)
+
+
+def kappa_auto(cfg: Config, thetas, budget_usd: float, *, engine: str = DEFAULT_ENGINE) -> list[KappaAuto]:
+    """kappa-auto for several thetas: fixed-point iteration, the pilots of one round in parallel (H-21).
+
+    Round 0 runs every theta at ``kappa = -inf``. A pilot whose expected spend
+    (:func:`pilot_spend_usd`) exceeds ``B x n_periods`` raises its theta's kappa with
+    :func:`kappa_from_pilot` on that pilot, and the next round reruns the pilot at
+    the new kappa; a theta is done when its pilot fits. Because tie groups are kept
+    whole, an overspending pilot always gives a strictly larger kappa, so kappa only
+    rises. After ``policy.threshold.kappa_max_iter`` reruns the last kappa found is
+    kept untested (0 reruns = the single pilot of spec §6 before H-21); the hard
+    budget stop of the ledger still holds in the evaluation runs. Pilots: threshold
+    policy, no budget, the same seed :func:`pilot_seed` for every theta and round.
+    """
+    th_cfg = with_policy(cfg, "threshold")
+    total = float(budget_usd) * Clock.from_config(cfg).n_periods
+    max_iter = int(cfg.policy.threshold.kappa_max_iter)
+    thetas = [float(t) for t in thetas]
+    kappa = [-math.inf] * len(thetas)
+    ran: list[list[float]] = [[] for _ in thetas]
+    ratios: list[list[float]] = [[] for _ in thetas]
+    final: list[float | None] = [None] * len(thetas)
+    active = list(range(len(thetas)))
+    while active:
+        jobs = [Job(cfg=th_cfg, seed=pilot_seed(cfg), theta=thetas[i], kappa=kappa[i], enforce_budget=False)
+                for i in active]
+        still = []
+        for i, pilot in zip(active, run_jobs(jobs, engine=engine), strict=True):
+            spend = pilot_spend_usd(pilot)
+            ran[i].append(kappa[i])
+            ratios[i].append(spend / total if total > 0 else (0.0 if spend == 0 else math.inf))
+            if spend <= total:
+                final[i] = kappa[i]
+                continue
+            new = kappa_from_pilot(pilot.offer_score, pilot.offer_voucher_usd, pilot.offer_completed, total)
+            if not new > kappa[i]:
+                raise RuntimeError(f"kappa-auto did not rise at theta={thetas[i]}: {kappa[i]} -> {new}")
+            kappa[i] = new
+            if len(ran[i]) > max_iter:
+                final[i] = new                 # reruns used up: keep the last kappa, untested
+            else:
+                still.append(i)
+        active = still
+    return [KappaAuto(kappa=float(final[i]), n_pilots=len(ran[i]), pilot_kappas=tuple(ran[i]),
+                      spend_ratios=tuple(ratios[i])) for i in range(len(thetas))]
+
+
+def resolve_kappas(cfg: Config, thetas, budget_usd: float | None, *,
+                   engine: str = DEFAULT_ENGINE) -> list[KappaAuto] | None:
+    """kappa of a threshold run at each theta: the config value, or kappa-auto; None for other policies."""
     if cfg.policy.name != "threshold":
         return None
     k = cfg.policy.threshold.kappa
     if k != "auto":
-        return float(k)
+        return [KappaAuto(kappa=float(k)) for _ in thetas]
     if budget_usd is None:
-        return -math.inf                      # nothing to ration without a budget (T-23)
-    return kappa_auto(cfg, theta, theta_index, budget_usd, engine=engine)
+        return [KappaAuto(kappa=-math.inf) for _ in thetas]    # nothing to ration without a budget (T-23)
+    return kappa_auto(cfg, thetas, budget_usd, engine=engine)
+
+
+def resolve_kappa(cfg: Config, theta: float, budget_usd: float | None, *,
+                  engine: str = DEFAULT_ENGINE) -> float | None:
+    """kappa of a threshold run at one theta (see :func:`resolve_kappas`); None for other policies."""
+    found = resolve_kappas(cfg, [theta], budget_usd, engine=engine)
+    return None if found is None else found[0].kappa
 
 
 # ---------------------------------------------------------------------------
@@ -308,9 +376,11 @@ def evaluate(cfg: Config, out_dir: Path, *, engine: str = DEFAULT_ENGINE, log_le
     """``policy.name`` x ``sweep.n_seeds`` (T-22) under B; writes policy_results and run_metadata."""
     budget = budget_for(cfg, engine=engine)
     theta = float(cfg.policy.threshold.theta) if cfg.policy.name == "threshold" else NAN
-    kappa = resolve_kappa(cfg, theta, 0, budget, engine=engine)
-    jobs = [Job(cfg=cfg, seed=s, theta=theta, kappa=kappa, budget_usd=budget, enforce_budget=cfg.budget.enforce,
-                log_level=log_level, profile=profile) for s in seeds_for(cfg, cfg.sweep.n_seeds)]
+    found = resolve_kappas(cfg, [theta], budget, engine=engine)
+    ka = KappaAuto(kappa=NAN) if found is None else found[0]
+    jobs = [Job(cfg=cfg, seed=s, theta=theta, kappa=None if found is None else ka.kappa, budget_usd=budget,
+                enforce_budget=cfg.budget.enforce, log_level=log_level, profile=profile, kappa_pilots=ka.n_pilots)
+            for s in seeds_for(cfg, cfg.sweep.n_seeds)]
     return _finish("evaluate", out_dir, jobs, run_jobs(jobs, engine=engine))
 
 
@@ -337,11 +407,12 @@ def sweep_theta(cfg: Config, out_dir: Path, *, engine: str = DEFAULT_ENGINE, log
     """Threshold policy for every theta of ``sweep.theta_grid`` x ``sweep.n_seeds``, same B; returns theta_sweep."""
     base = with_policy(cfg, "threshold")
     budget = budget_for(base, engine=engine)
+    grid = [float(t) for t in cfg.sweep.theta_grid]
     jobs: list[Job] = []
-    for i, theta in enumerate(cfg.sweep.theta_grid):
-        kappa = resolve_kappa(base, float(theta), i, budget, engine=engine)
-        jobs += [Job(cfg=base, seed=s, theta=float(theta), kappa=kappa, budget_usd=budget,
-                     enforce_budget=base.budget.enforce, log_level=log_level, profile=profile)
+    for theta, ka in zip(grid, resolve_kappas(base, grid, budget, engine=engine), strict=True):
+        jobs += [Job(cfg=base, seed=s, theta=theta, kappa=ka.kappa, budget_usd=budget,
+                     enforce_budget=base.budget.enforce, log_level=log_level, profile=profile,
+                     kappa_pilots=ka.n_pilots)
                  for s in seeds_for(base, cfg.sweep.n_seeds)]
     table = _finish("sweep_theta", out_dir, jobs, run_jobs(jobs, engine=engine))
     sweep = theta_sweep_table(table)

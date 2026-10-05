@@ -237,3 +237,18 @@ def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bo
         offer_score=offer_score, offer_voucher_usd=np.full(n_offered, FAKE_VOUCHER_USD, dtype=np.float32),
         offer_completed=(np.arange(n_offered) % 2 == 0),
     )
+
+
+def fake_run_congested(cfg, world, policy, rng, **kwargs) -> RunResult:
+    """:func:`fake_run` whose offered orders complete less often the more sessions are offered.
+
+    The completed share of offered sessions is ``0.2 + 0.7 x (1 - offered share)``,
+    spread evenly over the score order. A kappa-auto pilot at ``kappa = -inf``
+    offers to everyone and so under-predicts the spend of a run at a higher kappa,
+    which is the congestion effect behind decisions H-21 (Q26).
+    """
+    res = fake_run(cfg, world, policy, rng, **kwargs)
+    share = 0.2 + 0.7 * (1.0 - res.profile["offered"])
+    i = np.arange(len(res.offer_score))
+    completed = np.floor((i + 1) * share) > np.floor(i * share)
+    return dataclasses.replace(res, offer_completed=completed)

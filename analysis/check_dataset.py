@@ -13,6 +13,8 @@ rows used in docs/datasets.md. Exit code 1 when any check fails.
 
 from __future__ import annotations
 
+import hashlib
+import json
 import sys
 from pathlib import Path
 
@@ -20,13 +22,14 @@ import pandas as pd
 import pyarrow.parquet as pq
 import yaml
 
-from sim.config import build_config, config_hash
 from sim.logger import META_COLUMNS, RESULTS_TABLES, RUN_KEYS, RUN_TABLES
 from sim.state import HIDDEN_COLUMNS
 
 ARROW_TO_SCHEMA = {"string": "string", "large_string": "string", "bool": "bool", "int8": "int8", "int16": "int16",
                    "int32": "int32", "int64": "int64", "float": "float32", "double": "float64"}
 TERMINAL = {"Completed", "Abandoned", "Cancelled", "Truncated"}
+# run_metadata columns added after data sets had been generated: older directories may lack them (T-32).
+META_ADDED_LATER = frozenset({"kappa_pilots"})
 
 
 def arrow_types(path: Path) -> dict[str, str]:
@@ -35,11 +38,25 @@ def arrow_types(path: Path) -> dict[str, str]:
             for name in schema.names}
 
 
-def _check_types(path: Path, expected: dict[str, str], label: str, problems: list[str]) -> None:
+def stored_config_hash(config_yaml: str) -> str:
+    """``config_hash`` of a stored ``config_yaml``, computed on the stored dict itself.
+
+    ``config_yaml`` is the dump of the normalized config, so this equals
+    ``sim.config.config_hash(build_config(...))`` (checked on all 1.146 runs of B7a and
+    B7b, T-32), and it still works for configs written before a key was added to
+    ``config/default.yaml``, which ``build_config`` rejects.
+    """
+    raw = yaml.safe_load(config_yaml)
+    return hashlib.sha1(json.dumps(raw, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+
+
+def _check_types(path: Path, expected: dict[str, str], label: str, problems: list[str],
+                 optional: frozenset[str] = frozenset()) -> None:
     if not path.exists():
         problems.append(f"{label}: file missing")
         return
     types = arrow_types(path)
+    expected = {c: t for c, t in expected.items() if c in types or c not in optional}
     if types != expected:
         missing, extra = sorted(set(expected) - set(types)), sorted(set(types) - set(expected))
         wrong = sorted(c for c in set(types) & set(expected) if types[c] != expected[c])
@@ -55,14 +72,15 @@ def check_run_dir(run_dir: Path) -> tuple[list[str], dict]:
     """``(problems, summary)`` of one directory; an empty list means every check passed."""
     run_dir = Path(run_dir)
     problems: list[str] = []
-    _check_types(run_dir / "meta" / "run_metadata.parquet", META_COLUMNS, "meta/run_metadata", problems)
+    _check_types(run_dir / "meta" / "run_metadata.parquet", META_COLUMNS, "meta/run_metadata", problems,
+                 optional=META_ADDED_LATER)
     if problems:
         return problems, {"name": run_dir.name}
     meta = pd.read_parquet(run_dir / "meta" / "run_metadata.parquet")
     for _, row in meta.iterrows():
         # generate runs on the config's own run_seed, so the stored hash must be the hash of the stored
         # config; multi-seed modes store the per-seed config, whose hash differs by construction.
-        if row["mode"] == "generate" and config_hash(build_config(yaml.safe_load(row["config_yaml"]))) != row["config_hash"]:
+        if row["mode"] == "generate" and stored_config_hash(row["config_yaml"]) != row["config_hash"]:
             problems.append(f"meta: config_hash {row['config_hash']} is not the hash of config_yaml ({row['run_id']})")
     cfg0 = yaml.safe_load(meta["config_yaml"].iloc[0])
     summary = {

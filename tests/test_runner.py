@@ -7,17 +7,20 @@ import pandas as pd
 import pytest
 import yaml
 
+import sim.runner as runner
 from sim.config import config_hash, load_config
 from sim.logger import META_COLUMNS, RESULTS_TABLES, cast_table, write_results
 from sim.runner import (
-    Job, calibrate_budget, evaluate, generate, gte, gte_summary, kappa_from_pilot, metadata_table, pilot_seed,
-    policy_results_table, resolve_kappa, run_id, run_jobs, run_mode, run_throughput_curve, seeds_for,
-    summarize_throughput, sweep_theta, theta_sweep_table, throughput_config, throughput_jobs, with_policy, with_seed,
+    Job, calibrate_budget, evaluate, generate, gte, gte_summary, kappa_auto, kappa_from_pilot, metadata_table,
+    pilot_seed, pilot_spend_usd, policy_results_table, resolve_kappa, resolve_kappas, run_id, run_jobs, run_mode,
+    run_throughput_curve, seeds_for, summarize_throughput, sweep_theta, theta_sweep_table, throughput_config,
+    throughput_jobs, with_policy, with_seed,
 )
 from sim.state import Clock
 from tests.fakes import FAKE_VOUCHER_USD, make_run_result
 
 FAKE = "tests.fakes:fake_run"
+CONGESTED = "tests.fakes:fake_run_congested"
 SMALL = ["sweep.n_seeds=2", "gte.n_seeds=2", "sweep.theta_grid=[0.0, 0.5, 1.0]", "runner.n_procs=1"]
 
 
@@ -45,7 +48,7 @@ def test_seeds_and_with_seed(tiny_cfg):
     assert with_7.meta.run_seed == 7 and with_7.meta.world_seed == tiny_cfg.meta.world_seed
     assert tiny_cfg.meta.run_seed == 0                                        # original untouched
     assert config_hash(with_7) != config_hash(tiny_cfg)
-    assert pilot_seed(tiny_cfg) == 9000 and pilot_seed(with_7, 3) == 9010
+    assert pilot_seed(tiny_cfg) == 9000 and pilot_seed(with_7) == 9007          # one pilot seed for all thetas (H-21)
     assert with_policy(tiny_cfg, "legacy").policy.name == "legacy" and tiny_cfg.policy.name == "threshold"
     with pytest.raises(ValueError):
         seeds_for(tiny_cfg, 0)
@@ -207,6 +210,7 @@ def test_metadata_table_fields(off_cfg):
     assert row["config_hash"] == config_hash(off_cfg) and row["seed"] == 3 and row["world_seed"] == off_cfg.meta.world_seed
     assert yaml.safe_load(row["config_yaml"])["meta"]["run_seed"] == 3           # the config the run actually used
     assert row["kappa"] == 0.1 and row["theta"] == 0.4 and row["budget_B_usd"] == 7.0
+    assert row["kappa_pilots"] == 0                                               # kappa given, not kappa-auto
     assert len(row["git_sha"]) == 40 or row["git_sha"] == "unknown"
     assert row["created_at"].endswith("+00:00") and row["window_end_s"] == res[0].window_end_s
     assert metadata_table("x", jobs, res, budget_B_usd=1.5)["budget_B_usd"][0] == 1.5
@@ -229,6 +233,17 @@ def test_kappa_from_pilot():
     assert unordered == 0.5
 
 
+def test_kappa_from_pilot_keeps_tied_scores_together():
+    # The policy offers on score >= kappa, so equal scores (one rider's sessions) are kept or dropped together (T-32).
+    tied = ([0.9, 0.8, 0.8, 0.7], [1.0] * 4, [True] * 4)
+    assert kappa_from_pilot(*tied, 2.0) == 0.9            # top 0.8 alone would fit, but both 0.8 sessions are offered
+    assert kappa_from_pilot(*tied, 3.0) == 0.8
+    assert kappa_from_pilot(*tied, 3.5) == 0.8
+    assert kappa_from_pilot(*tied, 4.0) == -math.inf
+    assert kappa_from_pilot([0.5, 0.5], [1.0, 1.0], [True, True], 1.0) == math.inf
+    assert kappa_from_pilot([0.5, 0.5, 0.4], [1.0, 1.0, 1.0], [True, False, True], 1.0) == 0.5   # spend 1 + 0
+
+
 def test_calibrate_budget_fixed_and_pilot(tiny_layers):
     fixed = load_config(tiny_layers, ["budget.mode=fixed", "budget.fixed_usd=42.0"])
     assert calibrate_budget(fixed, engine=FAKE) == (42.0, None)
@@ -240,20 +255,65 @@ def test_calibrate_budget_fixed_and_pilot(tiny_layers):
 
 
 def test_resolve_kappa(tiny_layers, th_cfg):
-    assert resolve_kappa(load_config(tiny_layers, ["policy.name=all_on"]), float("nan"), 0, 10.0, engine=FAKE) is None
+    assert resolve_kappa(load_config(tiny_layers, ["policy.name=all_on"]), float("nan"), 10.0, engine=FAKE) is None
     fixed = load_config(tiny_layers, ["policy.threshold.kappa=0.3"])
-    assert resolve_kappa(fixed, 0.35, 0, 10.0, engine=FAKE) == 0.3
-    assert resolve_kappa(th_cfg, 0.35, 0, None, engine=FAKE) == -math.inf     # no budget: nothing to ration
+    assert resolve_kappa(fixed, 0.35, 10.0, engine=FAKE) == 0.3
+    assert resolve_kappas(fixed, [0.0, 1.0], 10.0, engine=FAKE)[1].n_pilots == 0   # no pilot for a fixed kappa
+    assert resolve_kappa(th_cfg, 0.35, None, engine=FAKE) == -math.inf     # no budget: nothing to ration
     budget = 20.0
-    kappa = resolve_kappa(th_cfg, 0.35, 2, budget, engine=FAKE)
+    kappa = resolve_kappa(th_cfg, 0.35, budget, engine=FAKE)
     assert 0.0 < kappa < 1.0
-    # The pilot the runner used: kappa = -inf, no budget, seed offset + theta index.
-    pilot = run_jobs([Job(cfg=th_cfg, seed=pilot_seed(th_cfg, 2), theta=0.35, kappa=-math.inf, enforce_budget=False)],
+    # Fixed point: the pilot rerun at the kappa found (no budget, the shared pilot seed) fits the budget.
+    pilot = run_jobs([Job(cfg=th_cfg, seed=pilot_seed(th_cfg), theta=0.35, kappa=kappa, enforce_budget=False)],
                      engine=FAKE, n_procs=1)[0]
-    spend = np.where(pilot.offer_completed, pilot.offer_voucher_usd, 0.0)
-    kept = pilot.offer_score >= kappa
     n_periods = Clock.from_config(th_cfg).n_periods
-    assert spend[kept].sum() <= budget * n_periods < spend[kept].sum() + 2 * FAKE_VOUCHER_USD
+    assert pilot_spend_usd(pilot) <= budget * n_periods < pilot_spend_usd(pilot) + 2 * FAKE_VOUCHER_USD
+
+
+def test_kappa_auto_iterates_to_a_fixed_point_under_congestion(tiny_layers, th_cfg):
+    def with_max_iter(n):
+        return load_config(tiny_layers, SMALL + [f"policy.threshold.kappa_max_iter={n}"])
+
+    # decisions H-21: a pilot at kappa = -inf under-predicts the spend at a higher kappa (fewer offers, less
+    # congestion, more completed trips), so kappa is raised until the pilot rerun at kappa fits B x n_periods.
+    budget, thetas = 20.0, [0.0, 0.35, 1.0]
+    for ka in kappa_auto(th_cfg, thetas, budget, engine=CONGESTED):
+        assert ka.n_pilots >= 3 and ka.n_pilots == len(ka.pilot_kappas) == len(ka.spend_ratios)
+        assert ka.pilot_kappas[0] == -math.inf and np.all(np.diff(ka.pilot_kappas) > 0)     # kappa only rises
+        assert ka.kappa == ka.pilot_kappas[-1] and ka.spend_ratios[-1] <= 1.0                # last pilot fits
+        assert all(r > 1.0 for r in ka.spend_ratios[:-1])                                   # every earlier one overspent
+    # kappa_max_iter = 0 is the single pilot of spec §6 before H-21; a rerun at its kappa overspends.
+    single = with_max_iter(0)
+    ka0 = kappa_auto(single, [0.35], budget, engine=CONGESTED)[0]
+    first = run_jobs([Job(cfg=single, seed=pilot_seed(single), theta=0.35, kappa=-math.inf, enforce_budget=False)],
+                     engine=CONGESTED, n_procs=1)[0]
+    total = budget * Clock.from_config(single).n_periods
+    assert ka0.n_pilots == 1
+    assert ka0.kappa == kappa_from_pilot(first.offer_score, first.offer_voucher_usd, first.offer_completed, total)
+    rerun = run_jobs([Job(cfg=single, seed=pilot_seed(single), theta=0.35, kappa=ka0.kappa, enforce_budget=False)],
+                     engine=CONGESTED, n_procs=1)[0]
+    assert pilot_spend_usd(rerun) > total
+    # Out of reruns: the last kappa found is kept, untested.
+    ka1 = kappa_auto(with_max_iter(1), [0.35], budget, engine=CONGESTED)[0]
+    assert ka1.n_pilots == 2 and ka1.kappa > ka1.pilot_kappas[-1]
+
+
+def test_kappa_auto_pilots_share_one_seed_and_run_by_round(th_cfg, monkeypatch):
+    calls = []
+
+    def spy(jobs, **kwargs):
+        calls.append(list(jobs))
+        return run_jobs(jobs, **kwargs)
+
+    monkeypatch.setattr(runner, "run_jobs", spy)
+    found = kappa_auto(th_cfg, [0.0, 0.5, 1.0], 20.0, engine=CONGESTED)
+    assert [j.theta for j in calls[0]] == [0.0, 0.5, 1.0]                      # round 0: every theta at once
+    assert all(j.kappa == -math.inf for j in calls[0])
+    pilots = [j for round_ in calls for j in round_]
+    assert {j.seed for j in pilots} == {pilot_seed(th_cfg)}                     # one pilot seed for every theta
+    assert all(j.enforce_budget is False and j.policy_name == "threshold" for j in pilots)
+    assert len(pilots) == sum(ka.n_pilots for ka in found)
+    assert len(calls) == max(ka.n_pilots for ka in found)                       # one call per round
 
 
 # --- modes ------------------------------------------------------------------------------
@@ -270,6 +330,7 @@ def test_evaluate_mode(th_cfg, tmp_path):
     meta = pd.read_parquet(tmp_path / "meta" / "run_metadata.parquet")
     assert list(meta.columns) == list(META_COLUMNS) and len(meta) == 2
     assert np.isfinite(meta["kappa"]).all() and (meta["budget_B_usd"] == budget).all()
+    assert (meta["kappa_pilots"] >= 2).all()                                    # pilot at -inf, then rerun(s) (H-21)
     assert (meta["policy"] == "threshold").all() and meta["run_id"].is_unique
 
 
@@ -305,6 +366,7 @@ def test_sweep_theta_mode(th_cfg, tmp_path):
     meta = pd.read_parquet(tmp_path / "meta" / "run_metadata.parquet")
     kappa_by_theta = meta.groupby("theta")["kappa"].nunique()
     assert (kappa_by_theta == 1).all()                                            # one kappa per theta, shared by seeds
+    assert (meta["kappa_pilots"] >= 1).all() and (meta.groupby("theta")["kappa_pilots"].nunique() == 1).all()
     assert (tmp_path / "results" / "theta_sweep.parquet").exists()
     np.testing.assert_allclose(sweep["N_mean"], runs.groupby("theta")["N_completed"].mean().to_numpy())
 
