@@ -21,12 +21,86 @@ on the indicator; the indicator only decides how much of each hour is cut). Per 
   Cutting raises ``r`` while ``S >= B``; past that point money is left unspent.
 
 Both are argmax over a grid; the interval comes from the unit bootstrap of ``tau`` and ``cost``.
+
+The harm itself is shown two ways (notebook 04, task H6.2): :func:`hour_table` (``tau(h)`` with its
+interval, any switchback) and :func:`on_off_by_hour` (voucher for everyone minus for no one, no budget,
+paired by seed: completed, requests, riders who gave up, quoted ETA).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+
+LOST = ("Abandoned", "Cancelled")           # order statuses where the rider gave up waiting
+
+
+def hour_table(effects: dict, *, alpha: float = 0.05) -> pd.DataFrame:
+    """``hour, tau, lo, hi, cost`` from :func:`hour_effects` (percentile interval of the unit bootstrap)."""
+    with np.errstate(all="ignore"):
+        lo, hi = np.nanquantile(effects["tau_draws"], [alpha / 2, 1 - alpha / 2], axis=0)
+    return pd.DataFrame({"hour": np.arange(24), "tau": effects["tau"], "lo": lo, "hi": hi, "cost": effects["cost"]})
+
+
+def hourly_outcomes(sessions: pd.DataFrame, orders: pd.DataFrame) -> pd.DataFrame:
+    """Per hour of one run's evaluation window: sessions, requests, completed, lost (gave up), mean quoted ETA."""
+    s = sessions[sessions["in_window"]]
+    o = orders.merge(s[["session_id", "hour"]], on="session_id")     # orders of in-window sessions, with their hour
+    out = pd.DataFrame({
+        "sessions": s.groupby("hour").size(),
+        "requests": o.groupby("hour").size(),
+        "completed": o[o["status"] == "Completed"].groupby("hour").size(),
+        "lost": o[o["status"].isin(LOST)].groupby("hour").size(),
+        "quoted_eta_min": s.groupby("hour")["quoted_eta_min"].mean(),
+    }).reindex(range(24))
+    counts = ["sessions", "requests", "completed", "lost"]
+    out[counts] = out[counts].fillna(0.0)
+    out.index.name = "hour"
+    return out
+
+
+def _per_seed_hourly(out_dir: Path) -> pd.DataFrame:
+    from analysis.io import load_run
+
+    frames = []
+    for run_dir in sorted((Path(out_dir) / "runs").iterdir()):
+        run = load_run(run_dir)
+        frames.append(hourly_outcomes(run["sessions"], run["orders"])
+                      .assign(seed=int(run_dir.name.rsplit("-", 1)[1])).reset_index())   # run_id ends with the seed
+    return pd.concat(frames, ignore_index=True)
+
+
+def on_off_by_hour(on: pd.DataFrame, off: pd.DataFrame) -> pd.DataFrame:
+    """Voucher for everyone minus voucher for no one, per hour, paired by seed (common random numbers).
+
+    ``on`` and ``off`` are ``hourly_outcomes`` rows with ``hour`` and ``seed`` columns. Returns per
+    hour the "off" level, the mean on - off difference of completed trips, requests and lost
+    requests per day, its SE over seeds, and the quoted ETA off and its change.
+    """
+    keys = ["seed", "hour"]
+    a, b = on.set_index(keys).sort_index(), off.set_index(keys).sort_index()
+    if not a.index.equals(b.index):
+        raise ValueError("on and off runs must cover the same seeds and hours")
+    d = (a - b).groupby("hour")
+    n_seeds = a.index.get_level_values("seed").nunique()
+    lvl = b.groupby("hour")
+    return pd.DataFrame({
+        "completed_off": lvl["completed"].mean(),
+        "completed_diff": d["completed"].mean(),
+        "completed_diff_se": d["completed"].std(ddof=1) / np.sqrt(n_seeds),
+        "requests_diff": d["requests"].mean(),
+        "lost_diff": d["lost"].mean(),
+        "lost_rate_off": lvl["lost"].sum() / lvl["requests"].sum(),
+        "quoted_eta_off": lvl["quoted_eta_min"].mean(),
+        "quoted_eta_diff": d["quoted_eta_min"].mean(),
+    }).reset_index()
+
+
+def on_off_by_hour_runs(on_dir: Path, off_dir: Path) -> pd.DataFrame:
+    """:func:`on_off_by_hour` of two ``evaluate --log-level full`` directories (all_on, all_off; no budget)."""
+    return on_off_by_hour(_per_seed_hourly(on_dir), _per_seed_hourly(off_dir))
 
 
 

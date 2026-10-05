@@ -56,3 +56,38 @@ def test_theta_hat_cuts_the_harmful_hours_only():
     assert 0.3 <= r["theta_hat_A"] <= 0.5                                        # all tight sessions, nothing else
     assert r["ci_A"][0] >= 0.3
     assert r["theta_hat_B"] == r["theta_hat_A"]                                  # budget never binds: same rule
+
+
+# --- harm by hour: voucher for everyone against voucher for no one (H6.2) -------------------------
+
+
+def test_hour_table_gives_the_bootstrap_interval():
+    f = switchback_frame([0.05] * 3 + [0.0] * 21, units_per_hour=60, per_unit=20)
+    t = theta.hour_table(theta.hour_effects(f, n_boot=200))
+    assert list(t.columns) == ["hour", "tau", "lo", "hi", "cost"] and len(t) == 24
+    assert ((t["lo"] <= t["tau"]) & (t["tau"] <= t["hi"])).all()
+
+
+def test_hourly_outcomes_counts_in_window_sessions_and_their_orders():
+    sessions = pd.DataFrame({"session_id": [1, 2, 3, 4], "hour": [5, 5, 7, 7], "in_window": [True, True, True, False],
+                             "quoted_eta_min": [4.0, 6.0, 3.0, 9.0]})
+    orders = pd.DataFrame({"session_id": [1, 2, 3, 4], "status": ["Completed", "Cancelled", "Abandoned", "Completed"]})
+    t = theta.hourly_outcomes(sessions, orders)
+    assert len(t) == 24 and t["sessions"].sum() == 3                      # session 4 is outside the window
+    assert t.loc[5, ["sessions", "requests", "completed", "lost"]].tolist() == [2, 2, 1, 1]
+    assert t.loc[7, ["completed", "lost"]].tolist() == [0, 1] and t.loc[5, "quoted_eta_min"] == 5.0
+    assert t.loc[0, "requests"] == 0 and np.isnan(t.loc[0, "quoted_eta_min"])
+
+
+def test_on_off_by_hour_pairs_seeds():
+    def rows(completed_by_seed):
+        return pd.DataFrame([{"seed": s, "hour": h, "sessions": 10.0, "requests": 8.0, "completed": c[h], "lost": 1.0,
+                              "quoted_eta_min": 5.0} for s, c in completed_by_seed.items() for h in range(2)])
+    off = rows({0: [5, 6], 1: [7, 6]})
+    on = rows({0: [4, 8], 1: [6, 9]})                                     # hour 0: -1 both seeds; hour 1: +2, +3
+    t = theta.on_off_by_hour(on, off).set_index("hour")
+    assert t.loc[0, "completed_diff"] == -1 and t.loc[0, "completed_diff_se"] == 0
+    assert t.loc[1, "completed_diff"] == 2.5 and t.loc[1, "completed_diff_se"] == pytest.approx(0.5)
+    assert t.loc[1, "completed_off"] == 6 and t.loc[0, "lost_rate_off"] == pytest.approx(1 / 8)
+    with pytest.raises(ValueError, match="same seeds"):
+        theta.on_off_by_hour(on[on["seed"] == 0], off)
