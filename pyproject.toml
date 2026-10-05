@@ -17,10 +17,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
-analysis = ["matplotlib>=3.8", "lightgbm>=4.0"]   # gate plots, DR-learner (decisions T-13); sim/ never imports them
+analysis = ["matplotlib>=3.8", "lightgbm>=4.0", "ipykernel>=6"]   # gate plots, DR-learner, notebooks (decisions T-13, H-27); sim/ never imports them
 
 [tool.setuptools.packages.find]
-include = ["sim*"]
+include = ["sim*", "analysis*"]   # analysis: importable from notebooks/ (decisions H-27)
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

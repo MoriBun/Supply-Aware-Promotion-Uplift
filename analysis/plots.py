@@ -7,10 +7,14 @@ Each command reads the results table of the run directory and writes a PNG next
 to it (``results/<name>.png``). One measure per panel (never two y-scales on one
 axis), one hue for the single series, reference lines in neutral ink with a
 direct label, recessive grid. Needs matplotlib (extra ``[analysis]``).
+
+The result notebooks (decisions H-27) use the same style through :func:`pyplot`
+and write the figures of the report to ``docs/figures/`` with :func:`save_figure`.
 """
 
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
@@ -20,11 +24,14 @@ import pandas as pd
 SURFACE, INK, INK_2, MUTED, GRID, AXIS = "#fcfcfb", "#0b0b0b", "#52514e", "#898781", "#e1e0d9", "#c3c2b7"
 SERIES = "#2a78d6"            # categorical slot 1; every chart here has a single series
 Z95 = 1.959963984540054
+FIGURES_DIR = Path(__file__).resolve().parents[1] / "docs" / "figures"
+FIGURE_NAME = re.compile(r"\d{2}_[a-z0-9_]+")   # <notebook number>_<what>, e.g. 04_regret_theta_hat
 
 
 def _pyplot():
     import matplotlib
-    matplotlib.use("Agg")
+    if "ipykernel" not in sys.modules:          # a notebook keeps its inline backend, so figures show under the cell
+        matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     plt.rcParams.update({
         "font.family": ["Segoe UI", "DejaVu Sans"], "font.size": 10,
@@ -36,6 +43,26 @@ def _pyplot():
         "axes.axisbelow": True, "axes.titlesize": 11, "axes.titleweight": "bold", "axes.titlelocation": "left",
     })
     return plt
+
+
+def pyplot():
+    """``matplotlib.pyplot`` with the style of these plots (for the notebooks)."""
+    return _pyplot()
+
+
+def save_figure(fig, name: str, *, figures_dir: Path | None = None) -> Path:
+    """Write ``fig`` to ``docs/figures/<name>.png`` for the report and slides (decisions H-27).
+
+    ``name`` starts with the number of the notebook that owns the figure (``04_regret``),
+    so the two authors never write the same file. The figure stays open, so a
+    notebook still shows it under the cell.
+    """
+    if not FIGURE_NAME.fullmatch(name):
+        raise ValueError(f"figure name {name!r}: use '<notebook number>_<lowercase words>', e.g. '04_regret'")
+    path = Path(figures_dir or FIGURES_DIR) / f"{name}.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=150, bbox_inches="tight")
+    return path
 
 
 def _line(ax, x, y, lo=None, hi=None) -> None:
