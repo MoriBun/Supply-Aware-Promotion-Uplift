@@ -231,7 +231,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner; H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
+**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8). Tiếp theo: H5.2 DR-learner; H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -513,3 +513,13 @@ Mẫu:
 - Lệch spec / quyết định mới: H-21 (lệch spec §6, D12 cũ; đã sửa spec), H-22, H-23
 - Bàn giao: không. Việc kéo theo cho Tình: cài H-21 trong `sim/runner.py` (khóa YAML số lần lặp), chạy lại sweep B7b
 - Còn lại / bước tiếp: H5.1 giao B8; chốt định nghĩa ŝ với Tình theo H-22 trước H5.3
+
+### 2026-10-05 · H5.1 · giao B8: hàm điểm τ̂ nền và parquet dự đoán · xong
+- Nhánh/PR: `develop2` (PR cuối S5, hoặc PR sớm nếu Tình cần trước)
+- Đã làm: `analysis/scores.py`: `predict_frame`, `SCORE_FUNCTIONS`, CLI `predict <run dir> <out.parquet>`; `tests/test_estimate.py` (+4: nạp hàm điểm trong tiến trình `spawn` ×2, `predict_frame` khớp hàm điểm và tất định, CLI không có cột ẩn); `runs/b8/predictions_<bộ>.parquet` cho 5 bộ B7a (718.749 dòng mỗi bộ); mục B8 trong `datasets.md`
+- Test: `pytest -q` → 480 passed, 1 skipped (py3.12 `.venv`); chạy thật `evaluate` với `score_fn=analysis.scores:tau_per_dollar_baseline`, 2 seed, 2 tiến trình: N = 3.932,5 (se 60,5), chi 5.545,80 = B
+- Số liệu cho T5.2: Qini (`qini_coef`, `rider_ab_28d`, trong cửa sổ) `tau_x_baseline` +846,4; `tau_per_dollar_baseline` −633,9; `heuristic_low_freq` −985,9. Dưới cùng B (H4.2) thứ tự N lại ngược: per_dollar 3.896,0 > heuristic 3.882,8 > tau_x 3.862,4, là ví dụ "Qini cao hơn mà N thấp hơn"
+- Lệch spec / quyết định mới: không
+- Bàn giao: giao B8; người nhận kiểm tra: `pytest -q tests/test_estimate.py`
+- Còn lại / bước tiếp: H5.2 DR-learner
+

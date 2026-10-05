@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+import multiprocessing
 
 import numpy as np
 import pandas as pd
@@ -234,6 +235,52 @@ def test_score_functions_load_by_spec_and_read_only_rider_features(spec):
     edges, tau, cost = scores.load_table()
     expected = tau if spec.endswith("tau_x_baseline") else tau / cost
     np.testing.assert_allclose(out, expected.ravel().astype(np.float32))
+
+
+def _score_in_worker(spec: str, x_freq: np.ndarray, x_segment: np.ndarray) -> np.ndarray:
+    batch = dataclasses.replace(make_batch(len(x_freq), 37), x_freq=x_freq, x_segment=x_segment)
+    return score_batch(load_score_fn(spec), batch, np.full(len(x_freq), np.nan))
+
+
+@pytest.mark.parametrize("spec", ["analysis.scores:tau_x_baseline", "analysis.scores:tau_per_dollar_baseline"])
+def test_score_functions_load_in_a_spawned_worker(spec):
+    # B8 check: runner workers start with spawn on Windows and only get the score_fn string.
+    x_freq = np.array([0.5, 1.5, 3.0] * 3, dtype=np.float32)
+    x_segment = np.repeat([0, 1, 2], 3).astype(np.int8)
+    with multiprocessing.get_context("spawn").Pool(1) as pool:
+        remote = pool.apply(_score_in_worker, (spec, x_freq, x_segment))
+    np.testing.assert_array_equal(remote, _score_in_worker(spec, x_freq, x_segment))
+
+
+def test_predict_frame_matches_the_score_functions():
+    gen = np.random.default_rng(3)
+    riders = pd.DataFrame({"rider_id": np.arange(50, dtype=np.int32), "x_freq": gen.gamma(2.0, 1.0, 50).astype(np.float32),
+                           "x_segment": gen.integers(0, 3, 50).astype(np.int8), "x_tenure": np.ones(50, np.float32)})
+    sessions = pd.DataFrame({"session_id": np.arange(200, dtype=np.int64) * 7,
+                             "rider_id": gen.integers(0, 50, 200).astype(np.int32), "in_window": gen.random(200) < 0.9})
+    pred = scores.predict_frame(sessions, riders)
+    assert list(pred.columns) == ["session_id", "rider_id", "in_window", *scores.SCORE_FUNCTIONS]
+    np.testing.assert_array_equal(pred["session_id"], sessions["session_id"])
+    rider = riders.set_index("rider_id").loc[sessions["rider_id"]]
+    batch = dataclasses.replace(make_batch(200, 37), x_freq=rider["x_freq"].to_numpy(),
+                                x_segment=rider["x_segment"].to_numpy())
+    for name, fn in scores.SCORE_FUNCTIONS.items():
+        np.testing.assert_array_equal(pred[name].to_numpy(), score_batch(fn, batch, np.full(200, np.nan)))
+    pd.testing.assert_frame_equal(pred, scores.predict_frame(sessions, riders))           # deterministic
+    with pytest.raises(ValueError, match="missing"):
+        scores.predict_frame(sessions.assign(rider_id=999), riders)
+
+
+def test_predict_cli_writes_parquet_without_hidden_columns(tiny_run, tmp_path):
+    from sim.state import HIDDEN_COLUMNS
+
+    run_dir, out = tiny_run[0], tmp_path / "b8" / "pred.parquet"
+    assert scores.main(["scores", "predict", str(run_dir), str(out)]) == 0
+    pred = pd.read_parquet(out)
+    sessions = pd.read_parquet(run_dir / "observed" / "sessions.parquet")
+    assert len(pred) == len(sessions) and pred["session_id"].is_unique
+    assert not set(pred.columns) & set(HIDDEN_COLUMNS)
+    assert scores.main(["scores", "predict", str(run_dir)]) == 2
 
 
 # --- A4 on the B7a data (informational; docs/tests.md §3) ------------------------
