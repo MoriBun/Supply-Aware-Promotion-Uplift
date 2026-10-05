@@ -29,7 +29,7 @@ def make_policy(cfg: Config, world, *, rng: Rng | None = None, theta: float | No
     if name == "legacy":
         return LegacyPolicy(cfg, LegacyHiddenView.from_world(world), rng, world.n_cells)
     if name == "threshold":
-        return ThresholdPolicy(cfg, world.n_cells, theta=theta, kappa=kappa)
+        return ThresholdPolicy(cfg, world.n_cells, theta=theta, kappa=kappa, neighbors=world.space.neighbors)
     if name == "experiment":
         return ExperimentPolicy(cfg, world, rng)
     raise ValueError(f"unknown policy {name!r}")

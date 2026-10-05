@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S4 đã gộp vào `develop` (PR #12; PR #13 của Hoàng cũng đã gộp, `develop1` ở `723a994`). Gate P6 đạt theo quyết định T-31 của Tình, **chờ mentor xác nhận**. Rà soát kết quả simulator xong: ba câu hỏi mở Q26–Q28 chờ Tình, Hoàng và mentor; mục log và `decisions.md` của lần rà soát **chưa commit** (Tình tự commit). Còn lại của S4: gắn tag dữ liệu; báo mentor T-31, Q24, Q26–Q28. Tiếp theo: S5, T5.1 bảng N/V dưới cùng B (random, heuristic; τ̂ khi có B8).
+**Đang làm:** S5: T5.1–T5.3 xong (bảng N/V dưới B đủ hàm điểm DR và π_θ̂, Qini so với N, chệch thiết kế và `u_latent`); H-21 đã cài, B7b chạy lại (`runs/b7b_h21`); `ring1` (H-25) đã cài làm tùy chọn, mặc định vẫn `cell`; 3 sweep θ mới ở `runs/s5`. Tất cả **chưa commit** (Tình commit): báo cáo phương pháp luận bản 1, H-21, S5; cần Hoàng duyệt `.gitattributes`, `config.py` và 1 dòng `test_acceptance_core.py`. Chờ hai người quyết mặc định `scope`. Gate P6 (T-31) vẫn chờ mentor xác nhận.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -226,6 +226,53 @@ Mẫu:
 - Lệch spec / quyết định mới: không quyết định gì; ba câu hỏi mở Q26, Q27, Q28
 - Bàn giao: không
 - Còn lại / bước tiếp: Tình, Hoàng và mentor xem Q26–Q28 trước S5; nếu đồng ý Q26 thì sửa `runner.kappa_auto`, thêm test, chạy lại sweep B7b
+
+### 2026-10-05 · báo cáo · phương pháp luận simulator, bản 1 · xong (chưa commit)
+- Nhánh/PR: `develop1` (viết ở `a5ccc50`, cập nhật theo H-21…H-23 sau khi kéo `develop` `8467f83`), chưa commit (Tình commit); file mới trong `docs/` nên cần Hoàng duyệt trong PR
+- Đã làm: `docs/bao_cao_phuong_phap_v1.md`: bài toán và lý do chọn N(π); nền tảng (kết cục tiềm năng khi SUTVA vỡ, định luật Little và WGC, khoảng cách tới xe gần nhất, logit, hazard, gây nhiễu, thiết kế thí nghiệm, phân bổ dưới ngân sách, CRN và so sánh bội, Qini); mô hình từng module, chính sách, CRN, chế độ chạy, kiểm định, kết quả đến S4; giả định và hạn chế; phụ lục tham số và bản đồ code/test. Số minh họa tính từ `default.yaml` qua `build_world`; số kết quả chép từ log, `decisions.md`, `datasets.md`
+- Test: không đổi code; không chạy test
+- Lệch spec / quyết định mới: không. Báo cáo §10.3 nêu 6 điểm chưa có trong `decisions.md`, đáng nhất: `forecast: ar` gần như trùng `persistence` trong lượt 1 ngày (lag ngày chỉ có ở 4 slot cuối cửa sổ); regret và tập θ\* chọn "tốt nhất" và đo trên cùng seed; mọi kết quả trên một `world_seed`; `tests.md` M11 còn ghi "inf khi E = 0" (cũ so với H-14)
+- Bàn giao: không
+- Còn lại / bước tiếp: Hoàng và mentor đọc, góp ý; quyết định có đưa các điểm §10.3 vào "Câu hỏi mở" không; bản 2 sau S5 (τ̂, bảng N/V dưới cùng B, ví dụ Qini so với N)
+
+### 2026-10-05 · H-21 · κ auto điểm bất động + chạy lại B7b · xong (chưa commit) · giao B7b (bản H-21)
+- Nhánh/PR: `develop1` (`8467f83` + thay đổi chưa commit); PR S5 `develop1 → develop`
+- Đã làm: `sim/runner.py`: `kappa_auto(cfg, thetas, B)` lặp pilot theo vòng, mọi θ chạy song song, chung seed pilot; `kappa_from_pilot` giữ trọn nhóm điểm bằng nhau; `KappaAuto`, `resolve_kappas`, `pilot_spend_usd`; `pilot_seed(cfg)` và `resolve_kappa(cfg, theta, B)` bỏ chỉ số θ. Khóa `policy.threshold.kappa_max_iter = 10` (`default.yaml`, `config.py`); cột `run_metadata.kappa_pilots`; `analysis.check_dataset` đọc được bộ cũ (cột mới tùy chọn, hash tính trên config đã lưu). Sửa `spec.md` §6, §9, `schema.md`. Test: `test_runner` (+3: điểm hòa, điểm bất động trên engine giả có tắc nghẽn, chung seed và chạy theo vòng; sửa 4), `test_config` (+1), `tests/fakes.py` (`fake_run_congested`), test chậm κ auto đo thêm hai số của H-21(d). **Sửa 1 dòng `tests/test_acceptance_core.py` (file của Hoàng)** vì `resolve_kappa` bỏ tham số chỉ số θ
+- Test: `pytest -q` → 493 passed, 8 deselected (py3.11, 247 s, chạy cùng lúc sinh dữ liệu). `pytest -m slow tests/test_acceptance.py -k kappa` → 1 passed: θ = 0,35, κ = −2,534 (cũ −2,748); chi/B có dừng cứng 0,9998; 0,9999; 0,9661; **không dừng cứng 1,024; 1,017; 0,966** (Q26 cũ: 1,113); voucher bị chặn cứng 1,9%; 1,4%; 0% (cũ 8,4%). `pytest -m slow tests/test_acceptance_core.py` → 4 passed (A1, A5 hai chính sách, CAL; 304 s). `check_dataset`: B7a, B7b cũ và 5 thư mục mới OK
+- Số liệu B7b mới (`runs/b7b_h21`, 16 θ × 30 seed; chi tiết `docs/datasets.md`): N(θ = 0) 3.860,3 (+11,9 ± 3,2 so với cũ); tốt nhất 3.899,7 ở θ = 2; khoảng θ\* [0,3; 2], mốc 1 bị loại; regret θ = 0: 39,5 ± 4,0 (1,01%, cũ 53,3); θ = 0,35: 7,8 ± 3,3. Mỗi θ 1–6 lượt pilot, không chạm trần. Độ nhạy: θ = 0,6 thuộc tập θ\* ở cả 5 kịch bản; regret θ = 0 khi cầu × 1,5: 2,85% (cũ 4,10%)
+- Lệch spec / quyết định mới: H-21 (spec đã sửa), T-32; `config_hash(default.yaml)` `cb27f5348011` → `34f3aa436d16`
+- Bàn giao: giao B7b bản H-21; người nhận kiểm tra: sinh lại theo `docs/datasets.md`, `check_dataset` OK, N theo θ khớp bảng; xem lại dòng sửa trong `test_acceptance_core.py`
+- Còn lại / bước tiếp: Hoàng review; xóa `runs/b7b`, `runs/p6` sau khi nhận
+
+### 2026-10-05 · T5.1–T5.3 · bảng N/V dưới B, Qini so với N, tranh chấp cung và độ nhạy theo `u_latent` · dở (chờ B8, H5.2, H5.3)
+- Nhánh/PR: `develop1`, chưa commit; PR S5
+- Đã làm: `analysis/policy_table.py` (T5.1: nhiều chính sách, cùng seed, cùng B, κ auto, hiệu ghép cặp), `analysis/qini_vs_value.py` (T5.2: chấm session đã ghi bằng chính `score_fn`, Qini có bootstrap theo rider, cặp "Qini cao hơn mà N thấp hơn"), `analysis/interference.py` (T5.3: thiết kế so với GTE; chệch do `u_latent`), `analysis/score_ties.py` (phá hòa ngẫu nhiên cho hàm điểm dạng bảng); `tests/test_policy_eval.py` (+12). Sinh 3 bộ legacy 28 ngày `target_g_u` = 0; 0,5; 2 (`runs/s5`). `docs/datasets.md`: mục B7b bản H-21 và mục dữ liệu S5. Cập nhật `docs/bao_cao_phuong_phap_v1.md` §0, §5.4, §7.2, §9, §10 theo H-21 và kết quả S5
+- Test: xem mục H-21 (493 passed)
+- T5.1 (30 seed, B = 5.545,80): `all_off` 3.440,1; `all_on` có B 3.686,7; điểm `random` +120,3 ± 5,1; `heuristic_low_freq` +173,5 ± 4,7; τ̂(x) nền +117,0 ± 6,4; **τ̂(x)/USD nền +315,3 ± 5,3 (4.002,0)**; π_θ θ = 0,5 heuristic +208,1 ± 5,4. Lượt đầu cho τ̂(x) nền κ = +∞ (không phát) vì bảng chỉ có 9 giá trị → T-33(e), phá hòa bằng `u_score`
+- T5.2 (Qini trên `rider_ab_28d`, `completed`, 200 bootstrap theo rider): τ̂(x) nền 862,6 [418,6; 1.313,7]; `random` 59,8; τ̂(x)/USD −619,0; heuristic −985,9. **Ví dụ: Qini(τ̂(x)) − Qini(τ̂(x)/USD) = +1.481,6 [682,3; 2.407,0] mà N(τ̂(x)) − N(τ̂(x)/USD) = −198,3 ± 5,3**; cặp τ̂(x)–heuristic: +1.848,4 Qini, −56,6 ± 6,1 N. Cùng thứ tự với kết cục `requested`. Cơ chế: Qini đếm theo lượt phát, B tính bằng USD; nhóm tần suất cao có uplift mỗi lượt phát cao nhất nhưng ít chuyến tăng thêm mỗi USD nhất (8,75 so với 12,24 chuyến/100 USD ở phân khúc 0). Ví dụ này do chi phí, chưa phải do trạng thái cung: cặp τ̂(x) với τ̂(x, s) chờ B8
+- T5.3 (GTE +1.212,9): A/B theo rider +1.646,9 (+35,8%); switchback cụm 1 +1.631,6 (+34,5%); cụm 7 +1.496,6 (+23,4%); toàn hệ +1.267,1 (+4,5%), bỏ burn-in (tính cả burn-in thì trùng H4.2, toàn hệ +8,2%). Request: chệch +17,6% / +17,5% / +11,6% / +2,6%. Độ nhạy `u_latent`, chệch còn lại sau khi điều chỉnh theo X: `target_g_u` = 0: −0,0052 [−0,0134; +0,0032]; 0,5: +0,0210; 1: +0,0432; 2: +0,0724 (hiệu ứng thật ≈ 0,058–0,074)
+- Lệch spec / quyết định mới: T-33, T-34; chưa chốt định nghĩa ŝ chung (H-22), giữ slack ô `persistence`
+- Bàn giao: không
+- Còn lại / bước tiếp: nhận B8 (kiểm: nạp được trong tiến trình con, tất định, chỉ đọc cột batch); thêm dòng τ̂(x, s), π_θ̂ bằng `--spec`, chạy lại T5.2 với cặp τ̂(x)–τ̂(x, s); quét lại θ với hàm điểm học được (H-22 ii); đồ thị Qini cho S6
+
+### 2026-10-05 · B8 · hàm điểm τ̂ nền, parquet dự đoán, DR-learner (H5.1, H5.2) · nhận B8
+- Nhánh/PR: `develop` (`ed64f62`, PR #16) kéo về `develop1` (stash thay đổi chưa commit, pull, gộp tay `decisions.md` và `datasets.md`, giữ cả hai phía)
+- Đã làm: cài extra `[analysis]` (`lightgbm` 4.7.0) vào `.venv`; chạy phần "Người nhận kiểm tra". Lần đầu tiến trình bị **abort** khi nạp mô hình LightGBM: `core.autocrlf = true` đổi `analysis/models/dr_*.txt` sang CRLF và LightGBM không đọc được (bản LF nạp bình thường). Sửa bằng `analysis/models/*.txt text eol=lf` trong `.gitattributes` rồi checkout lại 8 file (T-35c; `.gitattributes` là file chung, cần Hoàng duyệt)
+- Test: `pytest -q tests/test_estimate.py tests/test_uplift.py tests/test_tension.py tests/test_theta.py` → 46 passed, 1 deselected (gồm nạp hàm điểm trong tiến trình `spawn`, tất định, chỉ đọc cột batch)
+- Lệch spec / quyết định mới: T-35 (c)
+- Bàn giao: nhận B8. `runs/b8/` (parquet dự đoán) không có trên máy này; các bước S5 của tôi chấm điểm trực tiếp bằng hàm điểm nên không cần
+- Còn lại / bước tiếp: cài `ring1` (H-25), sweep với `ring1` và hàm điểm học được, bảng T5.1 có dòng DR
+
+### 2026-10-05 · T5.1–T5.3 · cài `ring1` (H-25), sweep θ theo ŝ và hàm điểm, T5.1 và T5.2 đủ hàm điểm · xong (chưa commit)
+- Nhánh/PR: `develop1` (`ed64f62` + thay đổi chưa commit); PR S5 `develop1 → develop`, review: Hoàng
+- Đã làm: khóa `policy.threshold.scope: cell | ring1` (`default.yaml`, `config.py`), `ThresholdPolicy` tính ŝ vòng 1, `make_policy` truyền bảng ô kề; `analysis/policy_table.py` thêm 8 dòng mặc định (6 hàm điểm DR, 2 π_θ̂ trên `ring1`); `tests/test_policies.py` (+2), `test_config` (+1), `test_policy_eval` (+1). Chạy 3 sweep θ (`runs/s5/sweep_ring1_heuristic`, `sweep_ring1_dr`, `sweep_cell_dr`; 16 θ × 30 seed), bảng T5.1 (15 chính sách × 30 seed), T5.2 với `completed` và `requested`. Sửa `spec.md` §6, `datasets.md` (mục S5), báo cáo §5.4, §9, §10
+- Test: `pytest -q` → 525 passed, 8 deselected (296 s); `pytest -m slow tests/test_acceptance_core.py` → 4 passed (A1, A5 hai chính sách, CAL; 241 s); `check_dataset` 3 sweep và `policy_table` OK; π_θ θ = 0,5 heuristic của T5.1 trùng điểm θ = 0,5 của B7b (3.894,9)
+- Sweep (θ tốt nhất; bao θ\*; regret θ = 0): ô + heuristic (B7b) 2; [0,3; 2]; 39,5 ± 4,0 · `ring1` + heuristic 3; [1,5; 3]; 55,4 ± 4,7 · ô + DR/USD 0,4; [0,1; 0,6]; 16,6 ± 5,7 · `ring1` + DR/USD 1; [0,2; 1,5]; 27,4 ± 4,1. **H-22 (ii) đúng** trên cả hai ŝ. Regret θ̂ của H5.3 trên `ring1` + DR/USD: (A) 0,25 → 5,1 ± 3,1 (0,13%, CI chứa 0); (B) 5 → 168,2 ± 5,3 (4,19%; tắt 70% (ô, slot), κ = −∞, chi 0,890 × B)
+- T5.1: τ̂(x, s)/USD DR 4.010,3; π_θ̂ (A) `ring1` 4.011,8 (+21,8 ± 4,6 so với cùng điểm ở θ = 0; ngang τ̂(x, s)/USD: +1,4 ± 4,0); τ̂(x)/USD DR 3.989,9 (−12,1 ± 4,4 so với bảng nền H4.2); τ̂(x) DR 3.752,7 dưới `random` 3.807,0
+- T5.2: 28/45 cặp "Qini cao hơn mà N thấp hơn" (cả hai kết cục); lớn nhất τ̂(x) DR so với τ̂(x, s)/USD DR: Qini +1.498,9 [503,9; 2.562,6], N −257,6 ± 5,2. Thứ hạng N trùng thứ hạng "chuyến thêm / 100 USD" đo trên A/B theo rider (Spearman 0,976): cơ chế là trả voucher cho chuyến đằng nào cũng có (q0 nhóm được phát 0,21–0,23 ở điểm Qini cao, 0,07 ở điểm /USD), không phải trạng thái cung; **chưa có ví dụ đảo thứ tự do cung** trong thế giới mặc định
+- Lệch spec / quyết định mới: T-35 (e) với `ring1`, θ > `slack_cap` là `all_off`; (f) `config_hash(default.yaml)` `34f3aa436d16` → `92b7d13adc39`
+- Bàn giao: cho Hoàng (H5.3) regret θ̂ (A), (B) trên `ring1` (`docs/datasets.md`, mục S5)
+- Còn lại / bước tiếp: hai người quyết có đổi mặc định sang `ring1` không; học lại τ̂(x, s) trên slack vòng 1 (T-35b, Hoàng); T5.2 trên kịch bản cầu × 1,5 / thiếu xe để tìm ví dụ do cung; đồ thị Qini cho S6; Tình commit và mở PR S5
 
 ---
 

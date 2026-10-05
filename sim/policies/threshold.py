@@ -11,6 +11,11 @@ nothing. With ``hysteresis_h > 0`` a cell that is off turns on only when
 session is offered when its cell is on and ``score >= kappa``; the budget is
 applied afterwards by the voucher layer (L12). ``kappa = -inf`` is the pilot
 setting of kappa-auto (spec §6). Only ``indicator = slack`` is implemented (Q19).
+
+Scope (decisions H-25, T-35): ``cell`` reads the cell's own slack; ``ring1`` reads
+idle / en-route summed over the cell and its neighbours in the same slot, with the
+rule of decisions H-14 (no idle driver: 0; idle but none en route: inf) and inf
+capped at ``monitor.slack_cap``. A slot not yet published stays NaN (cell on).
 """
 
 from __future__ import annotations
@@ -30,7 +35,7 @@ class ThresholdPolicy:
     name = "threshold"
 
     def __init__(self, cfg: Config, n_cells: int, *, theta: float | None = None, kappa: float | None = None,
-                 score_fn: ScoreFn | None = None) -> None:
+                 score_fn: ScoreFn | None = None, neighbors: np.ndarray | None = None) -> None:
         th = cfg.policy.threshold
         if th.indicator != "slack":
             raise NotImplementedError(f"policy.threshold.indicator={th.indicator!r}: only 'slack' is defined (Q19)")
@@ -48,13 +53,34 @@ class ThresholdPolicy:
         self.slack_cap = float(cfg.monitor.slack_cap)
         self.score_fn = load_score_fn(th.score_fn) if score_fn is None else score_fn
         self._prev_on = np.ones(self.n_cells, dtype=bool)
+        self.scope = th.scope
+        self._ring = None
+        if self.scope == "ring1":
+            if neighbors is None:
+                raise ValueError("policy.threshold.scope = ring1 needs the neighbour table of the grid")
+            nb = np.asarray(neighbors)
+            ring = np.eye(self.n_cells)                     # ring[c, j] = 1 if j is c or a neighbour of c
+            rows, cols = np.nonzero(nb >= 0)
+            ring[rows, nb[rows, cols]] = 1.0
+            self._ring = ring
+
+    def _slack(self, read) -> np.ndarray:
+        """Slack of every cell in one published slot; ``read(field)`` returns that slot's field (NaN if unknown)."""
+        if self._ring is None:
+            return read("slack")
+        idle = self._ring @ read("idle_avg").astype(np.float64)
+        enroute = self._ring @ read("enroute_avg").astype(np.float64)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = np.where(enroute > 0, idle / enroute, np.where(idle > 0, np.inf, 0.0))
+        ratio = np.where(np.isnan(idle) | np.isnan(enroute), np.nan, ratio)
+        return np.minimum(ratio, self.slack_cap)            # NaN stays NaN
 
     def forecast_slack(self, snapshots: SnapshotView) -> np.ndarray:
         """``s_hat`` per cell (float64); NaN where nothing is published yet."""
-        lag_slot = snapshots.lag("slack", 1)
+        lag_slot = self._slack(lambda f: snapshots.lag(f, 1))
         if self.forecast == "persistence":
             return lag_slot
-        lag_day = snapshots.lag_day("slack")
+        lag_day = self._slack(snapshots.lag_day)
         a = np.minimum(lag_slot, self.slack_cap)
         b = np.minimum(lag_day, self.slack_cap)
         w_slot, w_day = self.ar_weights

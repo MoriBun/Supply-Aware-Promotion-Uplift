@@ -432,3 +432,51 @@ def test_experiment_policy_global_switchback_and_rider_ab(default_yaml):
     np.testing.assert_array_equal(dec.offer, experiment.rider_arm(Rng.from_config(ab), ab, batch.rider_id))
     np.testing.assert_array_equal(pol.offer(batch, cd, make_ledger()).offer, dec.offer)   # fixed for the run
     assert (dec.propensity == np.float32(0.5)).all()
+
+
+# --- scope ring1 (decisions H-25, T-35) --------------------------------------------------------
+
+
+def test_threshold_ring1_sums_idle_and_enroute_over_the_cell_and_its_neighbours(default_yaml):
+    from sim.space import build_space
+    cfg = load_config(default_yaml, ["space.grid_radius=1", "policy.threshold.scope=ring1"])
+    nb = build_space(cfg).neighbors                                     # 7 cells on a torus: everyone is a neighbour
+    idle = np.array([0.0, 1.0, 0.0, 2.0, 0.0, 0.5, 0.0])
+    enroute = np.array([1.0, 0.0, 0.0, 1.0, 0.0, 0.5, 0.0])
+    store = SnapshotStore(7, 96)
+    store.publish(0, blank_record(7, 0, idle_avg=idle, enroute_avg=enroute, slack=np.zeros(7)))
+    pol = ThresholdPolicy(cfg, 7, theta=1.0, neighbors=nb)
+    s_hat = pol.forecast_slack(SnapshotView(store, 1))
+    expected = np.array([(idle[c] + idle[nb[c]].sum()) / (enroute[c] + enroute[nb[c]].sum()) for c in range(7)])
+    np.testing.assert_allclose(s_hat, expected)                        # here 3.5 / 2.5 for every cell
+    assert pol.cell_state(1, SnapshotView(store, 1)).promo_on.all()    # 1.4 >= theta = 1
+    # Rule of H-14 on the ring, inf capped at slack_cap: no idle driver -> 0; idle but none en route -> cap.
+    store2 = SnapshotStore(7, 96)
+    store2.publish(0, blank_record(7, 0, idle_avg=np.zeros(7), enroute_avg=np.ones(7)))
+    assert (pol.forecast_slack(SnapshotView(store2, 1)) == 0.0).all()
+    store3 = SnapshotStore(7, 96)
+    store3.publish(0, blank_record(7, 0, idle_avg=np.ones(7), enroute_avg=np.zeros(7)))
+    assert (pol.forecast_slack(SnapshotView(store3, 1)) == pol.slack_cap).all()
+    first = pol.cell_state(0, SnapshotView(SnapshotStore(7, 96), 0))  # nothing published yet: NaN, cell on
+    assert np.isnan(first.s_hat).all() and first.promo_on.all()
+
+
+def test_threshold_ring1_on_a_radius_3_torus_and_scope_cell_is_unchanged(default_yaml):
+    cfg = load_config(default_yaml, ["policy.threshold.scope=ring1"])
+    world = stub_world(cfg)
+    pol = make_policy(cfg, world, theta=0.5)
+    nb = world.space.neighbors
+    gen = np.arange(37, dtype=np.float64)
+    idle, enroute = (gen % 5) * 0.3, (gen % 3) * 0.4
+    store = SnapshotStore(37, 96)
+    store.publish(0, blank_record(37, 0, idle_avg=idle, enroute_avg=enroute))
+    s_hat = pol.forecast_slack(SnapshotView(store, 1))
+    for c in (0, 11, 36):
+        cells = [c, *nb[c]]
+        i, e = idle[cells].sum(), enroute[cells].sum()
+        assert s_hat[c] == pytest.approx(min(i / e, pol.slack_cap) if e > 0 else (pol.slack_cap if i > 0 else 0.0))
+    cell = make_policy(load_config(default_yaml), world, theta=0.5)    # default scope: the cell's own slack
+    assert cell.scope == "cell"
+    np.testing.assert_array_equal(cell.forecast_slack(SnapshotView(store, 1)), blank_record(37, 0)["slack"])
+    with pytest.raises(ValueError):
+        ThresholdPolicy(cfg, 37)                                       # ring1 needs the neighbour table
