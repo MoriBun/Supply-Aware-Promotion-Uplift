@@ -184,3 +184,5 @@ foreach ($d in "legacy_28d","rider_ab_28d","switchback_c1_28d","switchback_c7_28
 
 **Lưu ý:** bảng τ̂ được ước lượng trên lát explore của `legacy_28d`. Các bộ khác cùng session nhưng khác cách gán voucher, nên kết quả kiểm định trên đó không độc lập hoàn toàn với dữ liệu huấn luyện.
 
+**Bổ sung H5.2 (DR-learner, H-24):** 8 hàm điểm `analysis.uplift:tau_x_dr`, `tau_xs_dr`, `tau_x_dr_per_dollar`, `tau_xs_dr_per_dollar` (mẫu explore) và các bản `..._all` (toàn bộ legacy). Mô hình ở `analysis/models/dr_*` (có commit); fit lại bằng `python -m analysis.uplift fit runs/b7a/legacy_28d`. Cần `pip install -e ".[analysis]"` (LightGBM). Kiểm tra: `pytest -q tests/test_uplift.py`.
+

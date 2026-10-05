@@ -231,7 +231,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8). Tiếp theo: H5.2 DR-learner; H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
+**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8), H5.2 xong (DR-learner, H-24). Tiếp theo: H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -522,4 +522,14 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: giao B8; người nhận kiểm tra: `pytest -q tests/test_estimate.py`
 - Còn lại / bước tiếp: H5.2 DR-learner
+
+### 2026-10-05 · H5.2 · DR-learner τ̂(x), τ̂(x, s) trên `completed` · xong
+- Nhánh/PR: `develop2` (PR cuối S5)
+- Đã làm: `analysis/uplift.py` (DR-learner Kennedy 2023, cross-fit 5 fold theo rider, LightGBM; mẫu `dr_explore` và `dr_all`; 8 hàm điểm `analysis.uplift:tau_{x,xs}_dr[_all][_per_dollar]`; CLI `python -m analysis.uplift fit runs/b7a/legacy_28d`); mô hình trong `analysis/models/dr_*` (có commit); `tests/test_uplift.py` (+17); `lightgbm>=4.0` vào extras `[analysis]`; quyết định H-24
+- Test: `pytest -q` → 497 passed, 1 skipped (py3.12 `.venv`)
+- Hiệu ứng trung bình (ATE) lên `completed`: `dr_explore` 0,0697 ± 0,0037 (naive 0,0695); `dr_all` 0,1010 ± 0,0009 (naive 0,1019): DR không gỡ được nhiễu do `u_latent` (số liệu cho H5.3)
+- N dưới cùng B, θ = 0, 10 seed, hiệu ghép cặp so với `random` (3.795,8; κ auto một pilot, trước H-21): `tau_x_dr_all_per_dollar` +181,5 ± 9,9; `tau_per_dollar_baseline` +174,3 ± 7,8; `tau_xs_dr_all_per_dollar` +172,2 ± 11,1; `tau_x_dr_per_dollar` +115,7 ± 7,4; `tau_xs_dr_per_dollar` +113,5 ± 8,8; `heuristic_low_freq` +48,8 ± 8,4; mọi điểm τ̂ theo chuyến đều âm (−26,7 … −52,6) dù Qini cao nhất (`dr_all tau_xs` +1.600,6 trên `rider_ab`). Thêm s vào hàm điểm không làm N tăng
+- Lệch spec / quyết định mới: H-24
+- Bàn giao: không (bổ sung cho B8: thêm hàm điểm DR cho T5.1)
+- Còn lại / bước tiếp: H5.3 (chờ B7b chạy lại theo H-21; đo `ar` và chọn ŝ theo H-22)
 
