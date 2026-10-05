@@ -214,6 +214,16 @@ Quy ước:
 
 Câu hỏi mới ghi vào đây theo mẫu: tiêu đề, bối cảnh, đề xuất, mốc bị chặn.
 
+### Q29. Dùng notebook cho báo cáo và hình ở S6 (không chặn mốc nào)
+- Bối cảnh: S6 cần hình và bảng cho báo cáo và slides. Hiện chỉ có `analysis/plots.py` (T-30) ghi PNG từ dòng lệnh; repo chưa có notebook. Notebook trình bày lời giải thích, bảng số và hình cạnh nhau, hợp với phần ước lượng và thống kê; rủi ro là phép tính bị chép vào notebook, lệch với `analysis/` và không có test. Cần thêm thư viện (`ipykernel`) nên phải hai người đồng ý (`CLAUDE.md`, phần Stack).
+- **Đề xuất (Hoàng, 05/10):**
+  1. Thư mục `notebooks/` ở gốc repo, mỗi chương báo cáo một notebook, chủ sở hữu như file code (chỉ chủ sửa; người kia góp ý qua PR): `01_simulator_kiem_dinh` (Tình: throughput, A1–A5, CAL), `02_danh_gia_chinh_sach` (Tình: N/V dưới B, Qini so với N), `03_interference` (Tình: chệch theo thiết kế, độ nhạy `u_latent`), `04_uoc_luong_va_theta` (Hoàng: DR-learner, chọn ŝ, tác hại theo giờ, θ̂ so với θ\*, regret), `05_confounding` (Hoàng: so thô, DR, lát explore).
+  2. Notebook **chỉ gọi** hàm trong `analysis/` (và `sim/` khi cần đọc config), không chứa phép tính riêng; phép tính mới viết vào `analysis/*.py` kèm test rồi mới gọi. Markdown tiếng Việt, comment code tiếng Anh.
+  3. Commit **kèm output** để xem được trên GitHub không cần chạy; trước khi commit chạy "Restart & Run All". Hình dùng cho slides và báo cáo ghi thêm ra `docs/figures/*.png` qua hàm trong `analysis/plots.py`, để hai nơi dùng chung một hình.
+  4. `runs/` vẫn không commit. Ô đầu của mỗi notebook liệt kê thư mục dữ liệu cần và lệnh sinh lại trong `docs/datasets.md`; notebook báo rõ thư mục nào thiếu thay vì lỗi giữa chừng.
+  5. Thêm `ipykernel` vào extras `[analysis]` của `pyproject.toml` (file chung, PR có cả hai duyệt); đủ để chạy notebook trong VS Code. Không thêm `nbstripout`, `nbmake` hay thư viện khác.
+- Mốc bị chặn: không (S6 vẫn làm được bằng `analysis/plots.py` nếu không chốt).
+
 ### Q19. Hướng cắt ô khi `policy.threshold.indicator` là `utilization` hoặc `eta`
 - Bối cảnh: spec §6 chỉ định nghĩa quy tắc cho slack (`promo_on = not (ŝ < θ)`: cắt khi slack *thấp*). Với utilization và eta, "căng" là giá trị *cao* nên hướng so sánh phải đảo và `sweep.theta_grid` (0–2) không còn ý nghĩa.
 - Hiện tại: `ThresholdPolicy` báo `NotImplementedError` cho hai chỉ số này (T-23a). D4 đã chốt slack là mặc định (T-17); hai chỉ số kia chỉ dành cho phân tích độ nhạy.
