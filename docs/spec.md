@@ -46,7 +46,7 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
 | D9 | CRN: mọi phép ngẫu nhiên lấy từ luồng được khóa theo định danh ổn định (session, order, driver, cell-slot) | Accepted | [report M13] |
 | D10 | Thí nghiệm (switchback, A/B) và lượt GTE không áp ngân sách | Accepted | [report M3, M13] |
 | D11 | Cụm cho switchback: cụm "7 ô" xây theo quy tắc hoa lục giác; trên torus 37 ô cụm có kích thước 3–7 | Accepted | Không chia đều được vì 37 là số nguyên tố |
-| D12 | κ (ngưỡng điểm tầng rider) hiệu chỉnh bằng 1 lượt pilot để chi tiêu kỳ vọng ≈ B; kèm dừng cứng khi chạm B | Accepted | [report M3] |
+| D12 | κ (ngưỡng điểm tầng rider) hiệu chỉnh bằng pilot lặp đến điểm bất động để chi tiêu của pilot ≤ B, chung seed pilot cho mọi θ; kèm dừng cứng khi chạm B | Accepted | [report M3]; H-21 |
 
 ---
 
@@ -421,7 +421,8 @@ Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này 
   1. Chạy pilot với κ = -∞, **không áp ngân sách** nhưng vẫn cắt ô theo θ.
   2. Ghi `(score, voucher_spent_session)` cho mọi session được offer.
   3. Sắp giảm theo score; κ là score nhỏ nhất sao cho tổng chi tiêu ≤ B.
-  4. Pilot dùng seed `pilot_seed_offset + θ_index`. Ghi κ vào `run_metadata`.
+  4. Lặp (H-21): chạy lại pilot tại κ vừa tìm, không áp ngân sách; nếu chi tiêu > B thì làm lại bước 2–3 trên các session được offer của lượt này (κ chỉ tăng). Dừng khi chi tiêu ≤ B hoặc hết số lần lặp tối đa (khóa YAML).
+  5. Mọi θ dùng chung seed pilot `pilot_seed_offset`. Ghi κ và số lần lặp vào `run_metadata`.
 
 **ExperimentPolicy:** đọc assignment từ M10. **FixedPolicy:** `all_on` hoặc `all_off`, không áp ngân sách khi dùng cho GTE.
 

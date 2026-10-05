@@ -231,7 +231,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S4 xong (H4.1, H4.2, H4.3; đã nhận B7a, B7b); đã gộp `develop` (`fb354b1`) vào `develop2`; PR `develop2 → develop` chờ Tình review. Gate P6: đồng ý về số liệu, chờ mentor xác nhận T-31. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner, H5.3.
+**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner; H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -505,3 +505,11 @@ Mẫu:
 - Lệch spec / quyết định mới: không
 - Bàn giao: không
 - Còn lại / bước tiếp: không
+
+### 2026-10-05 · Q24, Q26–Q28 · chốt theo đề xuất của Tình · xong
+- Nhánh/PR: `develop2` (đã kéo `develop` ở `a5ccc50`)
+- Đã làm: Hoàng đồng ý toàn bộ đề xuất của Tình nên đóng Q26 (gộp Q24), Q27, Q28 thành H-21, H-22, H-23 trong `decisions.md`; sửa spec D12 và §6 (κ auto lặp đến điểm bất động, chung seed pilot); thêm ghi chú H-23 vào `tests.md` §4
+- Test: không đổi code
+- Lệch spec / quyết định mới: H-21 (lệch spec §6, D12 cũ; đã sửa spec), H-22, H-23
+- Bàn giao: không. Việc kéo theo cho Tình: cài H-21 trong `sim/runner.py` (khóa YAML số lần lặp), chạy lại sweep B7b
+- Còn lại / bước tiếp: H5.1 giao B8; chốt định nghĩa ŝ với Tình theo H-22 trước H5.3

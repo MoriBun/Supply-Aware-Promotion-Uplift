@@ -134,4 +134,6 @@ Chạy all_off, 5 seed, `default.yaml` (`tests/test_acceptance_core.py`, đánh 
 | Tỷ lệ (ô, slot) căng | share slack < 0,35 (all_off; slack của chính (ô, slot), I = 0 thì slack = 0, H-14) | 10–35% |
 | Tỷ lệ (ô, slot) dư | share slack > 1 (all_off) | 30–80% |
 
+Hai dải tỷ lệ (ô, slot) căng và dư là **thiết kế kịch bản** ("có vùng căng thật"), không phải số đo từ dữ liệu thực tế; số tuyệt đối theo USD và số xe là quy ước (H-23). Không dùng N(π_θ), θ\*, GTE làm mục tiêu hiệu chỉnh.
+
 Núm chỉnh theo thứ tự: `alpha0` (cho P(đặt)), `beta_price_per_usd` và `delta0` (cho uplift), `per_min_usd` (cho giá), `fleet_size` và `demand_scale` (cho phân bố slack). Ghi giá trị cuối vào `default.yaml` và lý do vào `docs/decisions.md`.
