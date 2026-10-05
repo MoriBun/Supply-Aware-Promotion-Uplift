@@ -140,10 +140,19 @@ Chung: chốt định nghĩa ŝ và chỉ số căng cung dùng cho cả θ̂ v�
 
 Code phân tích đặt trong `analysis/`, không trong `sim/`. Không bao giờ nối (join) dữ liệu `hidden/` vào dữ liệu huấn luyện. Thư viện: extras `[analysis]` gồm scikit-learn, lightgbm, scikit-uplift, matplotlib; DR-learner tự viết, không dùng causalml (T-13).
 
-### Sprint 6: Báo cáo và seminar (ngày 14–15)
-- Tình: simulator và kiểm định (A1–A5, CAL, dữ liệu), đánh giá chính sách, Qini vs N(π), interference.
-- Hoàng: ước lượng, θ̂ vs θ\*, confounding.
-- Cả hai: bảng ba nguồn sai số, slides 30 phút, review chéo, dọn code.
+### Sprint 6: Notebook kết quả (ngày 14–15)
+
+Cách làm (H-27): mỗi chương kết quả có một notebook trong `notebooks/`, chủ sở hữu như file code. Notebook **chỉ gọi** hàm trong `analysis/`; phép tính mới viết vào `analysis/*.py` kèm test. Commit kèm output, chạy "Restart & Run All" trước khi commit. Hình ghi ra `docs/figures/` (tiền tố `01_`…`05_` theo notebook). Ô đầu mỗi notebook liệt kê thư mục `runs/` cần và lệnh sinh lại trong `docs/datasets.md`.
+
+| 1. Tình: simulator, đánh giá chính sách, interference | 2. Hoàng: ước lượng, θ̂ so với θ\*, confounding |
+|---|---|
+| T6.1 `01_simulator_kiem_dinh.ipynb`: mô hình thị trường (cung, cầu, ghép xe, hủy); đường throughput và WGC (P2); A1–A5; CAL; mô tả các bộ dữ liệu B7a, B7b | H6.1 Đầu S6: nền cho cả 5 notebook (H-27 f): `ipykernel` trong `[analysis]`; gói `analysis` import được từ `notebooks/`; `analysis/notebook.py` (`setup`, `require_runs`); `save_figure` trong `analysis/plots.py` (PR nhỏ, Tình duyệt); `notebooks/README.md` (quy ước, ô đầu mẫu) |
+| T6.2 `02_danh_gia_chinh_sach.ipynb`: bảng N(π), V(π) dưới cùng B (T5.1); bậc thang θ\* (H-22 i); đường N theo θ của B7b và ba sweep S5; ví dụ Qini cao hơn mà N thấp hơn (T5.2) | H6.2 `04_uoc_luong_va_theta.ipynb`: DR-learner (ATE, τ̂ theo nhóm rider, N dưới B của các hàm điểm, H-24); chọn ŝ (7 ứng viên, H-25); tác hại theo giờ (bật/tắt toàn bộ, switchback toàn hệ so với theo cụm); θ̂ (A), (B) và đường lợi ích; regret trên 3 sweep `ring1`; chính sách khuyến nghị (H-26) |
+| T6.3 `03_interference.ipynb`: GTE so với `rider_ab`, switchback cụm 1/7/toàn hệ (T5.3); độ nhạy theo `u_latent` | H6.3 `05_confounding.ipynb`: so thô, DR toàn bộ legacy, lát explore; vì sao DR không gỡ được nhiễu do `u_latent` (dẫn số độ nhạy của T6.3) |
+
+Sở hữu: notebook 01–03 và hình `docs/figures/01_`…`03_` của Tình; 04–05 và `docs/figures/04_`, `05_` của Hoàng.
+
+Chưa làm ở S6 (để sau, quyết định ngày 05/10): chương báo cáo, slides 30 phút, bảng ba nguồn sai số, review chéo, dọn code, gộp `develop → main`.
 
 ### Nếu còn thời gian: P7 NYC (làm sau P8, T-14)
 - Tình: 5 file theo spec §10 + script kiểm tra hợp đồng.

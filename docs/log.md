@@ -278,7 +278,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S5 của Hoàng xong: H5.1 (giao B8), H5.2 (DR-learner, H-24), H5.3 (ŝ = `ring1`, θ̂ (A) = 0,25 regret 0,13%, H-25, H-26); đã kéo `develop` (`1c3d5a8`, PR #17) về `develop2`, nhận B7b bản H-21. Chờ mở PR S5 `develop2` → `develop`. Gate P6 chờ mentor xác nhận T-31.
+**Đang làm:** S5 xong (H5.1–H5.3, PR #18 đã gộp). S6: H-27 (notebook) đã chốt, task S6 đã viết trong `phan_cong.md`; H6.1 xong (nền notebook); bước tiếp H6.2 notebook `04_uoc_luong_va_theta`. Gate P6 chờ mentor xác nhận T-31.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -608,3 +608,19 @@ Mẫu:
 - Lệch spec / quyết định mới: H-26 (π_θ̂ khuyến nghị = `ring1` + `tau_x_dr_all_per_dollar` + θ = 0,25; mặc định `scope` giữ `cell`; không học lại τ̂(x, s) trên `ring1`)
 - Bàn giao: không
 - Còn lại / bước tiếp: S5 của Hoàng xong; PR `develop2` → `develop`. Mở: kiểm giả thuyết ŝ khi voucher bật thấp hơn ŝ trên `all_off` (lý do (B) vượt), để sau nếu còn thời gian
+
+### 2026-10-05 · S6 · chốt Q29 (notebook, H-27) và viết task Sprint 6 · xong
+- Nhánh/PR: `develop2` → `develop`, review: Tình (Tình đã đồng ý Q29 qua tin nhắn)
+- Đã làm: Q29 chuyển sang "Câu hỏi đã chốt", thêm H-27; `docs/phan_cong.md` mục Sprint 6: T6.1–T6.3, H6.1–H6.3 (5 notebook trong `notebooks/`); chương báo cáo, slides, bảng ba nguồn sai số, review chéo, dọn code để sau; `pyproject.toml` thêm `ipykernel>=6` vào `[analysis]` (cài `ipykernel` 7.4.0 vào `.venv`)
+- Test: không đổi code; không chạy test
+- Lệch spec / quyết định mới: H-27
+- Bàn giao: không
+- Còn lại / bước tiếp: H6.1 (hàm lưu hình `docs/figures/` trong `analysis/plots.py`, PR nhỏ Tình duyệt), rồi H6.2 notebook `04_uoc_luong_va_theta`; Tình chạy `pip install -e ".[analysis]"` để có `ipykernel`
+
+### 2026-10-05 · H6.1 · nền cho notebook S6 · xong
+- Nhánh/PR: `develop2` → `develop` (cùng PR với task S6), review: Tình (`analysis/plots.py`, `pyproject.toml` là file của Tình / file chung)
+- Đã làm: `analysis/notebook.py` (`setup`: về gốc repo, kiểu hình, bảng pandas rộng; `require_runs`: báo mọi dữ liệu thiếu kèm chỉ dẫn `docs/datasets.md`); `analysis/plots.py`: `pyplot()`, `save_figure()` ghi `docs/figures/<số notebook>_<tên>.png`, không ép backend `Agg` khi chạy trong kernel; `pyproject.toml`: gói `analysis` vào `include` (notebook trong `notebooks/` import được); `notebooks/README.md` (bảng 5 notebook, quy ước, ô đầu mẫu); `tests/test_notebook.py` (+5)
+- Test: `pytest -q` → 531 passed, 8 deselected (57 s, py3.12 `.venv`); thử trong kernel Jupyter thật mở từ `notebooks/`: thư mục làm việc về gốc repo, backend `module://matplotlib_inline.backend_inline`, hình hiện dưới ô (`image/png`), `require_runs("runs/b7a")` OK
+- Lệch spec / quyết định mới: H-27 (f)
+- Bàn giao: không (Tình dùng chung cho notebook 01–03 sau khi gộp; cần `pip install -e ".[analysis]"` lại vì `pyproject.toml` đổi)
+- Còn lại / bước tiếp: H6.2 notebook `04_uoc_luong_va_theta`
