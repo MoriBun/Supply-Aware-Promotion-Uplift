@@ -134,12 +134,16 @@ policy:
   # --- π_θ: chính sách hai tầng [report] ---
   threshold:
     indicator: slack              # slack | utilization | eta   [pending: slack]
+    scope: cell                   # phạm vi đo ŝ: cell = slack của ô; ring1 = (Σ xe rảnh) / (Σ xe đi đón) của ô
+                                  # và 6 ô kề, +∞ cắt ở monitor.slack_cap [decisions H-25, T-35]
     theta: 0.35                   # chỉ dùng khi chạy 1 θ; quét θ dùng sweep.theta_grid
     forecast: persistence         # persistence | ar  (ar: dùng lag slot + lag ngày)
     ar_weights: [0.7, 0.3]        # [w_slot, w_day] khi forecast = ar [assume]
     hysteresis_h: 0.0             # 0 = tắt; bật lại khi ŝ > θ + h [report]
     score_fn: heuristic_low_freq  # random | heuristic_low_freq | "module.path:function"
     kappa: auto                   # auto = hiệu chỉnh bằng pilot để chi tiêu kỳ vọng ≈ B
+    kappa_max_iter: 10            # κ auto: số lượt pilot chạy lại tối đa sau lượt κ = −∞ (lặp đến khi
+                                  # chi của pilot ≤ B); 0 = một lượt pilot như trước H-21 [decisions H-21, T-32] [assume]
 
 # ---------------------------------------------------------------------
 # M5 Matching

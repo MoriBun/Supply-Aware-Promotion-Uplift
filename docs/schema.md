@@ -46,6 +46,7 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | world_seed | int64 | |
 | budget_B_usd | float64 | NaN nếu không áp ngân sách |
 | kappa | float64 | NaN nếu không áp dụng |
+| kappa_pilots | int32 | số lượt pilot κ auto đã chạy để ra `kappa`, gồm lượt κ = −∞ (H-21); 0 nếu không dùng κ auto. Thêm ngày 05/10: bộ dữ liệu sinh trước đó không có cột này |
 | window_start_s, window_end_s | float64 | cửa sổ đánh giá |
 | sim_end_s | float64 | thời điểm dừng (gồm cool-down) |
 | n_truncated_orders | int32 | order bị cắt khi hết cool-down |

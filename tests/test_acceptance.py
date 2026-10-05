@@ -259,19 +259,34 @@ def threshold_jobs(cfg, theta: float, seeds, *, hysteresis_h: float | None = Non
         th = dataclasses.replace(th, policy=dataclasses.replace(
             th.policy, threshold=dataclasses.replace(th.policy.threshold, hysteresis_h=float(hysteresis_h))))
     budget = budget_for(th)
-    kappa = resolve_kappa(th, theta, 0, budget)
+    kappa = resolve_kappa(th, theta, budget)
     return budget, kappa, [Job(cfg=th, seed=s, theta=theta, kappa=kappa, budget_usd=budget, enforce_budget=True)
                            for s in seeds]
 
 
 def kappa_auto_spend(cfg, n_seeds: int = 3) -> dict:
-    """Spend of the default threshold policy with kappa-auto, relative to B per period."""
+    """Spend of the default threshold policy with kappa-auto, relative to B per period.
+
+    ``ratio``: spend under B with the hard stop. Decisions H-21 (d) adds two numbers: ``ratio_unblocked``,
+    the same seeds and kappa without the hard stop, and ``share_blocked``, the share of the vouchers the
+    policy meant to give (in the window) that the hard stop blocked.
+    """
     budget, kappa, jobs = threshold_jobs(cfg, float(cfg.policy.threshold.theta), seeds_for(cfg, n_seeds))
-    results = run_jobs(jobs)
-    n_periods = Clock.from_config(cfg).n_periods
-    return {"budget": budget, "kappa": kappa, "spent": [r.voucher_spent_usd for r in results],
-            "ratio": [r.voucher_spent_usd / (budget * n_periods) for r in results],
-            "N": [r.N_completed for r in results]}
+    capped = [dataclasses.replace(j, log_level="full") for j in jobs]
+    free = [dataclasses.replace(j, enforce_budget=False) for j in jobs]
+    results = run_jobs(capped + free)
+    capped_res, free_res = results[:n_seeds], results[n_seeds:]
+    total = budget * Clock.from_config(cfg).n_periods
+    share_blocked = []
+    for r in capped_res:
+        in_window = r.sessions.col("in_window")
+        blocked = int((in_window & r.sessions.col("budget_blocked")).sum())
+        offered = int((in_window & (r.sessions.col("arm") == 1)).sum())
+        share_blocked.append(blocked / (blocked + offered) if blocked + offered else 0.0)
+    return {"budget": budget, "kappa": kappa, "spent": [r.voucher_spent_usd for r in capped_res],
+            "ratio": [r.voucher_spent_usd / total for r in capped_res],
+            "ratio_unblocked": [r.voucher_spent_usd / total for r in free_res],
+            "share_blocked": share_blocked, "N": [r.N_completed for r in capped_res]}
 
 
 def a2b_variances(cfg, n_seeds: int = 20, theta: float = 0.3) -> dict:
@@ -304,9 +319,13 @@ def a3_switches(cfg, hysteresis_h: float, n_seeds: int = 5, theta: float = 0.35)
 @pytest.mark.slow
 def test_kappa_auto_spend_is_between_85_and_100_percent_of_budget():
     # docs/tests.md "Chính sách": with kappa-auto the evaluation run spends within [0.85 B, 1.0 B].
+    # H-21 (d): the spend without the hard stop and the share of vouchers blocked are reported (printed and
+    # in docs/log.md); tests.md sets no pass range for them.
     m = kappa_auto_spend(load_config(DEFAULT))
+    print("kappa-auto:", m)
     assert np.isfinite(m["kappa"]) and m["budget"] > 0
     assert all(0.85 <= r <= 1.0 + 1e-9 for r in m["ratio"]), m
+    assert all(np.isfinite(r) and r > 0 for r in m["ratio_unblocked"]) and all(0 <= b < 1 for b in m["share_blocked"])
 
 
 @pytest.mark.slow

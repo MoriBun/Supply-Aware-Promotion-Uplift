@@ -80,88 +80,86 @@ Mỗi bộ `generate` chạy 4–5 phút trên một lõi (đo: 240–272 giây)
 
 ---
 
-## B7b (T4.3, sinh ngày 02/10/2026): sweep θ tham chiếu
+## B7b (bản H-21, sinh ngày 05/10/2026): sweep θ tham chiếu với κ auto điểm bất động
 
-Theo quyết định T-31 (chốt Q23; quyết định của Tình, **mentor chưa xác nhận**): giữ B = 5.545,80 USD/kỳ nên các bộ B7a ở trên **không phải sinh lại**; sweep tham chiếu dùng lưới θ kéo dài và 30 seed.
+Bản này thay bản ngày 02/10 (`runs/b7b`, κ từ một lượt pilot, seed pilot riêng cho từng θ). Theo H-21 và T-32: κ auto lặp pilot đến khi chi của pilot ≤ B, mọi θ dùng chung seed pilot 9000, κ giữ trọn nhóm điểm bằng nhau. B không đổi (5.545,80 USD/kỳ) nên **B7a không phải sinh lại**. T-31 (θ\* là tập, chấm θ̂ bằng regret) giữ nguyên; mentor chưa xác nhận T-31.
 
-### Sweep tham chiếu (`runs/b7b/sweep_theta_ref`)
+### Sweep tham chiếu (`runs/b7b_h21/sweep_theta_ref`)
 
 - Chính sách `threshold`, hàm điểm `heuristic_low_freq`, dự báo `persistence`, không hysteresis.
-- 16 mốc θ (lớp phủ `config/sweep_reference.yaml`) × 30 seed (0–29) × 1 ngày = 480 lượt; cùng B; κ auto riêng cho từng θ (pilot seed 9000 + chỉ số θ).
-- `config_hash` của lượt: `c27ac66f7c2c` (= `default.yaml` + lớp phủ + `sweep.n_seeds=30`); hash gốc `default.yaml` vẫn `cb27f5348011`; commit `c62800e`.
-- 120 lượt chung với sweep 12 θ × 10 seed chạy trước đó (`runs/p6/sweep_theta`) cho N và V giống hệt.
+- 16 mốc θ (lớp phủ `config/sweep_reference.yaml`) × 30 seed (0–29) × 1 ngày = 480 lượt; cùng B; κ auto mỗi θ lặp 1–6 lượt pilot (cột `kappa_pilots` của `meta/run_metadata`), không θ nào chạm trần `kappa_max_iter = 10`.
+- `config_hash` của lượt: `19f46649271e`; `config_hash(default.yaml)` = `34f3aa436d16` (đổi từ `cb27f5348011` vì thêm khóa `policy.threshold.kappa_max_iter`, T-32); code `8467f83` + thay đổi H-21 (chưa commit lúc sinh).
+- Cột cuối so với bản 02/10, ghép cặp theo seed (cùng seed đánh giá nên chỉ khác ở κ).
 
-| θ | N trung bình | SE | V (USD) | Chi voucher (USD) | % (ô, slot) tắt | κ | Kém θ tốt nhất (± SE ghép cặp) | Thuộc tập θ\* |
-|---|---|---|---|---|---|---|---|---|
-| 0 | 3.848,4 | 10,9 | 12.335,3 | 5.545,3 | 0 | −2,35 | 53,3 ± 4,8 | không |
-| 0,1 | 3.877,4 | 10,4 | 12.455,1 | 5.545,3 | 25 | −2,58 | 24,2 ± 4,5 | không |
-| 0,2 | 3.882,2 | 11,3 | 12.465,2 | 5.545,2 | 27 | −2,59 | 19,5 ± 5,5 | không |
-| 0,3 | 3.884,7 | 10,7 | 12.503,1 | 5.545,1 | 30 | −2,71 | 17,0 ± 4,5 | không |
-| 0,4 | 3.889,8 | 10,5 | 12.498,2 | 5.545,2 | 31 | −2,71 | 11,9 ± 4,2 | **có** |
-| 0,5 | 3.891,8 | 10,2 | 12.508,5 | 5.545,2 | 33 | −2,77 | 9,9 ± 3,9 | **có** |
-| 0,6 | 3.893,0 | 10,2 | 12.518,5 | 5.545,2 | 35 | −2,82 | 8,6 ± 4,6 | **có** |
-| 0,8 | 3.893,5 | 11,0 | 12.517,5 | 5.545,3 | 38 | −2,95 | 8,2 ± 3,8 | **có** |
-| 1,0 | 3.894,3 | 10,2 | 12.536,5 | 5.545,3 | 39 | −3,00 | 7,3 ± 3,4 | **có** |
-| 1,25 | 3.887,9 | 9,5 | 12.492,3 | 5.545,4 | 43 | −3,21 | 13,8 ± 2,9 | không (xem Q24) |
-| **1,5** | **3.901,7** | 10,3 | 12.535,9 | 5.533,8 | 45 | −3,10 | 0 (tốt nhất) | **có** |
-| 2,0 | 3.897,4 | 9,9 | 12.528,1 | 5.545,2 | 47 | −3,40 | 4,2 ± 3,6 | **có** |
-| 3,0 | 3.889,5 | 10,7 | 12.471,2 | 5.544,7 | 53 | −3,79 | 12,1 ± 4,0 | không |
-| 5,0 | 3.883,2 | 10,8 | 12.450,5 | 5.543,4 | 61 | −4,93 | 18,4 ± 4,4 | không |
-| 10 | 3.837,2 | 10,0 | 12.539,1 | 5.233,8 | 69 | −∞ | 64,4 ± 4,8 | không |
-| 30 | 3.693,0 | 9,8 | 13.579,8 | 3.436,3 | 75 | −∞ | 208,6 ± 4,3 | không |
+| θ | N trung bình | SE | V (USD) | Chi voucher (USD) | % (ô, slot) tắt | κ (cũ → mới) | lượt pilot | Kém θ tốt nhất (± SE ghép cặp) | Thuộc tập θ\* | N mới − cũ (± SE) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 0 | 3.860,3 | 11,0 | 12.378,0 | 5.523,3 | 0 | −2,349 → −2,236 | 4 | 39,5 ± 4,0 | không | 11,9 ± 3,2 |
+| 0,1 | 3.884,3 | 11,3 | 12.477,5 | 5.520,7 | 25 | −2,584 → −2,425 | 3 | 15,4 ± 4,3 | không | 6,9 ± 3,5 |
+| 0,2 | 3.887,0 | 10,8 | 12.479,8 | 5.523,4 | 27 | −2,589 → −2,469 | 3 | 12,7 ± 3,4 | không | 4,8 ± 3,5 |
+| 0,3 | 3.893,2 | 11,0 | 12.522,7 | 5.514,6 | 30 | −2,708 → −2,512 | 6 | 6,5 ± 3,7 | **có** | 8,5 ± 4,4 |
+| 0,4 | 3.890,8 | 11,3 | 12.531,5 | 5.495,4 | 31 | −2,708 → −2,563 | 3 | 9,0 ± 4,0 | **có** | 1,0 ± 4,4 |
+| 0,5 | 3.894,9 | 10,3 | 12.580,8 | 5.462,6 | 33 | −2,767 → −2,574 | 3 | 4,9 ± 2,7 | **có** | 3,1 ± 4,0 |
+| 0,6 | 3.892,2 | 11,0 | 12.573,4 | 5.447,7 | 35 | −2,821 → −2,622 | 5 | 7,5 ± 3,3 | **có** | −0,8 ± 3,6 |
+| 0,8 | 3.889,3 | 10,4 | 12.607,6 | 5.390,9 | 37 | −2,951 → −2,687 | 5 | 10,4 ± 3,9 | **có** | −4,2 ± 3,6 |
+| 1 | 3.889,9 | 11,5 | 12.581,8 | 5.414,6 | 39 | −2,995 → −2,741 | 3 | 9,9 ± 3,1 | không | −4,5 ± 4,0 |
+| 1,25 | 3.890,4 | 11,6 | 12.583,3 | 5.421,9 | 42 | −3,206 → −2,894 | 5 | 9,4 ± 3,3 | **có** | 2,5 ± 4,5 |
+| 1,5 | 3.891,8 | 11,6 | 12.579,3 | 5.431,2 | 45 | −3,101 → −2,986 | 4 | 7,9 ± 3,6 | **có** | −9,8 ± 3,7 |
+| **2** | **3.899,7** | 10,6 | 12.562,3 | 5.484,6 | 47 | −3,404 → −3,172 | 4 | 0 (tốt nhất) | **có** | 2,3 ± 3,3 |
+| 3 | 3.882,3 | 10,4 | 12.674,7 | 5.275,2 | 53 | −3,790 → −3,443 | 5 | 17,5 ± 3,9 | không | −7,3 ± 3,7 |
+| 5 | 3.876,9 | 10,8 | 12.516,8 | 5.424,9 | 61 | −4,931 → −4,485 | 3 | 22,9 ± 3,9 | không | −6,4 ± 4,5 |
+| 10 | 3.837,2 | 10,0 | 12.539,1 | 5.233,8 | 69 | −∞ → −∞ | 1 | 62,5 ± 4,6 | không | 0,0 ± 0,0 |
+| 30 | 3.693,0 | 9,8 | 13.579,8 | 3.436,3 | 75 | −∞ → −∞ | 1 | 206,7 ± 3,8 | không | 0,0 ± 0,0 |
 
 **Đọc bảng:**
-- Đường N(π_θ) có ba đoạn: tăng (θ từ 0 đến 0,4), phẳng (0,4 đến 2), giảm (từ 3 trở đi, rõ từ 10 khi không tiêu hết B). Cực đại nằm bên trong lưới.
-- **Khoảng θ\* = [0,4; 2]**: tập các θ không kém θ tốt nhất ở mức 95% đồng thời (so sánh bội với cái tốt nhất, hiệu ghép cặp theo seed, Bonferroni trên 15 phép so, phân vị t với 29 bậc tự do, hệ số 2,922). Mốc 1,25 nằm trong khoảng nhưng bị loại do nhiễu của κ auto (câu hỏi mở Q24).
-- Regret theo N khi dùng θ khác (hiệu ghép cặp, CI 95%): θ = 0 (không cắt ô): +53,3 ± 4,8 (1,37%); θ mặc định 0,35: +14,4 ± 4,1 (0,37%); θ = 0,5: +9,9 ± 3,9 (0,25%); θ = 10: +64,4 ± 4,8 (1,65%); θ = 30: +208,6 ± 4,3 (5,35%).
-- Mốc so sánh (`runs/b7a/gte`, seed 0–9): `all_off` 3.439,6; `all_on` không ngân sách 4.652,5. `all_on` có ngân sách B (20 seed, A2(b)): 3.700,4.
+- κ mới chặt hơn ở mọi θ có κ hữu hạn; chi tiêu còn 94–99,6% B thay vì luôn chạm 100% (ngân sách không còn cạn trước cuối ngày, Q26). N ở θ = 0 tăng 11,9 ± 3,2; ở đoạn phẳng thay đổi trong khoảng ±10, cùng cỡ nhiễu κ của Q24.
+- Đường vẫn có ba đoạn tăng, phẳng, giảm. **Khoảng θ\* = [0,3; 2]**, θ tốt nhất 2 (bản cũ: [0,4; 2], tốt nhất 1,5). Mốc 1 bị loại khỏi tập (kém 9,9 ± 3,1): dùng chung seed pilot chưa xóa hết nhiễu riêng theo θ của κ.
+- Regret theo N (± SE ghép cặp): θ = 0: 39,5 ± 4,0 (1,01%; bản cũ 53,3); θ mặc định 0,35 (nội suy): 7,8 ± 3,3 (0,20%); θ = 0,5: 4,9 ± 2,7; θ = 10: 62,5 ± 4,6; θ = 30: 206,7 ± 3,8 (5,30%). Lợi ích của tầng ô nhỏ hơn bản cũ: một phần lợi ích cũ đến từ việc κ cũ làm ngân sách cạn sớm ở θ nhỏ.
+- Mốc so sánh (`runs/b7a/gte`, seed 0–9): `all_off` 3.439,6; `all_on` không ngân sách 4.652,5. `all_on` có B (30 seed, `runs/s5/policy_table`): 3.686,7.
 
-File: `results/policy_results.parquet` (480 lượt), `results/theta_sweep.parquet`, `meta/run_metadata.parquet` (κ, B của từng lượt), `results/theta_sweep.png`.
+File: `results/policy_results.parquet` (480 lượt), `results/theta_sweep.parquet`, `meta/run_metadata.parquet` (κ, số lượt pilot, B của từng lượt).
 
-### Phân tích độ nhạy (`runs/b7b/sens_*`, 16 θ × 10 seed mỗi bộ)
+### Phân tích độ nhạy (`runs/b7b_h21/sens_*`, 16 θ × 10 seed mỗi bộ)
 
-| Thư mục | Override | B (USD/kỳ) | N tại θ = 0 | N lớn nhất (θ) | N tại θ = 30 | Khoảng θ\* | Regret của θ = 0 |
-|---|---|---|---|---|---|---|---|
-| `sens_fraction_0p1` | `budget.fraction=0.1` | 1.848,6 | 3.584 | 3.601,9 (0,6) | 3.573 | [0; 10] | +18,0 ± 5,5 (0,50%) |
-| `sens_fraction_0p6` | `budget.fraction=0.6` | 11.091,6 | 4.235 | 4.299,0 (0,4) | 3.685 | [0,2; 1] | +64,2 ± 8,2 (1,49%) |
-| `sens_voucher_0p3` | `voucher.pct_of_fare=0.3` | 9.076,3 | 3.956 | 4.025,8 (1,5) | 3.775 | [0,3; 5] | +70,3 ± 5,5 (1,75%) |
-| `sens_demand_1p5` | `demand.demand_scale=1.5` | 6.430,7 | 5.400 | 5.630,4 (2) | 5.347 | [0,4; 2], loại 0,5; 0,8; 1,0 | +230,9 ± 16,3 (4,10%) |
+| Thư mục | Override | B (USD/kỳ) | N tại θ = 0 | N lớn nhất (θ) | N tại θ = 30 | Khoảng θ\* | Regret của θ = 0 | Lượt pilot (min–max) |
+|---|---|---|---|---|---|---|---|---|
+| `sens_fraction_0p1` | `budget.fraction=0.1` | 1.848,6 | 3.586 | 3.606,7 (0,6) | 3.581 | [0,1; 10] | +20,9 ± 5,4 (0,58%) | 3–5 |
+| `sens_fraction_0p6` | `budget.fraction=0.6` | 11.091,6 | 4.240 | 4.298,3 (0,2) | 3.685 | [0,1; 1] | +58,8 ± 4,9 (1,37%) | 1–5 |
+| `sens_voucher_0p3` | `voucher.pct_of_fare=0.3` | 9.076,3 | 3.972 | 4.033,4 (1,5) | 3.775 | [0,1; 3], loại 0,2 | +61,6 ± 8,5 (1,53%) | 1–7 |
+| `sens_demand_1p5` | `demand.demand_scale=1.5` | 6.430,7 | 5.489 | 5.650,3 (1,25) | 5.347 | [0,3; 2], loại 0,4; 0,5 | +160,9 ± 15,6 (2,85%) | 1–9 |
 
-- Ở cả bốn biến thể đường có đủ ba đoạn tăng, phẳng, giảm trên lưới kéo dài.
-- θ = 0,4 và θ = 0,6 thuộc tập θ\* ở cả năm kịch bản (kể cả cấu hình chuẩn): kết luận về ngưỡng bền với mức ngân sách, cường độ voucher và độ căng thị trường.
-- Lợi ích của tầng ô tăng theo độ căng (0,5% khi ngân sách rất chặt, 1,4% ở cấu hình chuẩn, 4,1% khi cầu gấp rưỡi); θ\* nhọn dần khi ngân sách lớn hơn.
-- Các bộ này là phân tích độ nhạy, không phải cấu hình chính: `fraction` 0,6 làm chính sách cũ hết bị ngân sách ràng buộc, `demand_scale` 1,5 nằm ngoài hiệu chỉnh P3.
+- Cả bốn biến thể vẫn có đủ ba đoạn. θ = 0,6 thuộc tập θ\* ở cả năm kịch bản; θ = 0,4 thuộc tập ở bốn kịch bản (bị loại ở `sens_demand_1p5`).
+- Lợi ích của tầng ô vẫn tăng theo độ căng (0,58% khi ngân sách rất chặt, 1,01% ở cấu hình chuẩn, 2,85% khi cầu gấp rưỡi) nhưng nhỏ hơn bản cũ (0,50%; 1,37%; 4,10%).
 
 ### Lệnh sinh lại (PowerShell)
 
 ```powershell
 $py = ".venv\Scripts\python.exe"
 $ref = @("--config", "config/default.yaml", "--config", "config/sweep_reference.yaml")
-& $py -m sim run --mode sweep_theta @ref --set sweep.n_seeds=30 --out runs/b7b/sweep_theta_ref
-& $py -m sim run --mode sweep_theta @ref --set budget.fraction=0.1 --out runs/b7b/sens_fraction_0p1
-& $py -m sim run --mode sweep_theta @ref --set budget.fraction=0.6 --out runs/b7b/sens_fraction_0p6
-& $py -m sim run --mode sweep_theta @ref --set voucher.pct_of_fare=0.3 --out runs/b7b/sens_voucher_0p3
-& $py -m sim run --mode sweep_theta @ref --set demand.demand_scale=1.5 --out runs/b7b/sens_demand_1p5
-# đồ thị, bảng θ* và kiểm tra
-& $py -m analysis.plots theta_sweep runs/b7b/sweep_theta_ref --gte runs/b7a/gte
-& $py -m analysis.check_dataset runs/b7b/sweep_theta_ref runs/b7b/sens_fraction_0p1 runs/b7b/sens_fraction_0p6 runs/b7b/sens_voucher_0p3 runs/b7b/sens_demand_1p5
+& $py -m sim run --mode sweep_theta @ref --set sweep.n_seeds=30 --out runs/b7b_h21/sweep_theta_ref
+& $py -m sim run --mode sweep_theta @ref --set budget.fraction=0.1 --out runs/b7b_h21/sens_fraction_0p1
+& $py -m sim run --mode sweep_theta @ref --set budget.fraction=0.6 --out runs/b7b_h21/sens_fraction_0p6
+& $py -m sim run --mode sweep_theta @ref --set voucher.pct_of_fare=0.3 --out runs/b7b_h21/sens_voucher_0p3
+& $py -m sim run --mode sweep_theta @ref --set demand.demand_scale=1.5 --out runs/b7b_h21/sens_demand_1p5
+& $py -m analysis.check_dataset runs/b7b_h21/sweep_theta_ref runs/b7b_h21/sens_fraction_0p1 runs/b7b_h21/sens_fraction_0p6 runs/b7b_h21/sens_voucher_0p3 runs/b7b_h21/sens_demand_1p5
 ```
 
-Thời gian (8 tiến trình): sweep tham chiếu 30 seed 702 giây; mỗi sweep độ nhạy 5 đến 6 phút. `check_dataset` ngày 02/10: cả 5 thư mục OK. Cần `pip install -e ".[analysis]"` để vẽ đồ thị.
+Thời gian (8 tiến trình, chạy cùng lúc với việc khác): sweep tham chiếu 1.613 giây; mỗi sweep độ nhạy 548–910 giây. `check_dataset` ngày 05/10: cả 5 thư mục OK.
 
 ### Dùng cho phân tích tuần 5
 
 ```python
 import pandas as pd
 from analysis.metrics import theta_star_set, theta_star_interval, sweep_regret
-runs = pd.read_parquet("runs/b7b/sweep_theta_ref/results/policy_results.parquet")
-theta_star_interval(theta_star_set(runs))      # (1.5, 0.4, 2.0)
+runs = pd.read_parquet("runs/b7b_h21/sweep_theta_ref/results/policy_results.parquet")
+theta_star_interval(theta_star_set(runs))      # (2.0, 0.3, 2.0)
 sweep_regret(runs, theta_hat=0.8)              # regret theo N của một ngưỡng ước lượng θ̂
 ```
 
-Ước lượng θ̂ được chấm bằng regret theo N, không bằng khoảng cách tới θ\* (T-31): trong đoạn phẳng regret gần 0 dù θ̂ lệch xa θ = 1,5.
+Ước lượng θ̂ được chấm bằng regret theo N, không bằng khoảng cách tới θ\* (T-31).
 
-`runs/p6/` (sweep 12 θ × 10 seed và các sweep chẩn đoán 5 seed dùng để ra quyết định T-31) đã được thay bằng các bộ trên; có thể xóa.
+**Bản cũ** (`runs/b7b`, 02/10, κ một lượt pilot): N lớn nhất 3.901,7 ở θ = 1,5; khoảng θ\* [0,4; 2]; regret θ = 0: 53,3 ± 4,8. Giữ để đối chiếu; xóa được sau khi Hoàng nhận bản H-21. `runs/p6/` cũng xóa được.
+
+---
 
 ## B8 (H5.1, giao ngày 05/10/2026): hàm điểm τ̂ nền và parquet dự đoán
 
@@ -186,3 +184,56 @@ foreach ($d in "legacy_28d","rider_ab_28d","switchback_c1_28d","switchback_c7_28
 
 **Bổ sung H5.2 (DR-learner, H-24):** 8 hàm điểm `analysis.uplift:tau_x_dr`, `tau_xs_dr`, `tau_x_dr_per_dollar`, `tau_xs_dr_per_dollar` (mẫu explore) và các bản `..._all` (toàn bộ legacy). Mô hình ở `analysis/models/dr_*` (có commit); fit lại bằng `python -m analysis.uplift fit runs/b7a/legacy_28d`. Cần `pip install -e ".[analysis]"` (LightGBM). Kiểm tra: `pytest -q tests/test_uplift.py`.
 
+---
+
+## Dữ liệu Sprint 5 (05/10/2026, `runs/s5`)
+
+| Thư mục | Lệnh | Dùng cho |
+|---|---|---|
+| `policy_table` | `python -m analysis.policy_table --config config/default.yaml --n-seeds 30 --out runs/s5/policy_table` | T5.1: 15 chính sách (`DEFAULT_SPECS`, gồm 6 hàm điểm DR và 2 dòng π_θ̂ trên `ring1`) × 30 seed dưới cùng B (T-33, T-35d) |
+| `sweep_ring1_heuristic` | `python -m sim run --mode sweep_theta --config config/default.yaml --config config/sweep_reference.yaml --set sweep.n_seeds=30 --set policy.threshold.scope=ring1 --out runs/s5/sweep_ring1_heuristic` | Sweep θ với ŝ `ring1` (H-25), `heuristic_low_freq`; so với B7b (ŝ theo ô) |
+| `sweep_ring1_dr` | như trên, thêm `--set policy.threshold.score_fn=analysis.uplift:tau_x_dr_all_per_dollar` | Sweep θ với ŝ `ring1` và hàm điểm học được (H-22 ii); regret của θ̂ (A), (B) của H5.3 |
+| `sweep_cell_dr` | như `sweep_ring1_dr` nhưng bỏ `--set policy.threshold.scope=ring1` | Sweep θ với ŝ theo ô và hàm điểm học được (H-22 ii) |
+| `qini_vs_value` | `python -m analysis.qini_vs_value --data runs/b7a/rider_ab_28d --table runs/s5/policy_table --outcome completed --out runs/s5/qini_vs_value` (và `--outcome requested`) | T5.2 (T-33) |
+| `interference` | `python -m analysis.interference designs --gte runs/b7a/gte runs/b7a/rider_ab_28d runs/b7a/switchback_c1_28d runs/b7a/switchback_c7_28d runs/b7a/switchback_all_28d --out runs/s5/interference` (và `--outcome requested`); `python -m analysis.interference confounding runs/s5/legacy_gu_0_28d runs/s5/legacy_gu_0p5_28d runs/b7a/legacy_28d runs/s5/legacy_gu_2_28d --out runs/s5/interference` | T5.3 (T-34) |
+| `legacy_gu_0_28d`, `legacy_gu_0p5_28d`, `legacy_gu_2_28d` | `python -m sim run --mode generate --config config/default.yaml --set policy.name=legacy --set policy.legacy.target_g_u=<0 / 0.5 / 2> --out runs/s5/legacy_gu_<0 / 0p5 / 2>_28d` | T5.3: độ nhạy theo `u_latent`; cùng `run_seed = 0` nên cùng 718.749 session với `legacy_28d` (`target_g_u` = 1) |
+
+Ba bộ legacy mới (`config_hash` `2da8ea13c0e0` / `7306ebc20b78` / `5b6a3ba4079b`, code `8467f83` + H-21): N hoàn thành 105.941 / 106.911 / 108.177; tỷ lệ phát 22,0% / 22,2% / 22,2%; bị chặn ngân sách 0% / 0% / 2,9%; không order Truncated; `check_dataset` OK.
+
+### Sweep θ theo phạm vi ŝ và hàm điểm (vòng 2, code `ed64f62` + thay đổi chưa commit)
+
+Cùng lưới 16 θ, cùng 30 seed, cùng B = 5.545,80 USD/kỳ với B7b (`runs/b7b_h21/sweep_theta_ref`, ŝ theo ô, `heuristic_low_freq`), nên ghép cặp được theo seed. `config_hash` của lượt: `89c0a9869ced` (`ring1`, heuristic), `c54d6db7563e` (`ring1`, DR), `0fa4fa60e36c` (ô, DR); `check_dataset` OK cả 3 và `policy_table`. Mỗi θ cần 1–6 lượt pilot κ, không chạm `kappa_max_iter`. Hàm điểm DR = `analysis.uplift:tau_x_dr_all_per_dollar`.
+
+| Sweep | θ tốt nhất | N(θ tốt nhất) | Bao tập θ\* | θ trong bao bị loại | N(θ = 0) | Regret θ = 0 |
+|---|---|---|---|---|---|---|
+| ô, heuristic (B7b) | 2 | 3.899,7 | [0,3; 2] | 1 | 3.860,3 | 39,5 ± 4,0 (1,01%) |
+| `ring1`, heuristic | 3 | 3.915,7 | [1,5; 3] | 2 | 3.860,3 | 55,4 ± 4,7 (1,42%) |
+| ô, DR/USD | 0,4 | 4.006,6 | [0,1; 0,6] | không | 3.989,9 | 16,6 ± 5,7 (0,42%) |
+| `ring1`, DR/USD | 1 | 4.017,4 | [0,2; 1,5] | không | 3.989,9 | 27,4 ± 4,1 (0,68%) |
+
+N theo θ (chi / B, % (ô, slot) tắt); **đậm** = thuộc tập θ\*:
+
+| θ | ô, heuristic | `ring1`, heuristic | ô, DR/USD | `ring1`, DR/USD |
+|---|---|---|---|---|
+| 0 | 3.860,3 (0,996; 0) | 3.860,3 (0,996; 0) | 3.989,9 (0,988; 0) | 3.989,9 (0,988; 0) |
+| 0,1 | 3.884,3 (0,995; 25) | 3.871,4 (0,992; 6) | **3.999,2** (0,986; 25) | 4.002,1 (0,983; 6) |
+| 0,2 | 3.887,0 (0,996; 27) | 3.881,2 (0,991; 8) | **4.004,6** (0,986; 27) | **4.010,3** (0,988; 9) |
+| 0,3 | **3.893,2** (0,994; 30) | 3.889,2 (0,990; 11) | **4.005,3** (0,974; 30) | **4.014,2** (0,983; 11) |
+| 0,4 | **3.890,8** (0,991; 31) | 3.894,6 (0,991; 13) | **4.006,6** (0,985; 32) | **4.012,9** (0,973; 13) |
+| 0,5 | **3.894,9** (0,985; 33) | 3.893,0 (0,993; 14) | **4.000,3** (0,990; 33) | **4.014,0** (0,966; 15) |
+| 0,6 | **3.892,2** (0,982; 35) | 3.896,4 (0,993; 16) | **3.997,4** (0,974; 35) | **4.014,1** (0,971; 17) |
+| 0,8 | **3.889,3** (0,972; 37) | 3.895,8 (0,981; 20) | 3.990,2 (0,968; 38) | **4.015,5** (0,965; 20) |
+| 1 | 3.889,9 (0,976; 39) | 3.902,8 (0,989; 23) | 3.989,1 (0,972; 39) | **4.017,4** (0,973; 23) |
+| 1,25 | **3.890,4** (0,978; 42) | 3.900,0 (0,981; 27) | 3.980,5 (0,968; 43) | **4.009,3** (0,967; 28) |
+| 1,5 | **3.891,8** (0,979; 45) | **3.908,0** (0,980; 31) | 3.976,2 (0,983; 45) | **4.015,7** (0,970; 32) |
+| 2 | **3.899,7** (0,989; 47) | 3.901,9 (0,969; 38) | 3.964,1 (0,965; 48) | 4.006,0 (0,995; 40) |
+| 3 | 3.882,3 (0,951; 53) | **3.915,7** (0,988; 52) | 3.940,6 (0,924; 54) | 3.972,4 (0,981; 53) |
+| 5 | 3.876,9 (0,978; 61) | 3.849,2 (0,890; 70) | 3.919,4 (0,974; 61) | 3.849,2 (0,890; 70) |
+| 10 | 3.837,2 (0,944; 69) | 3.597,2 (0,324; 86) | 3.837,2 (0,944; 69) | 3.597,2 (0,324; 86) |
+| 30 | 3.693,0 (0,620; 75) | 3.443,5 (0; 100) | 3.693,0 (0,620; 75) | 3.443,5 (0; 100) |
+
+- **Hai cách đo ŝ, so ở θ tốt nhất của mỗi sweep (ghép cặp):** `ring1` − ô: heuristic +16,0 ± 3,2; DR/USD +10,8 ± 4,4. Cả hai phía đều chọn "tốt nhất" trên chính các seed này (winner's curse, báo cáo §10.3), nên hiệu này chỉ là chỉ dấu. Cùng θ thì không so được, vì θ đo trên hai thang khác nhau: `ring1` tắt ít (ô, slot) hơn ở θ nhỏ và nhiều hơn ở θ lớn.
+- **H-22 (ii), dự đoán "điểm càng tốt thì θ\* càng gần 0": đúng trên cả hai cách đo.** Với DR/USD thay heuristic, bao θ\* dời từ [0,3; 2] về [0,1; 0,6] (ô) và từ [1,5; 3] về [0,2; 1,5] (`ring1`); regret của θ = 0 giảm từ 39,5 xuống 16,6 (ô) và từ 55,4 xuống 27,4 (`ring1`). θ = 0 vẫn chưa thuộc tập θ\* ở cả bốn sweep. DR/USD hơn heuristic ở θ tốt nhất +106,8 ± 4,7 (ô).
+- **Regret của θ̂ (H5.3) trên các sweep `ring1`:** θ̂ (A) = 0,25: 5,1 ± 3,1 [−1,3; 11,5] (0,13%) với DR/USD; 30,5 ± 4,2 (0,78%) với heuristic. θ̂ (B) = 5: 168,2 ± 5,3 [157,4; 178,9] (4,19%) với DR/USD; 66,5 ± 3,9 (1,70%) với heuristic. Ở θ = 5 trên `ring1`, 70% (ô, slot) tắt, κ = −∞ (phát cho mọi session của ô còn bật) mà vẫn chỉ chi 0,890 × B: tầng ô cắt nhiều hơn mức ngân sách cần.
+- **Với `ring1`, θ > `monitor.slack_cap` (10) là `all_off`.** `ring1` cắt +∞ ở `slack_cap` (H-25a), còn ŝ theo ô với `forecast: persistence` giữ +∞ (ô bật, T-23b). Vì vậy ở θ = 30, `ring1` tắt 100% và N = 3.443,5 (≈ `all_off` 3.440,1), còn ô vẫn bật 25% (ô có xe rảnh mà không xe nào đi đón). Chỉ điểm θ = 30 bị ảnh hưởng; tập θ\* không đổi.
+- Kiểm chéo: π_θ θ = 0,5 heuristic của `policy_table` = 3.894,9, trùng điểm θ = 0,5 của B7b; π_θ̂ (B) `ring1` = 3.849,2, trùng θ = 5 của `sweep_ring1_dr`. Lượt chạy ~15–18 phút mỗi sweep (480 lượt + pilot κ).

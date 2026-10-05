@@ -30,7 +30,7 @@ def evaluate_job(cfg, policy: str) -> Job:
     cfg = with_policy(cfg, policy)
     budget = budget_for(cfg)
     theta = float(cfg.policy.threshold.theta) if policy == "threshold" else float("nan")
-    kappa = resolve_kappa(cfg, theta, 0, budget)
+    kappa = resolve_kappa(cfg, theta, budget)
     return Job(cfg=cfg, seed=cfg.meta.run_seed, theta=theta, kappa=kappa, budget_usd=budget,
                enforce_budget=cfg.budget.enforce)
 

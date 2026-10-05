@@ -162,6 +162,7 @@ def test_set_bad_key_raises(default_yaml, assignment):
         "policy.name=surge",              # not an allowed choice
         "experiment.cluster_level=3",     # not 1 / 7 / all
         "policy.threshold.kappa=manual",  # neither 'auto' nor a number
+        "policy.threshold.scope=ring2",   # not cell / ring1
         "supply.shift_mode=on",           # not schedule / always_on
         "matching.max_ring=[1]",          # list into Optional[int]
         "supply.shift_len_clip_h=[4.0]",  # wrong tuple length
@@ -190,6 +191,7 @@ def test_set_wrong_type_raises(default_yaml, assignment):
         "time.warmup_min=45",                  # not a multiple of experiment.block_min (60) (H-01)
         "throughput.reference_hour=24",
         "runner.n_procs=0",
+        "policy.threshold.kappa_max_iter=-1",
     ],
 )
 def test_out_of_range_raises(default_yaml, assignment):
