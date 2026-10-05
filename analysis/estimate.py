@@ -13,6 +13,8 @@ Moderators (the tension measure a session is binned by):
                    what docs/tests.md A4 names, but inside a block it is already affected by the
                    block's own arm (post-treatment), so on/off groups are not comparable.
 - ``cell_pre``     slack of the cell in the last slot before the block began.
+- ``ring_pre``     idle / en-route summed over the cell and its six neighbours, last slot before the
+                   block (the s_hat chosen in H5.3, decisions H-25).
 - ``cluster_pre``  idle / en-route summed over the session's cluster, last slot before the block.
 - ``system_pre``   idle / en-route summed over all cells, last slot before the block.
 
@@ -29,7 +31,7 @@ import yaml
 
 from analysis.io import completed_outcome, load_run
 
-MODERATORS = ("cell_lag", "cell_pre", "cluster_pre", "system_pre")
+MODERATORS = ("cell_lag", "cell_pre", "ring_pre", "cluster_pre", "system_pre")
 DEFAULT_EDGES = (0.0, 0.2, 0.35, 0.6, 1.0, 2.0, 5.0, np.inf)
 
 
@@ -46,15 +48,34 @@ def ratio_slack(idle, enroute) -> np.ndarray:
         return np.where(enroute > 0, idle / enroute, np.where(idle > 0, np.inf, 0.0))
 
 
+def ring_slack(snaps: pd.DataFrame, neighbors: np.ndarray) -> pd.DataFrame:
+    """``(slot, cell, ring1)``: idle / en-route summed over each cell and its neighbours (``-1`` = none)."""
+    nb = np.asarray(neighbors)
+    n = nb.shape[0]
+    member = np.zeros((n, n))                                   # member[c, j] = 1 if j is c or a neighbour of c
+    member[np.arange(n), np.arange(n)] = 1.0
+    rows, cols = np.nonzero(nb >= 0)
+    member[rows, nb[rows, cols]] = 1.0
+    idle = snaps.pivot(index="slot", columns="cell", values="idle_avg").reindex(columns=range(n)).to_numpy()
+    enr = snaps.pivot(index="slot", columns="cell", values="enroute_avg").reindex(columns=range(n)).to_numpy()
+    slots = snaps["slot"].drop_duplicates().sort_values().to_numpy()
+    ring = ratio_slack(idle @ member.T, enr @ member.T)
+    return pd.DataFrame({"slot": np.repeat(slots, n), "cell": np.tile(np.arange(n), len(slots)), "ring1": ring.ravel()})
+
+
 def run_config(run: dict[str, pd.DataFrame]) -> dict:
     """The config the run was made with (``meta/run_metadata.config_yaml``)."""
     return yaml.safe_load(run["run_metadata"]["config_yaml"].iloc[0])
 
 
 def experiment_frame(run_dir: Path | str) -> pd.DataFrame:
-    """One row per in-window session of a switchback run: arm, outcome, unit and the four moderators."""
+    """One row per in-window session of a switchback run: arm, outcome, unit and the moderators."""
+    from sim.config import build_config
+    from sim.space import build_space
+
     run = load_run(Path(run_dir))
     cfg = run_config(run)
+    neighbors = build_space(build_config(cfg)).neighbors
     slots_per_block = cfg["experiment"]["block_min"] // cfg["time"]["slot_min"]
     sessions, orders, snaps = run["sessions"], run["orders"], run["slot_snapshots"]
 
@@ -73,6 +94,9 @@ def experiment_frame(run_dir: Path | str) -> pd.DataFrame:
     last = cell[(cell["slot"] + 1) % slots_per_block == 0].copy()
     last["block"] = (last["slot"] + 1) // slots_per_block
     s = s.merge(last[["block", "cell", "slack"]].rename(columns={"cell": "pu_cell", "slack": "cell_pre"}),
+                on=["block", "pu_cell"], how="left")
+    ring = ring_slack(last, neighbors).merge(last[["slot", "block"]].drop_duplicates(), on="slot")
+    s = s.merge(ring[["block", "cell", "ring1"]].rename(columns={"cell": "pu_cell", "ring1": "ring_pre"}),
                 on=["block", "pu_cell"], how="left")
     by_cluster = last.groupby(["block", "cluster_id"], as_index=False)[["idle_avg", "enroute_avg"]].sum()
     by_cluster["cluster_pre"] = ratio_slack(by_cluster["idle_avg"], by_cluster["enroute_avg"])

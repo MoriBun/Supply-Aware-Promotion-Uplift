@@ -231,7 +231,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8), H5.2 xong (DR-learner, H-24). Tiếp theo: H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
+**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8), H5.2 xong (DR-learner, H-24), H5.3 dở: đã chọn ŝ = `ring1` (H-25), có θ̂ (A), (B), confounding; chờ Tình cài H-21, `ring1` và chạy sweep mới để tính regret.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -532,4 +532,16 @@ Mẫu:
 - Lệch spec / quyết định mới: H-24
 - Bàn giao: không (bổ sung cho B8: thêm hàm điểm DR cho T5.1)
 - Còn lại / bước tiếp: H5.3 (chờ B7b chạy lại theo H-21; đo `ar` và chọn ŝ theo H-22)
+
+### 2026-10-05 · H5.3 · chọn ŝ, tác hại theo giờ, θ̂ (A) và (B), confounding · dở (chờ Tình: H-21, ŝ `ring1`, sweep mới)
+- Nhánh/PR: `develop2` → `develop` (PR giữa S5 để Tình có B8, hàm DR, H-25), review: Tình
+- Đã làm: `analysis/tension.py` (so 7 chỉ số căng theo H-22); `analysis/estimate.py` (+ `ring_slack`, moderator `ring_pre`); `analysis/theta.py` (hiệu ứng và chi phí theo giờ có bootstrap theo đơn vị, θ̂ (A) không ngân sách và (B) có ngân sách); `tests/test_tension.py` (+5), `tests/test_theta.py` (+3), `tests/test_estimate.py` (thêm kiểm `ring_pre`); spec §6 (phạm vi `ring1`); H-25
+- Test: `pytest -q` → 505 passed, 1 skipped (py3.12 `.venv`)
+- Chọn ŝ (`all_off`, 5 seed × 3 ngày, 383.807 session): vòng 1 26,9% / 86,0% thắng cụm cố định 24,3% / 83,3% và ô 17,2% / 72,0% (số đầy đủ trong H-25)
+- Tác hại (bật/tắt toàn bộ, không ngân sách, 5 seed): theo giờ, bật voucher làm số chuyến 7h −15,4 ± 2,1, 8h −6,4 ± 6,8, 6h +0,4 ± 3,3; cả ngày +1.198,8. Ô có slack = 0: trung bình +2,3 chuyến / 100 session, riêng 7h −8,8. Trên switchback toàn hệ, hiệu ứng lên tỷ lệ hoàn thành 5–8h là −0,0071; −0,0048; −0,0066 [−0,0105; −0,0023]; −0,0017; switchback cụm 7 cùng giờ +0,034; +0,023; +0,029; +0,041
+- θ̂ (A, chỉ tác hại): `ring1` 0,25 [0,15; 0,30]; toàn hệ 0,75 [0,50; 0,95]; ô 0. θ̂ (B, có ngân sách): `ring1` 5,0 [5,0; 5,0]; ô 10,0 [5,0; 10,0]: mô hình (B) cắt quá tay. Regret sơ bộ trên B7b hiện có (ŝ theo ô, `heuristic_low_freq`, 30 seed, θ tốt nhất 1,5): θ̂ = 0: 53,27 ± 4,82 (1,37%); θ̂ = 10: 64,43 ± 4,82 (1,65%); θ = 5: 18,43 ± 4,42
+- Confounding và thiết kế (hiệu ứng tổng, chuyến/ngày, GTE thật +1.212,9): `rider_ab` +1.646,9 [1.512,0; 1.769,8]; switchback cụm 1 +1.633,2; cụm 7 +1.513,0; toàn hệ +1.312,7 [1.101,7; 1.513,6]. Legacy, hiệu ứng lên tỷ lệ hoàn thành: so thô +0,1018; DR toàn bộ +0,1010; lát explore +0,0695 (DR +0,0697)
+- Lệch spec / quyết định mới: H-25 (spec §6 thêm phạm vi `ring1`)
+- Bàn giao: cần Tình: (1) cài H-21; (2) thêm `ring1` vào `ThresholdPolicy` (khóa YAML mới); (3) sweep tham chiếu với ŝ = `ring1`, cùng `heuristic_low_freq` và `analysis.uplift:tau_x_dr_all_per_dollar` (H-22 (ii))
+- Còn lại / bước tiếp: khi có sweep mới: regret của θ̂ (A) và (B) theo `ring1`; xem lại giả định của (B) (tầng rider rải đều, hiệu ứng chỉ theo giờ) nếu regret lớn
 

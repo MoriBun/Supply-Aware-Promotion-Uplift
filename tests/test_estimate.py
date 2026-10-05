@@ -34,7 +34,7 @@ def synthetic_frame(effect_of, *, n_units=600, per_unit=60, base=0.15, seed=1) -
     p = base + arm * effect_of(moderator)
     y = (gen.random(len(unit)) < p).astype(np.int8)
     return pd.DataFrame({"unit": unit, "arm": arm.astype(np.int8), "completed": y, "in_burnin": False,
-                         "cell_lag": moderator, "cell_pre": moderator, "cluster_pre": moderator,
+                         "cell_lag": moderator, "cell_pre": moderator, "ring_pre": moderator, "cluster_pre": moderator,
                          "system_pre": moderator})
 
 
@@ -160,6 +160,9 @@ def test_experiment_frame_from_a_generated_run(tiny_run):
     # Pre-block moderators are constant within a (cell, block) and, for the system, within a block.
     assert frame.groupby(["block", "pu_cell"])["cell_pre"].nunique(dropna=False).max() == 1
     assert frame.groupby("block")["system_pre"].nunique(dropna=False).max() == 1
+    assert frame.groupby(["block", "pu_cell"])["ring_pre"].nunique(dropna=False).max() == 1
+    # A cell's ring holds its own idle drivers, so a ring has no less slack than "0 idle anywhere".
+    assert (frame["ring_pre"].notna()).all() and (frame.loc[frame["cell_pre"] > 0, "ring_pre"] > 0).all()
     assert frame["cell_pre"].notna().all() and (frame["cell_pre"] >= 0).all()   # warm-up gives block 1 a past
     table = effect_by_bin(frame, "system_pre", edges=[0, np.inf], n_boot=50)
     assert table["n_on"][0] > 0 and table["n_off"][0] > 0
