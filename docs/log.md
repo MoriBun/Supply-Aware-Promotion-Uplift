@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S5: T5.1–T5.3 xong (bảng N/V dưới B đủ hàm điểm DR và π_θ̂, Qini so với N, chệch thiết kế và `u_latent`); H-21 đã cài, B7b chạy lại (`runs/b7b_h21`); `ring1` (H-25) đã cài làm tùy chọn, mặc định vẫn `cell`; 3 sweep θ mới ở `runs/s5`. Tất cả **chưa commit** (Tình commit): báo cáo phương pháp luận bản 1, H-21, S5; cần Hoàng duyệt `.gitattributes`, `config.py` và 1 dòng `test_acceptance_core.py`. Chờ hai người quyết mặc định `scope`. Gate P6 (T-31) vẫn chờ mentor xác nhận.
+**Đang làm:** S6: T6.1–T6.3 xong (3 notebook trong `notebooks/`, 7 hình `docs/figures/01_`…`03_`, `analysis/validation.py`, `analysis/figures.py`; T-36, T-37), **chưa commit** (Tình commit), chờ PR S6 và Hoàng review. Báo cáo phương pháp bản 1 cũng chưa commit. S5 đã gộp (PR #17). Gate P6 (T-31) vẫn chờ mentor xác nhận. Để sau S6 (H-27): chương báo cáo, slides, bảng ba nguồn sai số.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -273,6 +273,24 @@ Mẫu:
 - Lệch spec / quyết định mới: T-35 (e) với `ring1`, θ > `slack_cap` là `all_off`; (f) `config_hash(default.yaml)` `34f3aa436d16` → `92b7d13adc39`
 - Bàn giao: cho Hoàng (H5.3) regret θ̂ (A), (B) trên `ring1` (`docs/datasets.md`, mục S5)
 - Còn lại / bước tiếp: hai người quyết có đổi mặc định sang `ring1` không; học lại τ̂(x, s) trên slack vòng 1 (T-35b, Hoàng); T5.2 trên kịch bản cầu × 1,5 / thiếu xe để tìm ví dụ do cung; đồ thị Qini cho S6; Tình commit và mở PR S5
+
+### 2026-10-05 · rà soát · S0–S5 trước S6 · xong
+- Nhánh/PR: `develop1` sau khi kéo `develop` `52f99a5` (PR #19, fast-forward; bỏ trước thay đổi chỉ định dạng ở `docs/phan_cong.md`)
+- Đã làm: đối chiếu mọi task S0–S5 trong `phan_cong.md` với log, PR, bàn giao B0–B8, gate, `decisions.md`. Mọi task S1–S5 của hai người có mục "xong" và đã gộp (#1–#18); B0–B8 đều có mục "nhận"
+- Test: sau khi kéo: `pytest -q` → 526 passed, 8 deselected (214 s); `pytest -q -m slow` → 8 passed (952 s; κ auto chi khi không dừng cứng 1,024 / 1,017 / 0,966 × B)
+- Còn mở: báo cáo phương pháp bản 1 chưa commit; tag dữ liệu B7 (T4.3) chưa gắn; P6 chờ mentor xác nhận T-31; mục P2 của Hoàng còn "dở"; A2 (b), A3 chưa đo lại sau H-21 (nay có trong notebook 01: 0,171 và 25,6); kịch bản thiếu xe / dạng TLC của H-23 chưa chạy; tiêu chí nghiệm thu 4 (bảng ba nguồn sai số) để sau S6 (H-27)
+- Lệch giữa tài liệu (file chung, sửa qua PR hai người duyệt): `CLAUDE.md` còn "Sprint đang làm: S0"; `docs/tests.md` M11 còn "inf khi E = 0" (lệch H-14); cột "Xong" của bảng bàn giao trong `phan_cong.md` chưa cập nhật (B0, B7b); nhiều dòng `decisions.md` còn "(chờ … review PR)" dù đã gộp; `main` chưa từng gộp `develop`
+- Bàn giao: không
+- Còn lại / bước tiếp: S6 (mục dưới)
+
+### 2026-10-05 · T6.1–T6.3 · notebook 01 simulator và kiểm định, 02 đánh giá chính sách, 03 interference · xong (chưa commit)
+- Nhánh/PR: `develop1` (`52f99a5` + thay đổi chưa commit); PR S6 `develop1 → develop`, review: Hoàng
+- Đã làm: `notebooks/01_simulator_kiem_dinh.ipynb`, `02_danh_gia_chinh_sach.ipynb`, `03_interference.ipynb` (chạy "Restart & Run All", kèm output); hình `docs/figures/01_*`–`03_*` (7 hình). Phép tính mới trong `analysis/`: `validation.py` (A1, CAL, A2 b, A3, A5, bảng bộ dữ liệu, thị trường theo giờ; T-37), `figures.py` (7 hình, trả về `fig`), `metrics.sweep_by_theta`, `metrics.sweep_overview`, `policy_table.paired_steps`, `qini_vs_value.offer_efficiency` + `efficiency_markdown` + `score_all` (T-36), `plots.throughput_figure`. Test: `tests/test_validation.py` (+6, gồm CAL từ bảng đã lưu = CAL của test chậm), `tests/test_figures.py` (+3), `test_analysis` (+1), `test_policy_eval` (+2). Dữ liệu mới `runs/s6` (A5, A1, CAL, A3; `docs/datasets.md` mục S6)
+- Test: `pytest -q` → 543 passed, 8 deselected (117 s); test chậm không chạy lại (`sim/` không đổi kể từ lượt 8 passed ở mục trên)
+- Số chính: A1 4/4 (đỉnh 781,2 ở 3,25); CAL 5/5; A2 (b) 0,171; A3 25,6 / 25,0 lần/ô/ngày; A4 0 lần đổi dấu; A5 5,75 s. T5.1: tốt nhất π_θ̂ (A) `ring1` 4.011,8 (+325,0 so với `all_on_B`); bậc thang: rải ngân sách +120,3, xếp theo /USD +195,0, đưa cung vào điểm hoặc tầng ô +20,4 / +21,8 (hai cách ngang nhau: +1,4 ± 4,0). T5.2: 28/45 cặp Qini cao hơn mà N thấp hơn; Spearman(N, chuyến thêm / 100 USD) = 0,976, Spearman(N, Qini) = −0,68: cơ chế chi phí. T5.3 tính lại trong notebook trùng số đã lưu
+- Lệch spec / quyết định mới: T-36, T-37. `throughput_curve` chỉ ghi `results/` (spec §7) nên `check_dataset` báo thiếu `meta/` cho `runs/s6/throughput`, không sửa
+- Bàn giao: không. Gợi ý cho Hoàng: `tests/test_acceptance_core.py` có thể gọi `analysis.validation.a1_checks` để một nguồn tính (T-37 d)
+- Còn lại / bước tiếp: Hoàng review PR S6; mở (để sau S6, H-27): chương báo cáo, slides 30 phút, bảng ba nguồn sai số, kịch bản căng hơn để tìm ví dụ Qini–N do cung
 
 ---
 

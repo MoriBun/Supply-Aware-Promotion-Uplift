@@ -88,7 +88,8 @@ Bản này thay bản ngày 02/10 (`runs/b7b`, κ từ một lượt pilot, seed
 
 - Chính sách `threshold`, hàm điểm `heuristic_low_freq`, dự báo `persistence`, không hysteresis.
 - 16 mốc θ (lớp phủ `config/sweep_reference.yaml`) × 30 seed (0–29) × 1 ngày = 480 lượt; cùng B; κ auto mỗi θ lặp 1–6 lượt pilot (cột `kappa_pilots` của `meta/run_metadata`), không θ nào chạm trần `kappa_max_iter = 10`.
-- `config_hash` của lượt: `19f46649271e`; `config_hash(default.yaml)` = `34f3aa436d16` (đổi từ `cb27f5348011` vì thêm khóa `policy.threshold.kappa_max_iter`, T-32); code `8467f83` + thay đổi H-21 (chưa commit lúc sinh).
+- `config_hash` của lượt: `19f46649271e`; `config_hash(default.yaml)` = `34f3aa436d16` (đổi từ `cb27f5348011` vì thêm khóa `policy.threshold.kappa_max_iter`, T-32); code `8467f83` + thay đổi H-21 (chưa commit lúc sinh, nay là commit `7b6a003`).
+- Sinh lại sau khi thêm khóa `policy.threshold.scope` (T-35 f) cho `config_hash` của lượt `11358df900a6` thay vì `19f46649271e`; mọi số N theo θ, tập θ\* và regret trùng từng chữ số (Hoàng kiểm khi nhận, log 05/10). Hash lệch chỉ vì khóa mới có giá trị mặc định.
 - Cột cuối so với bản 02/10, ghép cặp theo seed (cùng seed đánh giá nên chỉ khác ở κ).
 
 | θ | N trung bình | SE | V (USD) | Chi voucher (USD) | % (ô, slot) tắt | κ (cũ → mới) | lượt pilot | Kém θ tốt nhất (± SE ghép cặp) | Thuộc tập θ\* | N mới − cũ (± SE) |
@@ -195,7 +196,7 @@ foreach ($d in "legacy_28d","rider_ab_28d","switchback_c1_28d","switchback_c7_28
 | `sweep_ring1_dr` | như trên, thêm `--set policy.threshold.score_fn=analysis.uplift:tau_x_dr_all_per_dollar` | Sweep θ với ŝ `ring1` và hàm điểm học được (H-22 ii); regret của θ̂ (A), (B) của H5.3 |
 | `sweep_cell_dr` | như `sweep_ring1_dr` nhưng bỏ `--set policy.threshold.scope=ring1` | Sweep θ với ŝ theo ô và hàm điểm học được (H-22 ii) |
 | `sweep_ring1_random` | như `sweep_ring1_dr` nhưng `--set policy.threshold.score_fn=random` (Hoàng, 05/10) | H5.3: regret của θ̂ (B) với tầng rider rải đều (H-26). θ tốt nhất 3 (3.884,5), tập θ* {3}; N(θ = 0) 3.807,0 trùng dòng `random` của T5.1; θ = 5 trùng `sweep_ring1_dr` (3.849,2, κ = −∞); 6 phút, 16 tiến trình |
-| `qini_vs_value` | `python -m analysis.qini_vs_value --data runs/b7a/rider_ab_28d --table runs/s5/policy_table --outcome completed --out runs/s5/qini_vs_value` (và `--outcome requested`) | T5.2 (T-33) |
+| `qini_vs_value` | `python -m analysis.qini_vs_value --data runs/b7a/rider_ab_28d --table runs/s5/policy_table --outcome completed --out runs/s5/qini_vs_value` (và `--outcome requested`) | T5.2 (T-33). Từ 05/10 tối, `--outcome completed` ghi thêm `results/offer_efficiency.parquet` (T-36); chạy lại lệnh trên nếu thư mục thiếu file này (khoảng 6 phút) |
 | `interference` | `python -m analysis.interference designs --gte runs/b7a/gte runs/b7a/rider_ab_28d runs/b7a/switchback_c1_28d runs/b7a/switchback_c7_28d runs/b7a/switchback_all_28d --out runs/s5/interference` (và `--outcome requested`); `python -m analysis.interference confounding runs/s5/legacy_gu_0_28d runs/s5/legacy_gu_0p5_28d runs/b7a/legacy_28d runs/s5/legacy_gu_2_28d --out runs/s5/interference` | T5.3 (T-34) |
 | `legacy_gu_0_28d`, `legacy_gu_0p5_28d`, `legacy_gu_2_28d` | `python -m sim run --mode generate --config config/default.yaml --set policy.name=legacy --set policy.legacy.target_g_u=<0 / 0.5 / 2> --out runs/s5/legacy_gu_<0 / 0p5 / 2>_28d` | T5.3: độ nhạy theo `u_latent`; cùng `run_seed = 0` nên cùng 718.749 session với `legacy_28d` (`target_g_u` = 1) |
 
@@ -238,3 +239,27 @@ N theo θ (chi / B, % (ô, slot) tắt); **đậm** = thuộc tập θ\*:
 - **Regret của θ̂ (H5.3) trên các sweep `ring1`:** θ̂ (A) = 0,25: 5,1 ± 3,1 [−1,3; 11,5] (0,13%) với DR/USD; 30,5 ± 4,2 (0,78%) với heuristic. θ̂ (B) = 5: 168,2 ± 5,3 [157,4; 178,9] (4,19%) với DR/USD; 66,5 ± 3,9 (1,70%) với heuristic. Ở θ = 5 trên `ring1`, 70% (ô, slot) tắt, κ = −∞ (phát cho mọi session của ô còn bật) mà vẫn chỉ chi 0,890 × B: tầng ô cắt nhiều hơn mức ngân sách cần.
 - **Với `ring1`, θ > `monitor.slack_cap` (10) là `all_off`.** `ring1` cắt +∞ ở `slack_cap` (H-25a), còn ŝ theo ô với `forecast: persistence` giữ +∞ (ô bật, T-23b). Vì vậy ở θ = 30, `ring1` tắt 100% và N = 3.443,5 (≈ `all_off` 3.440,1), còn ô vẫn bật 25% (ô có xe rảnh mà không xe nào đi đón). Chỉ điểm θ = 30 bị ảnh hưởng; tập θ\* không đổi.
 - Kiểm chéo: π_θ θ = 0,5 heuristic của `policy_table` = 3.894,9, trùng điểm θ = 0,5 của B7b; π_θ̂ (B) `ring1` = 3.849,2, trùng θ = 5 của `sweep_ring1_dr`. Lượt chạy ~15–18 phút mỗi sweep (480 lượt + pilot κ).
+
+---
+
+## Dữ liệu Sprint 6 (05/10/2026, `runs/s6`): kiểm định cho notebook 01
+
+Notebook kết quả chỉ đọc dữ liệu, không chạy mô phỏng (H-27). Các thư mục dưới đây cho notebook `01_simulator_kiem_dinh` các số A1, A3, A5 và CAL; A2 (b) dùng `runs/s5/policy_table` và `runs/b7b_h21/sweep_theta_ref`, A4 dùng `runs/b7a/switchback_c7_28d`. Sinh bằng code `52f99a5` (`sim/` không đổi trong S6), `config_hash(default.yaml)` = `92b7d13adc39`.
+
+| Thư mục | Lệnh (`python -m sim run --config config/default.yaml ...`) | Dùng cho | `config_hash` | Thời gian |
+|---|---|---|---|---|
+| `a5_evaluate_1proc` | `--mode evaluate --set sweep.n_seeds=3 --set runner.n_procs=1 --out runs/s6/a5_evaluate_1proc` | A5: thời gian engine 1 ngày, 1 tiến trình, log tối thiểu (chạy riêng, máy không bận) | `dca3cafc1f50` | 44 s |
+| `throughput` | `--mode throughput_curve --out runs/s6/throughput` | A1: 16 mức cầu × 3 seed | — (mode chỉ ghi `results/`, spec §7) | 152 s |
+| `gte_full_5` | `--mode gte --set gte.n_seeds=5 --log-level full --out runs/s6/gte_full_5` | CAL: log đầy đủ của all_off 5 seed (cùng các job của test chậm CAL); kèm all_on | `06a9d1599ace` | 25 s |
+| `a3_h0` | `--mode evaluate --set sweep.n_seeds=5 --out runs/s6/a3_h0` | A3: π_θ θ = 0,35, h = 0 | `feb7327a82e5` | 36 s |
+| `a3_h01` | như trên, thêm `--set policy.threshold.hysteresis_h=0.1`, `--out runs/s6/a3_h01` | A3: h = 0,1 | `a37ada11e9eb` | 42 s |
+
+`check_dataset`: OK cả 4 thư mục có `meta/`; `throughput` báo thiếu `meta/run_metadata` vì mode `throughput_curve` chỉ ghi `results/throughput_curve.parquet` (đúng spec §7), không phải lỗi dữ liệu.
+
+Số chính (chi tiết trong notebook 01):
+- A1 đạt 4/4: đỉnh 781,2 chuyến/giờ ở mức 3,25 (trùng gate P3, log H3.2); mức cầu lớn nhất 0,845 × đỉnh; slack lớn nhất sau đỉnh 0,095; bước ETA lớn nhất 1,871 phút.
+- CAL 5/5 trong khoảng: P(đặt) 0,1535; tăng request +50,6%; giá trung bình 19,03 USD; (ô, slot) căng 27,9%, dư 63,3%. `tests/test_validation.py` kiểm rằng tính từ bảng đã lưu bằng đúng số test chậm tính trong bộ nhớ (cùng seed).
+- A2 (b): Var(hiệu, CRN) / Var(hiệu, seed độc lập) = 0,171 trên 30 seed, 0,135 trên 20 seed (ngưỡng 0,5; T-37).
+- A3: trung vị 25,6 lần/ô/ngày (h = 0), 25,0 (h = 0,1); N không đổi (3.884,6 và 3.883,0).
+- A4: 0 lần đổi dấu (trùng H4.2).
+- A5: trung vị 5,75 giây / ngày mô phỏng (ngưỡng 30).

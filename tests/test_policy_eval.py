@@ -95,6 +95,16 @@ def test_break_ties_keeps_the_order_between_strata_and_randomizes_inside():
         assert (lo[same] == u_order[same]).all()                                      # inside a stratum: by u_score
 
 
+def test_paired_steps_are_paired_by_seed():
+    from analysis.policy_table import paired_steps
+    runs = pd.DataFrame({"seed": [0, 1, 2] * 3, "label": ["a"] * 3 + ["b"] * 3 + ["c"] * 3,
+                         "N_completed": [10.0, 20.0, 30.0, 12.0, 21.0, 33.0, 12.0, 25.0, 30.0]})
+    steps = paired_steps(runs, [("a", "b"), ("b", "c")]).set_index("to")
+    assert steps.loc["b", "diff"] == pytest.approx(2.0) and steps.loc["b", "diff_se"] == pytest.approx(1 / math.sqrt(3))
+    assert steps.loc["b", "from_mean"] == pytest.approx(20.0) and steps.loc["b", "n_seeds"] == 3
+    assert steps.loc["c", "diff"] == pytest.approx(1 / 3)
+
+
 def test_default_specs_are_valid():
     labels = [s.label for s in DEFAULT_SPECS]
     assert len(set(labels)) == len(labels) and "all_on_B" in labels
@@ -179,6 +189,28 @@ def test_scoring_logged_sessions_uses_observed_columns_only(tiny_runs):
     assert (explore["sessions"]["assign_mechanism"] == "explore").all()
     with pytest.raises(ValueError):
         randomized_sessions(tiny_runs["legacy"])                               # observational data
+
+
+def test_offer_efficiency_by_hand():
+    from analysis.qini_vs_value import offer_efficiency
+    # 8 sessions over 2 days; score >= kappa offers the first four; slack known for all but one.
+    sessions = pd.DataFrame({"day": [0, 0, 0, 0, 1, 1, 1, 1], "slot": [1, 1, 2, 2, 97, 97, 98, 98],
+                             "pu_cell": [0, 1, 0, 1, 0, 1, 0, 1],
+                             "voucher_value_usd": [4.0, 6.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0]})
+    snaps = pd.DataFrame({"slot": [1, 1, 2, 97, 97, 98, 98], "cell": [0, 1, 0, 0, 1, 0, 1],
+                          "slack_lag_slot": [0.0, 2.0, 0.0, 1.0, 1.0, 1.0, 1.0]})
+    data = {"sessions": sessions, "snapshots": snaps,
+            "y": np.array([1, 1, 0, 1, 1, 0, 0, 0], float), "t": np.array([1, 1, 0, 0, 1, 1, 0, 0], bool)}
+    score = np.array([4, 3, 2, 1, 0, 0, 0, 0], float)
+    eff = offer_efficiency(data, {"a": score, "none": score}, {"a": 1.0, "none": math.inf}).set_index("label")
+    a = eff.loc["a"]
+    assert a["share_offered"] == 0.5 and a["q1"] == 1.0 and a["q0"] == 0.5          # treated 0, 1; control 2, 3
+    assert a["voucher_per_offer_usd"] == 5.0
+    assert a["voucher_cost_per_day"] == pytest.approx(5.0 * 2)                       # 4 offers / 2 days, 5 USD each
+    assert a["extra_trips_per_day"] == pytest.approx(0.5 * 2)
+    assert a["extra_trips_per_100usd"] == pytest.approx(10.0)
+    assert a["share_offered_slack0"] == pytest.approx(2 / 3)                         # cell 1 of slot 2 unknown
+    assert eff.loc["none", "share_offered"] == 0 and math.isnan(eff.loc["none", "extra_trips_per_100usd"])
 
 
 def test_compare_pairs_flags_higher_qini_with_lower_value():

@@ -14,6 +14,10 @@ score, kappa-auto, budget B), and differences are paired by seed.
 A pair (a, b) is an example for the acceptance criterion "Qini higher but N lower" when the
 Qini of a is higher than the Qini of b and N(a) is lower than N(b), both with 95% intervals that
 exclude 0 (decisions T-33).
+
+With ``--outcome completed`` it also writes ``offer_efficiency.parquet`` (:func:`offer_efficiency`):
+the sessions each score offers at its own kappa and the extra trips per USD of that set measured
+on the randomized data, to tell a cost effect from a supply effect (decisions T-36).
 """
 
 from __future__ import annotations
@@ -166,13 +170,23 @@ def randomized_sessions(run_dir: Path, *, outcome: str = "completed", explore_on
             "t": s["arm"].to_numpy() == 1, "unit": unit}
 
 
-def qini_table(data: dict, scores: dict[str, str], *, n_boot: int = 200, seed: int = 0) -> tuple[pd.DataFrame, dict]:
-    """Qini coefficient per label with a bootstrap over units; also returns the bootstrap draws per label."""
+def score_all(data: dict, scores: dict[str, str], *, seed: int = 0) -> dict[str, np.ndarray]:
+    """The scores of every label's ``score_fn`` on the sessions of ``data`` (one scoring pass per label)."""
+    return {label: score_sessions(data["sessions"], data["riders"], data["snapshots"], score_fn, seed=seed)
+            for label, score_fn in scores.items()}
+
+
+def qini_table(data: dict, scores: dict[str, str], *, n_boot: int = 200, seed: int = 0,
+               scored: dict[str, np.ndarray] | None = None) -> tuple[pd.DataFrame, dict]:
+    """Qini coefficient per label with a bootstrap over units; also returns the bootstrap draws per label.
+
+    ``scored`` (from :func:`score_all`) skips scoring the sessions again.
+    """
     w = UnitBootstrap(data["unit"], n_boot, seed)
+    scored = scored if scored is not None else score_all(data, scores, seed=seed)
     rows, draws = [], {}
     for label, score_fn in scores.items():
-        ranked = RankedSessions(data["y"], data["t"], score_sessions(data["sessions"], data["riders"],
-                                                                    data["snapshots"], score_fn, seed=seed))
+        ranked = RankedSessions(data["y"], data["t"], scored[label])
         point = ranked.qini_coef()
         boot = np.array([ranked.qini_coef(w[b]) for b in range(n_boot)])
         draws[label] = boot
@@ -180,6 +194,40 @@ def qini_table(data: dict, scores: dict[str, str], *, n_boot: int = 200, seed: i
         rows.append({"label": label, "score_fn": score_fn, "qini_coef": point, "qini_lo": float(lo),
                      "qini_hi": float(hi), "n_sessions": len(data["y"]), "n_distinct_scores": len(ranked.ends)})
     return pd.DataFrame(rows), draws
+
+
+def offer_efficiency(data: dict, scored: dict[str, np.ndarray], kappas: dict[str, float]) -> pd.DataFrame:
+    """Who each score offers on the randomized data, and what offering them buys per USD.
+
+    A session counts as offered when its score is >= the kappa that kappa-auto gave this score in
+    the T5.1 table (theta = 0, every cell on). Within the offered set, the randomization gives the
+    individual-level effect: ``q1`` / ``q0`` = completion rate with / without the voucher. A voucher
+    is paid only on a completed trip, so the cost of an offer is ``voucher x q1`` and the extra
+    trips per USD are ``(q1 - q0) / (voucher x q1)``. These numbers hold the market fixed (no
+    competition for drivers), so if they rank the scores like N under B does, the gap between
+    Qini and N is a cost effect, not a supply effect (task T5.2). ``data["y"]`` must be
+    ``completed``.
+    """
+    s, y, t = data["sessions"], np.asarray(data["y"], dtype=np.float64), np.asarray(data["t"], dtype=bool)
+    voucher = s["voucher_value_usd"].to_numpy(np.float64)
+    s_hat = slack_hat(s, data["snapshots"])
+    n_days = s["day"].nunique()
+    rows = []
+    for label, score in scored.items():
+        offered = np.asarray(score, dtype=np.float64) >= kappas[label]
+        on, off = offered & t, offered & ~t
+        q1 = float(y[on].mean()) if on.any() else math.nan
+        q0 = float(y[off].mean()) if off.any() else math.nan
+        per_day = offered.sum() / n_days
+        cost = float(np.mean(voucher[on] * y[on])) * per_day if on.any() else math.nan
+        extra = (q1 - q0) * per_day
+        known = offered & ~np.isnan(s_hat)
+        rows.append({"label": label, "kappa": float(kappas[label]), "share_offered": float(offered.mean()),
+                     "voucher_per_offer_usd": float(voucher[on].mean()) if on.any() else math.nan,
+                     "share_offered_slack0": float((s_hat[known] == 0).mean()) if known.any() else math.nan,
+                     "q0": q0, "q1": q1, "extra_trips_per_day": extra, "voucher_cost_per_day": cost,
+                     "extra_trips_per_100usd": 100.0 * extra / cost if cost > 0 else math.nan})
+    return pd.DataFrame(rows)
 
 
 def policy_runs(table_dir: Path) -> pd.DataFrame:
@@ -232,6 +280,20 @@ def markdown(qini: pd.DataFrame, pairs: pd.DataFrame, runs: pd.DataFrame) -> str
     return "\n".join(lines)
 
 
+def efficiency_markdown(efficiency: pd.DataFrame) -> str:
+    """Table of :func:`offer_efficiency` sorted by N, and the rank correlation of N with extra trips per USD."""
+    lines = ["| Hàm điểm | N dưới B | Session được phát | Voucher / lượt phát (USD) | q0 / q1 | Chuyến thêm / 100 USD |",
+             "|---|---|---|---|---|---|"]
+    for r in efficiency.sort_values("N_mean", ascending=False).itertuples():
+        lines.append(f"| `{r.label}` | {_vn(r.N_mean)} | {_vn(100 * r.share_offered, 0)}% | "
+                     f"{_vn(r.voucher_per_offer_usd, 2)} | {_vn(r.q0, 3)} / {_vn(r.q1, 3)} | "
+                     f"{_vn(r.extra_trips_per_100usd, 2)} |")
+    rho = efficiency[["N_mean", "extra_trips_per_100usd"]].corr(method="spearman").iloc[0, 1]
+    lines += ["", f"Spearman(N dưới B, chuyến thêm / 100 USD ở mức cá nhân) = {_vn(rho, 3)} "
+                  f"trên {len(efficiency)} hàm điểm"]
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m analysis.qini_vs_value", description=__doc__.splitlines()[0])
     parser.add_argument("--data", type=Path, required=True, help="randomized run (rider_ab, switchback) or legacy")
@@ -242,19 +304,29 @@ def main(argv=None) -> int:
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
     runs = policy_runs(args.table)
-    scored = runs[(runs["policy"] == "threshold") & (runs["theta"] == 0.0)]
-    scores = dict(scored.groupby("label")["score_fn"].first())
+    at_zero = runs[(runs["policy"] == "threshold") & (runs["theta"] == 0.0)].groupby("label")
+    scores = dict(at_zero["score_fn"].first())
     data = randomized_sessions(args.data, outcome=args.outcome, explore_only=args.explore_only)
-    qini, draws = qini_table(data, scores, n_boot=args.n_boot)
+    scored = score_all(data, scores)
+    qini, draws = qini_table(data, scores, n_boot=args.n_boot, scored=scored)
     pairs = compare_pairs(qini, draws, runs)
+    efficiency = None
+    if args.outcome == "completed":                 # the voucher is paid on completed trips only
+        efficiency = offer_efficiency(data, scored, dict(at_zero["kappa"].first()))
+        efficiency["N_mean"] = efficiency["label"].map(at_zero["N_completed"].mean())
     if args.out is not None:
         out = Path(args.out) / "results"
         out.mkdir(parents=True, exist_ok=True)
         qini.to_parquet(out / f"qini_{args.outcome}.parquet", index=False)
         pairs.to_parquet(out / f"qini_pairs_{args.outcome}.parquet", index=False)
+        if efficiency is not None:
+            efficiency.to_parquet(out / "offer_efficiency.parquet", index=False)
     print(f"data {args.data} ({'explore slice' if args.explore_only else 'all sessions'}), outcome {args.outcome}, "
           f"{len(data['y'])} sessions, {len(np.unique(data['unit']))} units, {args.n_boot} bootstrap draws")
     print(markdown(qini, pairs, runs))
+    if efficiency is not None:
+        print()
+        print(efficiency_markdown(efficiency))
     return 0
 
 
