@@ -278,7 +278,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8), H5.2 xong (DR-learner, H-24), H5.3 dở: đã chọn ŝ = `ring1` (H-25), có θ̂ (A), (B), confounding; chờ Tình cài H-21, `ring1` và chạy sweep mới để tính regret.
+**Đang làm:** S5 của Hoàng xong: H5.1 (giao B8), H5.2 (DR-learner, H-24), H5.3 (ŝ = `ring1`, θ̂ (A) = 0,25 regret 0,13%, H-25, H-26); đã kéo `develop` (`1c3d5a8`, PR #17) về `develop2`, nhận B7b bản H-21. Chờ mở PR S5 `develop2` → `develop`. Gate P6 chờ mentor xác nhận T-31.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -592,3 +592,19 @@ Mẫu:
 - Bàn giao: cần Tình: (1) cài H-21; (2) thêm `ring1` vào `ThresholdPolicy` (khóa YAML mới); (3) sweep tham chiếu với ŝ = `ring1`, cùng `heuristic_low_freq` và `analysis.uplift:tau_x_dr_all_per_dollar` (H-22 (ii))
 - Còn lại / bước tiếp: khi có sweep mới: regret của θ̂ (A) và (B) theo `ring1`; xem lại giả định của (B) (tầng rider rải đều, hiệu ứng chỉ theo giờ) nếu regret lớn
 
+### 2026-10-05 · B7b bản H-21 và sweep `ring1` của Tình · nhận B7b (bản H-21)
+- Nhánh/PR: `develop` (`1c3d5a8`, PR #17) kéo về `develop2` (fast-forward); review PR #17: đọc `ThresholdPolicy` `ring1` (cùng phép tính với `analysis.estimate.ring_slack` mà θ̂ dùng), `.gitattributes`, `config.py`, dòng sửa trong `test_acceptance_core.py`: không có vấn đề
+- Đã làm: chạy phần "Người nhận kiểm tra": sinh lại `runs/b7b_h21/sweep_theta_ref` và `runs/s5/sweep_ring1_dr` theo `docs/datasets.md` (16 tiến trình, 6 phút và 9 phút)
+- Test: `check_dataset` OK cả hai; N trung bình của 16 θ, tập θ\* ([0,3; 2], loại 1 và [0,2; 1,5]) và regret (θ = 0: 39,5 ± 4,0 và 27,4 ± 4,1) **trùng từng số** với bảng của Tình. `config_hash` của B7b sinh lại là `11358df900a6` (Tình: `19f46649271e`) vì `default.yaml` thêm khóa `scope` sau lượt của Tình (T-35 f); `sweep_ring1_dr` trùng hash `c54d6db7563e`
+- Lệch spec / quyết định mới: không
+- Bàn giao: nhận B7b bản H-21; `runs/b7b` và `runs/p6` (bản cũ) xóa được
+- Còn lại / bước tiếp: chốt H5.3
+
+### 2026-10-05 · H5.3 · regret của θ̂, chọn θ̂ (A), sửa đọc bộ dữ liệu cũ · xong
+- Nhánh/PR: `develop2` → `develop` (PR cuối S5), review: Tình
+- Đã làm: sweep mới `runs/s5/sweep_ring1_random` (`ring1`, điểm `random`, 16 θ × 30 seed) để chấm θ̂ (B) đúng với giả định của nó; `analysis/estimate.py`: `stored_config` (bộ B7a sinh trước khi có `scope`, `kappa_max_iter` làm `experiment_frame` báo thiếu khóa); `tests/test_estimate.py` (+1); H-26; dòng `sweep_ring1_random` trong `docs/datasets.md`
+- Test: `pytest -q` → 525 passed, 1 skipped, 8 deselected (218 s, py3.12 `.venv`); `check_dataset` `sweep_ring1_random` OK; N(θ = 0) 3.807,0 trùng dòng `random` của T5.1
+- Regret theo N trên `ring1` (30 seed): DR/USD: θ̂ (A) = 0,25 → **5,1 ± 3,1 (0,13%, CI chứa 0)**, θ̂ (B) = 5 → 168,2 ± 5,3 (4,19%); heuristic: 30,5 / 66,5; `random` (θ tốt nhất 3, tập θ\* {3}): (A) 56,3 ± 5,2 (1,45%), (B) 35,3 ± 5,7 (0,91%). Mỗi θ̂ đúng với tầng rider nó giả định; (B) vượt vì ước chi ở θ = 5 là 6.552 USD/ngày, thực tế 4.937 (0,89 B). Ở θ = 0 mô hình (B) khớp: +361,5 dự báo, +366,9 đo
+- Lệch spec / quyết định mới: H-26 (π_θ̂ khuyến nghị = `ring1` + `tau_x_dr_all_per_dollar` + θ = 0,25; mặc định `scope` giữ `cell`; không học lại τ̂(x, s) trên `ring1`)
+- Bàn giao: không
+- Còn lại / bước tiếp: S5 của Hoàng xong; PR `develop2` → `develop`. Mở: kiểm giả thuyết ŝ khi voucher bật thấp hơn ŝ trên `all_off` (lý do (B) vượt), để sau nếu còn thời gian

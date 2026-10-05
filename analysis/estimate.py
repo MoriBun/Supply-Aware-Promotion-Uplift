@@ -68,14 +68,33 @@ def run_config(run: dict[str, pd.DataFrame]) -> dict:
     return yaml.safe_load(run["run_metadata"]["config_yaml"].iloc[0])
 
 
+def stored_config(raw: dict):
+    """``Config`` of a stored run config; keys added to ``config/default.yaml`` after the run take their default.
+
+    ``build_config`` rejects a stored config that lacks a key added later (e.g. B7a, generated
+    before ``policy.threshold.scope``, decisions T-32, T-35); every stored value still wins.
+    """
+    from sim.config import build_config, load_raw
+
+    def merge(base: dict, overlay: dict) -> None:
+        for key, value in overlay.items():
+            if isinstance(value, dict) and isinstance(base.get(key), dict):
+                merge(base[key], value)
+            else:
+                base[key] = value
+
+    base = load_raw(Path(__file__).resolve().parents[1] / "config" / "default.yaml")
+    merge(base, raw)
+    return build_config(base)
+
+
 def experiment_frame(run_dir: Path | str) -> pd.DataFrame:
     """One row per in-window session of a switchback run: arm, outcome, unit and the moderators."""
-    from sim.config import build_config
     from sim.space import build_space
 
     run = load_run(Path(run_dir))
     cfg = run_config(run)
-    neighbors = build_space(build_config(cfg)).neighbors
+    neighbors = build_space(stored_config(cfg)).neighbors
     slots_per_block = cfg["experiment"]["block_min"] // cfg["time"]["slot_min"]
     sessions, orders, snaps = run["sessions"], run["orders"], run["slot_snapshots"]
 

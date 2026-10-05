@@ -9,6 +9,7 @@ import pandas as pd
 import pytest
 
 from analysis import estimate, scores
+from analysis.io import load_run
 from analysis.estimate import (
     assign_bins, effect_by_bin, experiment_frame, isotonic_increasing, naive_total_effect, ratio_slack,
     sign_changes, theta_hat,
@@ -166,6 +167,15 @@ def test_experiment_frame_from_a_generated_run(tiny_run):
     assert frame["cell_pre"].notna().all() and (frame["cell_pre"] >= 0).all()   # warm-up gives block 1 a past
     table = effect_by_bin(frame, "system_pre", edges=[0, np.inf], n_boot=50)
     assert table["n_on"][0] > 0 and table["n_off"][0] > 0
+
+
+def test_stored_config_accepts_a_run_made_before_a_key_was_added(tiny_run):
+    # B7a was generated before policy.threshold.scope / kappa_max_iter existed (decisions T-32, T-35).
+    out, cfg = tiny_run
+    raw = estimate.run_config(load_run(out))
+    del raw["policy"]["threshold"]["scope"], raw["policy"]["threshold"]["kappa_max_iter"]
+    old = estimate.stored_config(raw)
+    assert old.policy.threshold.scope == "cell" and old.space.grid_radius == 1          # stored values win
 
 
 def test_frame_rejects_a_run_without_experiment(tmp_path):
