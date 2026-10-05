@@ -14,6 +14,9 @@ effect. It uses observed columns only.
 in the stratum (a voucher is only paid when the trip completes). The budget B is in
 dollars, so under B the offers worth making first are those with the most extra trips
 per dollar, not the most extra trips per offer.
+
+``predict_frame`` gives the same scores for every session of a saved run, so the ranking can be
+judged offline (Qini / AUUC, T5.2) by joining on ``session_id``; the CLI writes it to parquet.
 """
 
 from __future__ import annotations
@@ -119,12 +122,47 @@ def tau_per_dollar_baseline(batch, s_hat: np.ndarray) -> np.ndarray:
     return score_from_table(batch.x_freq, batch.x_segment, edges, tau / cost)
 
 
+SCORE_FUNCTIONS = {"tau_x_baseline": tau_x_baseline, "tau_per_dollar_baseline": tau_per_dollar_baseline}
+
+
+def predict_frame(sessions: pd.DataFrame, riders: pd.DataFrame) -> pd.DataFrame:
+    """One row per session: its id, rider, window flag and the score of every function in ``SCORE_FUNCTIONS``.
+
+    Rider features come from ``observed/riders``, as the simulator puts them in the ``SessionBatch``;
+    the result is the score the policy would give the session (the scores ignore ``s_hat``).
+    """
+    feats = sessions[["session_id", "rider_id"]].merge(riders[["rider_id", "x_freq", "x_segment"]],
+                                                        on="rider_id", how="left", validate="many_to_one")
+    if feats["x_freq"].isna().any():
+        raise ValueError("sessions with a rider_id missing from riders")
+    edges, tau, cost = load_table()
+    table = {"tau_x_baseline": tau, "tau_per_dollar_baseline": tau / cost}
+    out = sessions[["session_id", "rider_id", "in_window"]].reset_index(drop=True).copy()
+    for name in SCORE_FUNCTIONS:
+        out[name] = score_from_table(feats["x_freq"], feats["x_segment"], edges, table[name])
+    return out
+
+
+USAGE = ("usage: python -m analysis.scores fit <legacy run dir>\n"
+         "       python -m analysis.scores predict <run dir> <out.parquet>")
+
+
 def main(argv: list[str]) -> int:
-    """``python -m analysis.scores fit <legacy run dir>``: refit and save the baseline table."""
+    """``fit <legacy run dir>``: refit and save the baseline table; ``predict <run dir> <out>``: score its sessions."""
     from analysis.io import completed_outcome, load_run
 
+    if len(argv) == 4 and argv[1] == "predict":
+        run = load_run(Path(argv[2]))
+        pred = predict_frame(run["sessions"], run["riders"])
+        trained_on = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))["run_id"]
+        out = Path(argv[3])
+        out.parent.mkdir(parents=True, exist_ok=True)
+        pred.to_parquet(out, index=False)
+        print(f"saved {out}: {len(pred)} sessions of {run['run_metadata']['run_id'].iloc[0]}, "
+              f"table fitted on {trained_on}")
+        return 0
     if len(argv) != 3 or argv[1] != "fit":
-        print("usage: python -m analysis.scores fit <legacy run dir>")
+        print(USAGE)
         return 2
     run = load_run(Path(argv[2]))
     sessions = run["sessions"][run["sessions"]["in_window"]]

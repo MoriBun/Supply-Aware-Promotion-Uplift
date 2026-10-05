@@ -231,7 +231,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. Tiếp theo: S5, H5.1 giao B8, H5.2 DR-learner; H5.3 sau khi chốt ŝ (H-22) và chạy lại B7b (H-21).
+**Đang làm:** S4 xong và đã gộp vào `develop` (PR #13); đã kéo `develop` (`a5ccc50`, PR #14) về `develop2`. Q24, Q26–Q28 đã chốt (H-21…H-23); Gate P6 chờ mentor xác nhận T-31. S5: H5.1 xong (giao B8), H5.2 xong (DR-learner, H-24), H5.3 dở: đã chọn ŝ = `ring1` (H-25), có θ̂ (A), (B), confounding; chờ Tình cài H-21, `ring1` và chạy sweep mới để tính regret.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -513,3 +513,35 @@ Mẫu:
 - Lệch spec / quyết định mới: H-21 (lệch spec §6, D12 cũ; đã sửa spec), H-22, H-23
 - Bàn giao: không. Việc kéo theo cho Tình: cài H-21 trong `sim/runner.py` (khóa YAML số lần lặp), chạy lại sweep B7b
 - Còn lại / bước tiếp: H5.1 giao B8; chốt định nghĩa ŝ với Tình theo H-22 trước H5.3
+
+### 2026-10-05 · H5.1 · giao B8: hàm điểm τ̂ nền và parquet dự đoán · xong
+- Nhánh/PR: `develop2` (PR cuối S5, hoặc PR sớm nếu Tình cần trước)
+- Đã làm: `analysis/scores.py`: `predict_frame`, `SCORE_FUNCTIONS`, CLI `predict <run dir> <out.parquet>`; `tests/test_estimate.py` (+4: nạp hàm điểm trong tiến trình `spawn` ×2, `predict_frame` khớp hàm điểm và tất định, CLI không có cột ẩn); `runs/b8/predictions_<bộ>.parquet` cho 5 bộ B7a (718.749 dòng mỗi bộ); mục B8 trong `datasets.md`
+- Test: `pytest -q` → 480 passed, 1 skipped (py3.12 `.venv`); chạy thật `evaluate` với `score_fn=analysis.scores:tau_per_dollar_baseline`, 2 seed, 2 tiến trình: N = 3.932,5 (se 60,5), chi 5.545,80 = B
+- Số liệu cho T5.2: Qini (`qini_coef`, `rider_ab_28d`, trong cửa sổ) `tau_x_baseline` +846,4; `tau_per_dollar_baseline` −633,9; `heuristic_low_freq` −985,9. Dưới cùng B (H4.2) thứ tự N lại ngược: per_dollar 3.896,0 > heuristic 3.882,8 > tau_x 3.862,4, là ví dụ "Qini cao hơn mà N thấp hơn"
+- Lệch spec / quyết định mới: không
+- Bàn giao: giao B8; người nhận kiểm tra: `pytest -q tests/test_estimate.py`
+- Còn lại / bước tiếp: H5.2 DR-learner
+
+### 2026-10-05 · H5.2 · DR-learner τ̂(x), τ̂(x, s) trên `completed` · xong
+- Nhánh/PR: `develop2` (PR cuối S5)
+- Đã làm: `analysis/uplift.py` (DR-learner Kennedy 2023, cross-fit 5 fold theo rider, LightGBM; mẫu `dr_explore` và `dr_all`; 8 hàm điểm `analysis.uplift:tau_{x,xs}_dr[_all][_per_dollar]`; CLI `python -m analysis.uplift fit runs/b7a/legacy_28d`); mô hình trong `analysis/models/dr_*` (có commit); `tests/test_uplift.py` (+17); `lightgbm>=4.0` vào extras `[analysis]`; quyết định H-24
+- Test: `pytest -q` → 497 passed, 1 skipped (py3.12 `.venv`)
+- Hiệu ứng trung bình (ATE) lên `completed`: `dr_explore` 0,0697 ± 0,0037 (naive 0,0695); `dr_all` 0,1010 ± 0,0009 (naive 0,1019): DR không gỡ được nhiễu do `u_latent` (số liệu cho H5.3)
+- N dưới cùng B, θ = 0, 10 seed, hiệu ghép cặp so với `random` (3.795,8; κ auto một pilot, trước H-21): `tau_x_dr_all_per_dollar` +181,5 ± 9,9; `tau_per_dollar_baseline` +174,3 ± 7,8; `tau_xs_dr_all_per_dollar` +172,2 ± 11,1; `tau_x_dr_per_dollar` +115,7 ± 7,4; `tau_xs_dr_per_dollar` +113,5 ± 8,8; `heuristic_low_freq` +48,8 ± 8,4; mọi điểm τ̂ theo chuyến đều âm (−26,7 … −52,6) dù Qini cao nhất (`dr_all tau_xs` +1.600,6 trên `rider_ab`). Thêm s vào hàm điểm không làm N tăng
+- Lệch spec / quyết định mới: H-24
+- Bàn giao: không (bổ sung cho B8: thêm hàm điểm DR cho T5.1)
+- Còn lại / bước tiếp: H5.3 (chờ B7b chạy lại theo H-21; đo `ar` và chọn ŝ theo H-22)
+
+### 2026-10-05 · H5.3 · chọn ŝ, tác hại theo giờ, θ̂ (A) và (B), confounding · dở (chờ Tình: H-21, ŝ `ring1`, sweep mới)
+- Nhánh/PR: `develop2` → `develop` (PR giữa S5 để Tình có B8, hàm DR, H-25), review: Tình
+- Đã làm: `analysis/tension.py` (so 7 chỉ số căng theo H-22); `analysis/estimate.py` (+ `ring_slack`, moderator `ring_pre`); `analysis/theta.py` (hiệu ứng và chi phí theo giờ có bootstrap theo đơn vị, θ̂ (A) không ngân sách và (B) có ngân sách); `tests/test_tension.py` (+5), `tests/test_theta.py` (+3), `tests/test_estimate.py` (thêm kiểm `ring_pre`); spec §6 (phạm vi `ring1`); H-25
+- Test: `pytest -q` → 505 passed, 1 skipped (py3.12 `.venv`)
+- Chọn ŝ (`all_off`, 5 seed × 3 ngày, 383.807 session): vòng 1 26,9% / 86,0% thắng cụm cố định 24,3% / 83,3% và ô 17,2% / 72,0% (số đầy đủ trong H-25)
+- Tác hại (bật/tắt toàn bộ, không ngân sách, 5 seed): theo giờ, bật voucher làm số chuyến 7h −15,4 ± 2,1, 8h −6,4 ± 6,8, 6h +0,4 ± 3,3; cả ngày +1.198,8. Ô có slack = 0: trung bình +2,3 chuyến / 100 session, riêng 7h −8,8. Trên switchback toàn hệ, hiệu ứng lên tỷ lệ hoàn thành 5–8h là −0,0071; −0,0048; −0,0066 [−0,0105; −0,0023]; −0,0017; switchback cụm 7 cùng giờ +0,034; +0,023; +0,029; +0,041
+- θ̂ (A, chỉ tác hại): `ring1` 0,25 [0,15; 0,30]; toàn hệ 0,75 [0,50; 0,95]; ô 0. θ̂ (B, có ngân sách): `ring1` 5,0 [5,0; 5,0]; ô 10,0 [5,0; 10,0]: mô hình (B) cắt quá tay. Regret sơ bộ trên B7b hiện có (ŝ theo ô, `heuristic_low_freq`, 30 seed, θ tốt nhất 1,5): θ̂ = 0: 53,27 ± 4,82 (1,37%); θ̂ = 10: 64,43 ± 4,82 (1,65%); θ = 5: 18,43 ± 4,42
+- Confounding và thiết kế (hiệu ứng tổng, chuyến/ngày, GTE thật +1.212,9): `rider_ab` +1.646,9 [1.512,0; 1.769,8]; switchback cụm 1 +1.633,2; cụm 7 +1.513,0; toàn hệ +1.312,7 [1.101,7; 1.513,6]. Legacy, hiệu ứng lên tỷ lệ hoàn thành: so thô +0,1018; DR toàn bộ +0,1010; lát explore +0,0695 (DR +0,0697)
+- Lệch spec / quyết định mới: H-25 (spec §6 thêm phạm vi `ring1`)
+- Bàn giao: cần Tình: (1) cài H-21; (2) thêm `ring1` vào `ThresholdPolicy` (khóa YAML mới); (3) sweep tham chiếu với ŝ = `ring1`, cùng `heuristic_low_freq` và `analysis.uplift:tau_x_dr_all_per_dollar` (H-22 (ii))
+- Còn lại / bước tiếp: khi có sweep mới: regret của θ̂ (A) và (B) theo `ring1`; xem lại giả định của (B) (tầng rider rải đều, hiệu ứng chỉ theo giờ) nếu regret lớn
+

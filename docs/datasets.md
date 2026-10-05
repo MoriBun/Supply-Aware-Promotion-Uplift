@@ -162,3 +162,27 @@ sweep_regret(runs, theta_hat=0.8)              # regret theo N của một ngư�
 Ước lượng θ̂ được chấm bằng regret theo N, không bằng khoảng cách tới θ\* (T-31): trong đoạn phẳng regret gần 0 dù θ̂ lệch xa θ = 1,5.
 
 `runs/p6/` (sweep 12 θ × 10 seed và các sweep chẩn đoán 5 seed dùng để ra quyết định T-31) đã được thay bằng các bộ trên; có thể xóa.
+
+## B8 (H5.1, giao ngày 05/10/2026): hàm điểm τ̂ nền và parquet dự đoán
+
+**Hàm điểm** (`analysis/scores.py`, bảng `analysis/models/tau_x_baseline.json`, có commit):
+- `analysis.scores:tau_x_baseline`: hiệu ứng voucher lên `completed`, theo `x_segment` × tercile `x_freq`, ước lượng trên lát explore của `legacy_28d` (H4.2).
+- `analysis.scores:tau_per_dollar_baseline`: cùng hiệu ứng chia cho chi phí voucher kỳ vọng của một lượt phát (số chuyến thêm trên 1 USD).
+- Dùng: `--set policy.threshold.score_fn=analysis.scores:tau_per_dollar_baseline`. Chỉ đọc `x_freq`, `x_segment` của `SessionBatch`, bỏ qua ŝ, tất định.
+
+**Parquet dự đoán** (`runs/b8/`, không commit): một file cho mỗi bộ B7a, `predictions_<bộ>.parquet`, 718.749 dòng; cột `session_id`, `rider_id`, `in_window`, `tau_x_baseline`, `tau_per_dollar_baseline`. Ghép với dữ liệu bằng `session_id`. Năm file giống nhau vì các bộ dùng chung session (CRN) và điểm chỉ phụ thuộc đặc trưng rider.
+
+Lệnh sinh lại (PowerShell):
+
+```powershell
+foreach ($d in "legacy_28d","rider_ab_28d","switchback_c1_28d","switchback_c7_28d","switchback_all_28d") {
+  & $py -m analysis.scores predict runs/b7a/$d runs/b8/predictions_$d.parquet
+}
+```
+
+**Kiểm tra trước khi dùng (điều kiện nhận B8):** `pytest -q tests/test_estimate.py` (có test nạp hàm điểm trong tiến trình con `spawn`, test tất định và test chỉ đọc cột của batch).
+
+**Lưu ý:** bảng τ̂ được ước lượng trên lát explore của `legacy_28d`. Các bộ khác cùng session nhưng khác cách gán voucher, nên kết quả kiểm định trên đó không độc lập hoàn toàn với dữ liệu huấn luyện.
+
+**Bổ sung H5.2 (DR-learner, H-24):** 8 hàm điểm `analysis.uplift:tau_x_dr`, `tau_xs_dr`, `tau_x_dr_per_dollar`, `tau_xs_dr_per_dollar` (mẫu explore) và các bản `..._all` (toàn bộ legacy). Mô hình ở `analysis/models/dr_*` (có commit); fit lại bằng `python -m analysis.uplift fit runs/b7a/legacy_28d`. Cần `pip install -e ".[analysis]"` (LightGBM). Kiểm tra: `pytest -q tests/test_uplift.py`.
+
