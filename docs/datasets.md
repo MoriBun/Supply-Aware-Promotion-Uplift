@@ -202,6 +202,8 @@ foreach ($d in "legacy_28d","rider_ab_28d","switchback_c1_28d","switchback_c7_28
 
 Ba bộ legacy mới (`config_hash` `2da8ea13c0e0` / `7306ebc20b78` / `5b6a3ba4079b`, code `8467f83` + H-21): N hoàn thành 105.941 / 106.911 / 108.177; tỷ lệ phát 22,0% / 22,2% / 22,2%; bị chặn ngân sách 0% / 0% / 2,9%; không order Truncated; `check_dataset` OK.
 
+Máy 16 GB RAM (Hoàng, 05/10): `policy_table` với mặc định một tiến trình mỗi lõi (16) hết bộ nhớ ảo khi các tiến trình cùng nạp LightGBM; chạy với `--set runner.n_procs=6` (khoảng 10 phút) và `$env:PYTHONIOENCODING = "utf-8"` nếu chuyển hướng output (H-28 e). Bảng sinh lại trên máy Hoàng trùng từng số với bảng của Tình (N của 15 chính sách); ba bộ `legacy_gu_*` sinh lại trùng N hoàn thành 105.941 / 106.911 / 108.177.
+
 ### Sweep θ theo phạm vi ŝ và hàm điểm (vòng 2, code `ed64f62` + thay đổi chưa commit)
 
 Cùng lưới 16 θ, cùng 30 seed, cùng B = 5.545,80 USD/kỳ với B7b (`runs/b7b_h21/sweep_theta_ref`, ŝ theo ô, `heuristic_low_freq`), nên ghép cặp được theo seed. `config_hash` của lượt: `89c0a9869ced` (`ring1`, heuristic), `c54d6db7563e` (`ring1`, DR), `0fa4fa60e36c` (ô, DR); `check_dataset` OK cả 3 và `policy_table`. Mỗi θ cần 1–6 lượt pilot κ, không chạm `kappa_max_iter`. Hàm điểm DR = `analysis.uplift:tau_x_dr_all_per_dollar`.
@@ -239,6 +241,17 @@ N theo θ (chi / B, % (ô, slot) tắt); **đậm** = thuộc tập θ\*:
 - **Regret của θ̂ (H5.3) trên các sweep `ring1`:** θ̂ (A) = 0,25: 5,1 ± 3,1 [−1,3; 11,5] (0,13%) với DR/USD; 30,5 ± 4,2 (0,78%) với heuristic. θ̂ (B) = 5: 168,2 ± 5,3 [157,4; 178,9] (4,19%) với DR/USD; 66,5 ± 3,9 (1,70%) với heuristic. Ở θ = 5 trên `ring1`, 70% (ô, slot) tắt, κ = −∞ (phát cho mọi session của ô còn bật) mà vẫn chỉ chi 0,890 × B: tầng ô cắt nhiều hơn mức ngân sách cần.
 - **Với `ring1`, θ > `monitor.slack_cap` (10) là `all_off`.** `ring1` cắt +∞ ở `slack_cap` (H-25a), còn ŝ theo ô với `forecast: persistence` giữ +∞ (ô bật, T-23b). Vì vậy ở θ = 30, `ring1` tắt 100% và N = 3.443,5 (≈ `all_off` 3.440,1), còn ô vẫn bật 25% (ô có xe rảnh mà không xe nào đi đón). Chỉ điểm θ = 30 bị ảnh hưởng; tập θ\* không đổi.
 - Kiểm chéo: π_θ θ = 0,5 heuristic của `policy_table` = 3.894,9, trùng điểm θ = 0,5 của B7b; π_θ̂ (B) `ring1` = 3.849,2, trùng θ = 5 của `sweep_ring1_dr`. Lượt chạy ~15–18 phút mỗi sweep (480 lượt + pilot κ).
+
+## Dữ liệu H5.3 (05/10/2026, `runs/h53`)
+
+Dùng cho chọn ŝ (H-25) và tác hại theo giờ; notebook `04_uoc_luong_va_theta` đọc cả ba. Đều là `evaluate` 5 seed (0–4) với `--log-level full` (cần bảng session, order, snapshot của từng lượt).
+
+| Thư mục | Lệnh | Dùng cho |
+|---|---|---|
+| `all_off_3d` | `python -m sim run --mode evaluate --config config/default.yaml --set policy.name=all_off --set time.window_min=4320 --set sweep.n_seeds=5 --log-level full --out runs/h53/all_off_3d` | Chọn ŝ: `python -m analysis.tension runs/h53/all_off_3d` (bảng 7 ứng viên); cửa sổ 3 ngày để `cell_ar` có lag ngày |
+| `hourly_all_on`, `hourly_all_off` | `python -m sim run --mode evaluate --config config/default.yaml --set policy.name=<all_on / all_off> --set budget.enforce=false --set sweep.n_seeds=5 --log-level full --out runs/h53/hourly_<all_on / all_off>` | Tác hại theo giờ: phát voucher cho mọi khách trừ không phát, không ngân sách, ghép cặp theo seed (`analysis.theta.on_off_by_hour_runs`) |
+
+Kiểm tra: `on_off_by_hour_runs` cho cả ngày +1.198,8 chuyến, 7h −15,4 ± 2,1 (log H5.3).
 
 ---
 

@@ -296,7 +296,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S5 xong (H5.1–H5.3, PR #18 đã gộp). S6: H-27 (notebook) đã chốt, task S6 đã viết trong `phan_cong.md`; H6.1 xong (nền notebook); bước tiếp H6.2 notebook `04_uoc_luong_va_theta`. Gate P6 chờ mentor xác nhận T-31.
+**Đang làm:** S6 phần Hoàng xong: H6.1 (nền notebook), H6.2 (notebook 04), H6.3 (notebook 05); đính chính H-28 (τ̂(x, s)/USD hơn τ̂(x)/USD +20,4 ± 4,9; học lại τ̂(x, s) trên `ring1` là việc mở). Chờ PR `develop2` → `develop`. Gate P6 chờ mentor xác nhận T-31.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -642,3 +642,28 @@ Mẫu:
 - Lệch spec / quyết định mới: H-27 (f)
 - Bàn giao: không (Tình dùng chung cho notebook 01–03 sau khi gộp; cần `pip install -e ".[analysis]"` lại vì `pyproject.toml` đổi)
 - Còn lại / bước tiếp: H6.2 notebook `04_uoc_luong_va_theta`
+
+### 2026-10-05 · đính chính · H5.2 "thêm s không giúp" và H-26 (e)
+- Nhánh/PR: `develop2` → `develop` (cùng PR với H6.2, H6.3), review: Tình
+- Đã làm: so ghép cặp trên bảng T5.1 (30 seed): τ̂(x, s)/USD DR toàn bộ hơn τ̂(x)/USD DR toàn bộ +20,4 ± 4,9 chuyến/ngày; π_θ̂ (A) `ring1` ngang τ̂(x, s)/USD (+1,4 ± 4,0). Kết luận "thêm s không giúp" ở mục H5.2 và lý do (e) của H-26 (10 seed, không ghép cặp) là sai
+- Test: không đổi code
+- Lệch spec / quyết định mới: H-28 (chính sách khuyến nghị H-26 c giữ nguyên; học lại τ̂(x, s) trên `ring1` thành việc mở)
+- Bàn giao: không
+- Còn lại / bước tiếp: học lại τ̂(x, s) trên slack `ring1` và đo π_θ̂ kết hợp (khi còn thời gian)
+
+### 2026-10-05 · H6.2 · notebook `04_uoc_luong_va_theta` · xong
+- Nhánh/PR: `develop2` → `develop`, review: Tình
+- Đã làm: `notebooks/04_uoc_luong_va_theta.ipynb` (6 mục: DR-learner và N dưới B theo hàm điểm; chọn ŝ; tác hại theo giờ (bật/tắt toàn bộ, switchback toàn hệ so với cụm 7); θ̂ (A), (B) và đường lợi ích; N theo θ và regret trên 3 sweep `ring1`; chi tiêu mô hình (B) so với sweep; bảng chính sách khuyến nghị), 9 hình `docs/figures/04_*.png`; `analysis/theta.py`: `hour_table`, `hourly_outcomes`, `on_off_by_hour(_runs)`; `tests/test_theta.py` (+3); `docs/datasets.md`: mục "Dữ liệu H5.3" (lệnh sinh `runs/h53`) và ghi chú chạy `policy_table` trên máy 16 GB
+- Test: `pytest -q` → 537 passed, 8 deselected (54 s); notebook chạy lại từ đầu trong kernel mới (286 s), không lỗi. Dữ liệu sinh lại trên máy Hoàng theo `datasets.md` trùng số của Tình: `sweep_ring1_heuristic` (θ tốt nhất 3, N 3.915,7), `sweep_cell_dr` (0,4; 4.006,6), `policy_table` (15 chính sách); `on_off_by_hour_runs` trùng log H5.3 (7h −15,4 ± 2,1; cả ngày +1.198,8)
+- Lệch spec / quyết định mới: H-28 (đính chính ở mục trên; `policy_table` cần `runner.n_procs=6` trên máy 16 GB)
+- Bàn giao: không
+- Còn lại / bước tiếp: H6.3
+
+### 2026-10-05 · H6.3 · notebook `05_confounding` · xong
+- Nhánh/PR: `develop2` → `develop`, review: Tình
+- Đã làm: `analysis/confounding.py` (`latent_profile`: tỷ lệ phát, tỷ lệ hoàn thành, hiệu ứng explore theo 10 nhóm `u_latent`, đọc `hidden/` chỉ để chẩn đoán; `decompose_naive`); `tests/test_confounding.py` (+3); `notebooks/05_confounding.ipynb` (ước lượng trên legacy, cơ chế, tách độ lệch, độ nhạy theo `target_g_u` bằng `analysis.interference.confounding_table` của Tình), 4 hình `docs/figures/05_*.png`; sinh lại `runs/s5/legacy_gu_{0,0p5,2}_28d` theo `datasets.md` (`check_dataset` OK)
+- Test: `pytest -q` → 537 passed (cùng lượt H6.2); notebook chạy lại từ đầu (55 s), không lỗi
+- Kết quả: so thô 0,1053, điều chỉnh theo X 0,1170, DR toàn bộ 0,1010 so với explore 0,0695 (ô bật 0,0738): chệch 45–60%. Tách: ATE 0,068 + nhắm rider hiệu ứng lớn 0,014 + chọn lọc theo `u_latent` 0,024 − 0,0005. Chệch sau điều chỉnh theo `target_g_u` 0 / 0,5 / 1 / 2: −0,005 / +0,021 / +0,043 / +0,072 (trùng T5.3)
+- Lệch spec / quyết định mới: H-28 (d)
+- Bàn giao: không
+- Còn lại / bước tiếp: S6 phần Hoàng xong; PR `develop2` → `develop`
