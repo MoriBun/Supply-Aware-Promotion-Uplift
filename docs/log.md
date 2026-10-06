@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S6: T6.1–T6.3 xong (3 notebook trong `notebooks/`, 7 hình `docs/figures/01_`…`03_`, `analysis/validation.py`, `analysis/figures.py`; T-36, T-37), **chưa commit** (Tình commit), chờ PR S6 và Hoàng review. Báo cáo phương pháp bản 1 cũng chưa commit. S5 đã gộp (PR #17). Gate P6 (T-31) vẫn chờ mentor xác nhận. Để sau S6 (H-27): chương báo cáo, slides, bảng ba nguồn sai số.
+**Đang làm:** S6: T6.1–T6.3 xong (chưa commit, chờ PR S6 và Hoàng review). Ngoài sprint: dashboard quản trị `dashboard/` xong (T-38, nhánh `dashbroad`, chưa commit, chưa PR). Báo cáo phương pháp bản 1 chưa commit. Gate P6 (T-31) vẫn chờ mentor xác nhận. Để sau S6 (H-27): chương báo cáo, slides, bảng ba nguồn sai số.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -291,6 +291,14 @@ Mẫu:
 - Lệch spec / quyết định mới: T-36, T-37. `throughput_curve` chỉ ghi `results/` (spec §7) nên `check_dataset` báo thiếu `meta/` cho `runs/s6/throughput`, không sửa
 - Bàn giao: không. Gợi ý cho Hoàng: `tests/test_acceptance_core.py` có thể gọi `analysis.validation.a1_checks` để một nguồn tính (T-37 d)
 - Còn lại / bước tiếp: Hoàng review PR S6; mở (để sau S6, H-27): chương báo cáo, slides 30 phút, bảng ba nguồn sai số, kịch bản căng hơn để tìm ví dụ Qini–N do cung
+
+### 2026-10-06 · ngoài sprint · dashboard quản trị simulator (FastAPI + React, animation) · xong (chưa commit)
+- Nhánh/PR: `dashbroad` (chưa commit; PR `dashbroad → develop`, review: Hoàng vì có sửa file chung `pyproject.toml`, `README.md`)
+- Đã làm: `dashboard/` (`trace.py` vòng lặp 10 bước giống `engine.run` + frame mỗi tick; `jobs.py` chạy nền pilot B → κ auto → mô phỏng → ghi bảng đúng `schema.md` vào `runs/dashboard/<id>/`; `summary.py`, `geometry.py`, `results.py`, `server.py` FastAPI; `static/` React 18 + htm vendor sẵn, 6 trang: tổng quan, chạy mô phỏng, bản đồ động (xe nội suy giữa tâm ô, torus, ô bị cắt gạch chéo, pulse phát voucher / chặn ngân sách / ghép / hoàn thành / hủy, sổ ngân sách theo tick), vùng và ngưỡng θ (bản đồ nhiệt ô × slot, ŝ so với θ, nhật ký bật/tắt), phân phát voucher (theo giờ, phân khúc, cơ chế, phân bố điểm và κ, ngân sách theo thời gian), kết quả thực nghiệm (mọi sweep θ trong `runs/`, bảng T5.1, throughput, GTE, hình notebook)); `dashboard/README.md`; `tests/test_dashboard.py` (+4); `pyproject.toml` extras `[dashboard]`; `README.md` một dòng lệnh
+- Test: `pytest -q` → 547 passed, 8 deselected (127 s, py3.11 `.venv`); `tests/test_dashboard.py` 4 passed (3 s): tracer trùng `engine.run` từng số (RunResult, session, order), frame nhất quán với bộ đếm và bất biến ngân sách theo tick, vector torus, API chạy trọn lượt tiny rồi nạp lại từ đĩa. Chạy thật qua giao diện: tiny 0,8 s; 37 ô × 240 xe × cửa sổ 4 giờ 5,1 s (gồm pilot B 289,53 USD/kỳ và κ auto 4 pilot, κ = −2,56), N = 236, 22,6 % (ô, slot) bị cắt; 6 trang chụp màn hình headless Chrome không lỗi console
+- Lệch spec / quyết định mới: T-38 (dashboard ngoài `sim/`; `trace.py` chép vòng lặp engine thay vì sửa `engine.py`; `mode = dashboard` trong `run_id`); không thêm tính năng mô phỏng
+- Bàn giao: không. Việc cho Hoàng: review T-38 và hai dòng file chung; khi đổi thứ tự bước trong `engine.run` thì sửa `dashboard/trace.py` theo (test sẽ báo)
+- Còn lại / bước tiếp: Tình commit nhánh `dashbroad` (gồm `dashboard/static/vendor/` ≈ 145 KB), mở PR; mentor xem demo; có thể thêm: so sánh hai lượt chạy cạnh nhau, chạy sweep θ từ giao diện
 
 ---
 

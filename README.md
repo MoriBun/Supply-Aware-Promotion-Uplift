@@ -20,6 +20,7 @@ pytest -q                          # test nhanh
 pytest -q -m slow                  # test nghiệm thu (chậm)
 python -m sim run --mode evaluate --config config/default.yaml --set policy.threshold.theta=0.4
 python -m sim run --mode gte --config config/default.yaml --config tests/fixtures/tiny.yaml   # nhiều lớp config
+python -m dashboard                # dashboard quản trị (pip install -e ".[dashboard]"), xem dashboard/README.md
 ```
 
 Các mode: `generate`, `evaluate`, `sweep_theta`, `gte`, `calibrate_budget`, `throughput_curve` (spec §7).
@@ -47,6 +48,7 @@ sim/        mã nguồn (spec §3): config, rng, M1–M13, policies/
 tests/      pytest; fixtures/tiny.yaml là lớp ghi đè cho test nhanh
 config/     default.yaml
 docs/       thiết kế, spec, schema, tests, plan, decisions
+dashboard/  dashboard quản trị: chạy, animation, kết quả (FastAPI + React; T-38)
 runs/       output (không commit)
 ```
 
