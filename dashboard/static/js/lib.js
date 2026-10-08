@@ -20,23 +20,24 @@ export function useApi(path, deps = [], { poll = 0 } = {}) {
   const [state, setState] = useState({ data: null, error: null, loading: !!path });
   const [n, setN] = useState(0);
   useEffect(() => {
-    if (!path) { setState({ data: null, error: null, loading: false }); return; }
+    if (!path) { setState({ path, data: null, error: null, loading: false }); return; }
     let alive = true;
     let timer = null;
     const go = async () => {
       try {
         const data = await api(path);
-        if (alive) setState({ data, error: null, loading: false });
+        if (alive) setState({ path, data, error: null, loading: false });
       } catch (e) {
-        if (alive) setState((s) => ({ data: s.data, error: String(e.message || e), loading: false }));
+        if (alive) setState((s) => ({ path, data: s.path === path ? s.data : null, error: String(e.message || e), loading: false }));
       }
       if (alive && poll > 0) timer = setTimeout(go, poll);
     };
-    setState((s) => ({ ...s, loading: s.data == null }));
+    setState((s) => s.path === path ? { ...s, loading: s.data == null } : { path, data: null, error: null, loading: true });
     go();
     return () => { alive = false; if (timer) clearTimeout(timer); };
   }, [path, poll, n, ...deps]);
-  return { ...state, reload: () => setN((k) => k + 1) };
+  const current = !path ? { data: null, error: null, loading: false } : state.path === path ? state : { data: null, error: null, loading: true };
+  return { ...current, reload: () => setN((k) => k + 1) };
 }
 
 // --- formatting (vi-VN: dot thousands, comma decimals) ---
@@ -105,11 +106,23 @@ export function useLocalStorage(key, initial) {
 /** Resize-aware width of a container (for responsive SVG charts). */
 export function useWidth(ref, fallback = 600) {
   const [w, setW] = useState(fallback);
+  const observed = useRef(null);
+  const observer = useRef(null);
+  // A loading/empty state can render before the measured node exists. Check
+  // after every commit, but keep the observer until the actual node changes.
   useEffect(() => {
-    if (!ref.current) return undefined;
-    const ro = new ResizeObserver((entries) => { for (const e of entries) setW(Math.max(200, e.contentRect.width)); });
-    ro.observe(ref.current);
-    return () => ro.disconnect();
-  }, [ref]);
+    if (observed.current === ref.current) return;
+    observer.current?.disconnect();
+    observed.current = ref.current;
+    if (!ref.current) return;
+    observer.current = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setW(entry.contentRect.width);
+    });
+    observer.current.observe(ref.current);
+  });
+  useEffect(() => () => {
+    observer.current?.disconnect();
+    observed.current = null;
+  }, []);
   return w;
 }

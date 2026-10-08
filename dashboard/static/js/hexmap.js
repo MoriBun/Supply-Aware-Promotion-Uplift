@@ -273,9 +273,10 @@ export function HexMap({ geometry, slots, framesRef, player, k, tDisp, mode, sel
           <polygon className=${cls} points=${hexPoints(cx, cy, hexR)} fill=${fillOf(c.id)}
             onMouseEnter=${() => setHover(c.id)} onMouseLeave=${() => setHover((h) => (h === c.id ? null : h))}
             onClick=${() => onSelect && onSelect(selected === c.id ? null : c.id)} />
-          ${!on ? html`<polygon points=${hexPoints(cx, cy, hexR)} fill=${`url(#${hatchId})`} opacity="0.55" style=${{ pointerEvents: "none" }} />` : null}
+          ${mode === "promo" && !on ? html`<polygon points=${hexPoints(cx, cy, hexR)} fill=${`url(#${hatchId})`} opacity="0.55" style=${{ pointerEvents: "none" }} />` : null}
           <text className="cell-id" x=${cx} y=${cy - hexR * 0.55} textAnchor="middle">${c.id}</text>
           ${mode === "slack" && sHat ? html`<text className="cell-val" x=${cx} y=${cy + hexR * 0.72} textAnchor="middle">${sHat[c.id] == null ? "–" : fmtNum(Math.min(sHat[c.id], 99), 1)}</text>` : null}
+          ${mode === "cluster" && cluster && cluster[c.id] >= 0 ? html`<text className="cell-val" x=${cx} y=${cy + hexR * 0.72} textAnchor="middle">cụm ${cluster[c.id]}</text>` : null}
           ${mode === "promo" && !on ? html`<text className="cell-val" x=${cx} y=${cy + hexR * 0.72} textAnchor="middle" style=${{ fill: ink2 }}>TẮT</text>` : null}
         </g>`;
       })}
@@ -288,14 +289,40 @@ export function HexMap({ geometry, slots, framesRef, player, k, tDisp, mode, sel
   </div>`;
 }
 
-export function MapLegend({ mode }) {
+/** Static hex map: one value per cell on the sequential ramp (e.g. slots cut per cell), with labels. */
+export function HexStatic({ geometry, values, max = null, format = (v) => fmtInt(v), width = 420, height = 360, title = "" }) {
+  const fit = useMemo(() => fitGeometry(geometry, width, height, 22), [geometry, width, height]);
+  const seq = useMemo(() => SEQ(), []);
+  const vmax = max != null ? max : Math.max(1, ...values.filter((v) => v != null));
+  const r = fit.scale * 0.985;
+  return html`<div>
+    ${title ? html`<div className="chart-title">${title}</div>` : null}
+    <svg width=${width} height=${height} viewBox=${`0 0 ${width} ${height}`} style=${{ display: "block", maxWidth: "100%", height: "auto" }}>
+      ${geometry.cells.map((c) => {
+        const cx = fit.px(c.x), cy = fit.py(c.y);
+        const v = values[c.id];
+        const fill = v == null || v === 0 ? cssVar("--surface-2") : seqColor(v, vmax, seq);
+        const dark = v != null && v / vmax > 0.55;
+        return html`<g key=${c.id}><title>${`Ô ${c.id}: ${format(v)}`}</title>
+          <polygon points=${hexPoints(cx, cy, r)} fill=${fill} stroke="var(--surface)" strokeWidth="2" />
+          <text x=${cx} y=${cy - r * 0.35} textAnchor="middle" style=${{ fontSize: 9, fill: dark ? "#fff" : cssVar("--muted") }}>${c.id}</text>
+          <text x=${cx} y=${cy + r * 0.35} textAnchor="middle" style=${{ fontSize: 11, fontWeight: 600, fill: dark ? "#fff" : cssVar("--ink-2") }}>${v == null ? "–" : format(v)}</text></g>`;
+      })}
+    </svg>
+    <div className="legend"><span><i className="swatch" style=${{ background: "linear-gradient(90deg, var(--seq-100), var(--seq-700))" }}></i>0 → ${format(vmax)}</span></div>
+  </div>`;
+}
+
+export function MapLegend({ mode, hasCluster = false }) {
   const col = driverColors();
   return html`<div className="legend">
     ${["idle", "en_route", "on_trip", "repositioning"].map((s) => html`<span key=${s}><i className="dot" style=${{ background: col[s] }}></i>${DRIVER_LABEL[s]}</span>`)}
     <span><i className="dot" style=${{ background: "transparent", border: `2px solid ${cssVar("--s5")}`, width: 8, height: 8 }}></i>khách đang chờ ghép</span>
     ${mode === "promo" ? html`<span><i className="swatch" style=${{ background: "var(--promo-on)", border: "1px solid var(--border)" }}></i>ô đang bật voucher</span>` : null}
-    <span><i className="swatch" style=${{ background: "repeating-linear-gradient(45deg, var(--axis) 0 1.5px, transparent 1.5px 6px)", border: "1px solid var(--border)" }}></i>ô bị cắt (ŝ ${"<"} θ)</span>
+    ${mode === "promo" ? html`<span><i className="swatch" style=${{ background: "repeating-linear-gradient(45deg, var(--axis) 0 1.5px, transparent 1.5px 6px)", border: "1px solid var(--border)" }}></i>ô bị cắt (ŝ ${"<"} θ)</span>` : null}
     ${mode === "slack" ? html`<span><i className="swatch" style=${{ background: "linear-gradient(90deg, var(--seq-100), var(--seq-700))" }}></i>ŝ thấp → cao (cắt ở 3)</span>` : null}
-    ${mode === "waiting" ? html`<span><i className="swatch" style=${{ background: "linear-gradient(90deg, var(--seq-100), var(--seq-700))" }}></i>số khách chờ 0 → 6+</span>` : null}
+    ${mode === "waiting" ? html`<span><i className="swatch" style=${{ background: "linear-gradient(90deg, var(--seq-100), var(--seq-700))" }}></i>số khách chờ 0 → 6+ (còn chờ ở cuối tick, chưa có xe)</span>` : null}
+    ${mode === "cluster" ? (hasCluster ? html`<span><i className="swatch" style=${{ background: "linear-gradient(90deg, var(--s1), var(--s2), var(--s3), var(--s4))" }}></i>mỗi màu một cụm switchback</span>`
+      : html`<span className="muted">chỉ có dữ liệu cụm khi chính sách là experiment (cluster_switchback)</span>`) : null}
   </div>`;
 }

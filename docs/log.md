@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S6: T6.1–T6.3 xong (chưa commit, chờ PR S6 và Hoàng review). Ngoài sprint: dashboard quản trị `dashboard/` xong (T-38, nhánh `dashbroad`, chưa commit, chưa PR). Báo cáo phương pháp bản 1 chưa commit. Gate P6 (T-31) vẫn chờ mentor xác nhận. Để sau S6 (H-27): chương báo cáo, slides, bảng ba nguồn sai số.
+**Đang làm:** S6: T6.1–T6.3 xong (chưa commit, chờ PR S6 và Hoàng review). Ngoài sprint: dashboard quản trị `dashboard/` xong (T-38, nhánh `dashbroad`, chưa commit, chưa PR). Giao diện dashboard đã nâng cấp ngày 07/10 (xem mục rà soát đề tài và docs/dashboard_review.md), chưa commit/PR. Báo cáo phương pháp bản 1 chưa commit. Gate P6 (T-31) vẫn chờ mentor xác nhận. Để sau S6 (H-27): chương báo cáo, slides, bảng ba nguồn sai số.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -294,13 +294,72 @@ Mẫu:
 
 ### 2026-10-06 · ngoài sprint · dashboard quản trị simulator (FastAPI + React, animation) · xong (chưa commit)
 - Nhánh/PR: `dashbroad` (chưa commit; PR `dashbroad → develop`, review: Hoàng vì có sửa file chung `pyproject.toml`, `README.md`)
-- Đã làm: `dashboard/` (`trace.py` vòng lặp 10 bước giống `engine.run` + frame mỗi tick; `jobs.py` chạy nền pilot B → κ auto → mô phỏng → ghi bảng đúng `schema.md` vào `runs/dashboard/<id>/`; `summary.py`, `geometry.py`, `results.py`, `server.py` FastAPI; `static/` React 18 + htm vendor sẵn, 6 trang: tổng quan, chạy mô phỏng, bản đồ động (xe nội suy giữa tâm ô, torus, ô bị cắt gạch chéo, pulse phát voucher / chặn ngân sách / ghép / hoàn thành / hủy, sổ ngân sách theo tick), vùng và ngưỡng θ (bản đồ nhiệt ô × slot, ŝ so với θ, nhật ký bật/tắt), phân phát voucher (theo giờ, phân khúc, cơ chế, phân bố điểm và κ, ngân sách theo thời gian), kết quả thực nghiệm (mọi sweep θ trong `runs/`, bảng T5.1, throughput, GTE, hình notebook)); `dashboard/README.md`; `tests/test_dashboard.py` (+4); `pyproject.toml` extras `[dashboard]`; `README.md` một dòng lệnh
-- Test: `pytest -q` → 547 passed, 8 deselected (127 s, py3.11 `.venv`); `tests/test_dashboard.py` 4 passed (3 s): tracer trùng `engine.run` từng số (RunResult, session, order), frame nhất quán với bộ đếm và bất biến ngân sách theo tick, vector torus, API chạy trọn lượt tiny rồi nạp lại từ đĩa. Chạy thật qua giao diện: tiny 0,8 s; 37 ô × 240 xe × cửa sổ 4 giờ 5,1 s (gồm pilot B 289,53 USD/kỳ và κ auto 4 pilot, κ = −2,56), N = 236, 22,6 % (ô, slot) bị cắt; 6 trang chụp màn hình headless Chrome không lỗi console
-- Lệch spec / quyết định mới: T-38 (dashboard ngoài `sim/`; `trace.py` chép vòng lặp engine thay vì sửa `engine.py`; `mode = dashboard` trong `run_id`); không thêm tính năng mô phỏng
+- Đã làm: `dashboard/` (`trace.py` vòng lặp 10 bước giống `engine.run` + frame mỗi tick; `jobs.py` chạy nền pilot B → κ auto → mô phỏng → ghi bảng đúng `schema.md` vào `runs/dashboard/<id>/`; `summary.py`, `geometry.py`, `results.py`, `server.py` FastAPI; `static/` React 18 + htm vendor sẵn, 6 trang: tổng quan, chạy mô phỏng, bản đồ động (xe nội suy giữa tâm ô, torus, ô bị cắt gạch chéo, pulse phát voucher / chặn ngân sách / ghép / hoàn thành / hủy, sổ ngân sách theo tick), vùng và ngưỡng θ (bản đồ nhiệt ô × slot, ŝ so với θ, nhật ký bật/tắt), phân phát voucher (theo giờ, phân khúc, cơ chế, phân bố điểm và κ, ngân sách theo thời gian), kết quả thực nghiệm (mọi sweep θ trong `runs/`, bảng T5.1, throughput, GTE, hình notebook)); `dashboard/README.md`; bổ sung cùng ngày: trang **Tìm θ\*** quét θ từ giao diện (`dashboard/sweep.py`, `static/js/sweep.js`: cùng job với `runner.sweep_theta`, pool spawn, đường N(θ) ± SE lớn dần theo seed, tập θ\* theo T-31, đánh dấu θ̂, nút chạy một lượt tại θ\*), trang Vùng thêm "cắt theo giờ" và "cắt theo vùng" (bản đồ lục giác tĩnh), tổng quan ghi rõ θ đặt tay là một điểm trên đường N(θ); `tests/test_dashboard.py` (+5); `pyproject.toml` extras `[dashboard]`; `README.md` một dòng lệnh
+- Test: `pytest -q` → 554 passed, 8 deselected (146 s, py3.11 `.venv`, sau khi kéo `develop` 9343baf); `tests/test_dashboard.py` 5 passed (8 s), gồm quét 3 θ × 2 seed qua pool 2 tiến trình ra đúng bảng `sweep_theta` và θ\*; tracer trùng `engine.run` từng số (RunResult, session, order), frame nhất quán với bộ đếm và bất biến ngân sách theo tick, vector torus, API chạy trọn lượt tiny rồi nạp lại từ đĩa. Chạy thật qua giao diện: tiny 0,8 s; 37 ô × 240 xe × cửa sổ 4 giờ 5,1 s (gồm pilot B 289,53 USD/kỳ và κ auto 4 pilot, κ = −2,56), N = 236, 22,6 % (ô, slot) bị cắt; quét demo 6 θ × 2 seed × 4 giờ, 8 tiến trình: 16 s, θ\* = 2, tập θ\* = [0; 5]; 7 trang chụp màn hình headless Chrome không lỗi console
+- Lệch spec / quyết định mới: T-38 (dashboard ngoài `sim/`; `trace.py` chép vòng lặp engine thay vì sửa `engine.py`; `mode = dashboard` trong `run_id`; (f) quét θ từ giao diện dùng đúng job của `runner.sweep_theta`, không rẽ nhánh θ theo (ô, slot) theo D2); không thêm tính năng mô phỏng
 - Bàn giao: không. Việc cho Hoàng: review T-38 và hai dòng file chung; khi đổi thứ tự bước trong `engine.run` thì sửa `dashboard/trace.py` theo (test sẽ báo)
-- Còn lại / bước tiếp: Tình commit nhánh `dashbroad` (gồm `dashboard/static/vendor/` ≈ 145 KB), mở PR; mentor xem demo; có thể thêm: so sánh hai lượt chạy cạnh nhau, chạy sweep θ từ giao diện
+- Còn lại / bước tiếp: Tình commit nhánh `dashbroad` (gồm `dashboard/static/vendor/` ≈ 145 KB), mở PR; mentor xem demo; có thể thêm: so sánh hai lượt chạy cạnh nhau, quét theo `budget.fraction` để vẽ N theo chi tiêu
 
 ---
+
+### 2026-10-07 · ngoài sprint · rà soát đề tài và nâng cấp giao diện dashboard · xong (chưa commit)
+- Nhánh/PR: `dashbroad`; chưa commit, chưa mở PR; giữ các thay đổi đã có trong working tree.
+- Đã làm: shell/điều hướng theo nhóm, giao diện teal/navy sáng/tối, responsive; `overview.js` KPI chính/phễu/ngân sách/biểu đồ/tìm kiếm; `research.js` RQ1–RQ3 và gallery 5 notebook; `ui.js`, `workspace.css`; chú thích cửa sổ/slot, SE; chọn bảng bằng bàn phím; nhãn điều khiển timeline; bản đồ tĩnh co theo màn hình; `docs/dashboard_review.md`, README dashboard.
+- Kiểm dữ liệu: GTE chỉ dùng cặp all_on/all_off không ngân sách và seed chung; loại bảng trùng khóa; `useApi` không hiển thị dữ liệu lượt cũ khi đổi path; SE thiếu không bị coi là 0; bỏ chọn hết sweep và lưới trống được giữ đúng; static/HTML có HTTP revalidation.
+- Test: `tests/test_dashboard.py` 6 passed (9,61 s, 1 cảnh báo Starlette/httpx); kiểm cú pháp tất cả module JS pass; kiểm trình duyệt 7 trang desktop 1440 × 1000 và mobile 390 × 844, tìm kiếm/chọn bằng Enter, lọc hình Confounding, sáng/tối, phát/tạm dừng; không lỗi console. Mobile trang vùng tràn ngang do SVG 440 px đã sửa và kiểm lại (scrollWidth 375 ≤ viewport 390).
+- Lệch spec / quyết định mới: không đổi thuật toán hoặc tham số simulator; diễn giải theo D1–D4/T-38. Test Temp mặc định WinError 5; dùng thư mục riêng và giữ fixture trong `.pytest_cache/`, ngoài `runs/`.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review diff và commit/PR theo workflow repo; các đề xuất nghiên cứu bổ sung (bảng Qini–N, CI của ngưỡng uplift, bảng ba nguồn sai số, xuất báo cáo) đã ghi trong `docs/dashboard_review.md`.
+
+### 2026-10-07 · ngoài sprint · sửa phản hồi UI dashboard · xong (chưa commit)
+- Nhánh/PR: `dashbroad`; cùng working tree dashboard, chưa commit/PR.
+- Đã làm: bỏ cuộn ngang của menu ở viewport hẹp; điều hướng đổi sang lưới 3 cột (2 cột ≤480 px), giữ đủ nhãn; neo cụm Sáng/Tối/Tự động vào sidebar mobile và làm trạng thái đang chọn tương phản rõ.
+- Test: kiểm trình duyệt tại 697 × 558 (đúng viewport phản hồi) và 390 × 844: menu có `scrollWidth = clientWidth`, không thanh cuộn ngang, không tràn trang; JS syntax pass, `git diff --check` sạch. Không chạy lại pytest vì chỉ sửa CSS.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review diff và commit/PR theo workflow repo.
+
+### 2026-10-07 · ngoài sprint · phản hồi sidebar dashboard · xong (chưa commit)
+- Nhánh/PR: `dashbroad`; cùng working tree dashboard, chưa commit/PR.
+- Đã làm: ẩn thanh cuộn hiển thị của sidebar trên Firefox/Chromium nhưng vẫn giữ vùng điều hướng có thể cuộn; thêm nút thu gọn/mở rộng, lưu lựa chọn cục bộ, giữ nhãn ARIA và tooltip.
+- Test: kiểm trình duyệt desktop 1440 × 900: sidebar có `scrollbar-width: none`; nút thu gọn chuyển sidebar 250 px → 72 px, đổi nhãn thành “Mở rộng thanh điều hướng”, các mục vẫn có biểu tượng và trạng thái đang chọn. JS syntax pass, `git diff --check` sạch.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review diff và commit/PR theo workflow repo.
+
+### 2026-10-07 · ngoài sprint · hiệu ứng sidebar dashboard · xong (chưa commit)
+- Nhánh/PR: `dashbroad`; cùng working tree dashboard, chưa commit/PR.
+- Đã làm: thêm chuyển động 240 ms khi thay đổi bề rộng sidebar; tên sản phẩm, nhãn nhóm/menu và dấu trạng thái thu/mờ đồng bộ; mũi tên nút xoay theo trạng thái. `prefers-reduced-motion` vẫn vô hiệu hóa toàn bộ chuyển động.
+- Test: kiểm trình duyệt desktop 1440 × 900: transition lưới 0,24 s và icon 0,22 s đang áp dụng; thao tác thu đưa sidebar về 72 px, nhãn nút đổi đúng sang “Mở rộng thanh điều hướng”. JS syntax pass, `git diff --check` sạch.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review diff và commit/PR theo workflow repo.
+
+### 2026-10-07 · ngoài sprint · đồng bộ ngân sách của experiment trên dashboard · xong (chưa commit)
+- Nhánh/PR: `dashbroad`; cùng working tree dashboard, chưa commit/PR.
+- Đã làm: `dashboard.jobs` dùng `experiment.budget_enforce` khi chính sách là `experiment`, cùng quy tắc với `sim.runner`; vì mặc định là `false`, switchback/A-B trên dashboard không còn vô tình bị chặn bởi B.
+- Test: `python -m pytest tests/test_dashboard.py --basetemp <temp> -q` → 6 passed (1 cảnh báo Starlette/httpx); không đổi thuật toán hay tham số mặc định.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review diff và commit/PR theo workflow repo.
+
+---
+
+### 2026-10-08 · ngoài sprint · chuẩn hóa nhận diện Xanh SM · xong (chưa commit/PR)
+- Nhánh/PR: `dashbroad`; giữ thay đổi đang có trong working tree.
+- Đã làm: thay logo V tự vẽ bằng ảnh logo Xanh SM từ trang tuyển dụng chính thức; favicon và biểu tượng thu gọn từ website Green SM; lưu nguồn trong `dashboard/static/brand/README.md`. Đồng bộ cyan/vàng, màu nút sáng/tối, tiêu đề và nhãn dữ liệu mô phỏng; sửa mục tiêu về số chuyến hoàn thành.
+- Test: JS syntax và `git diff --check` đạt; Edge headless desktop 1440×900 và mobile 390/697 px, sáng/tối và thu/mở sidebar: ảnh tải thành công, thu về 72 px, không tràn ngang, không lỗi JavaScript. Chụp ảnh desktop/mobile để đối chiếu.
+- Lệch spec / quyết định mới: không; giữ tên Xanh SM theo yêu cầu, tài nguyên và UI adaptation có ghi nguồn, không tuyên bố bộ màu/font là brand guideline chính thức.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review và commit/PR các thay đổi dashboard.
+
+### 2026-10-08 · ngoài sprint · sửa bản đồ mô phỏng bị lệch và cắt mép · xong (chưa commit)
+- Nhánh/PR: `dashbroad`, chưa PR.
+- Đã làm: sửa `useWidth` để theo dõi container xuất hiện sau khi tải dữ liệu, chỉ gắn lại ResizeObserver khi DOM node đổi; đồng bộ kích thước SVG/canvas với vùng trong viền bản đồ. Giới hạn dấu cửa sổ đánh giá trong thanh thời gian để tránh tràn ngang.
+- Test: Edge headless với API trì hoãn, tải trực tiếp trang map, chuyển overview → map, resize 390/697/1024/1440 px, thu/mở sidebar và chọn ô: tất cả ô nằm trong khung, SVG/canvas cùng kích thước và vị trí, không tràn ngang hoặc lỗi JavaScript. JS syntax và `git diff --check` đạt.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không.
+- Còn lại / bước tiếp: review và commit/PR các thay đổi dashboard.
 
 ## 2. Hoàng
 

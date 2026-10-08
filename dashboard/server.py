@@ -23,7 +23,9 @@ from sim.runner import MODES
 
 from dashboard import results as res
 from dashboard import summary as summ
-from dashboard.jobs import DashRun, RunManager, RunSpec
+from dashboard.jobs import DashRun, RunManager, RunSpec, SweepSpec
+from dashboard.sweep import aggregate as sweep_aggregate
+from dashboard.sweep import default_n_procs
 from dashboard.trace import EVENT_TYPES
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -53,6 +55,15 @@ class RunRequest(BaseModel):
     kappa: float | None = None
 
 
+class SweepRequest(BaseModel):
+    name: str = Field(default="sweep", max_length=80)
+    overrides: list[str] = Field(default_factory=list)
+    layers: list[str] = Field(default_factory=list)
+    theta_grid: list[float] = Field(default_factory=list, max_length=64)
+    n_seeds: int = Field(default=3, ge=1, le=100)
+    n_procs: int | None = Field(default=None, ge=1, le=64)
+
+
 def _finite(x: Any) -> Any:
     if isinstance(x, float) and not math.isfinite(x):
         return None
@@ -67,13 +78,20 @@ def create_app(root: Path = ROOT, runs_dir: Path | None = None) -> FastAPI:
     app.state.manager = manager
     app.state.root = root
 
+    @app.middleware("http")
+    async def revalidate_frontend(request, call_next):
+        response = await call_next(request)
+        if request.url.path == "/" or request.url.path.startswith("/static/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     # --- config and presets --------------------------------------------------------
 
     @app.get("/api/config/defaults")
     def config_defaults() -> dict:
         cfg = load_config(root / "config" / "default.yaml")
         return {"config": to_dict(cfg), "score_functions": list(SCORE_FUNCTIONS), "presets": list(PRESETS),
-                "modes": list(MODES), "event_types": list(EVENT_TYPES)}
+                "modes": list(MODES), "event_types": list(EVENT_TYPES), "cpu_count": default_n_procs()}
 
     @app.post("/api/config/validate")
     def config_validate(req: RunRequest) -> dict:
@@ -103,11 +121,38 @@ def create_app(root: Path = ROOT, runs_dir: Path | None = None) -> FastAPI:
         run = manager.submit(spec)
         return run.public()
 
+    @app.post("/api/sweeps", status_code=202)
+    def start_sweep(req: SweepRequest) -> dict:
+        for layer in req.layers:
+            if not (root / layer).exists():
+                raise HTTPException(400, f"lớp config không tồn tại: {layer}")
+        grid = sorted({float(t) for t in req.theta_grid})
+        if not grid or any(t < 0 for t in grid):
+            raise HTTPException(400, "theta_grid cần ít nhất một θ ≥ 0")
+        spec = SweepSpec(name=req.name or "sweep", overrides=tuple(req.overrides), layers=tuple(req.layers),
+                         theta_grid=tuple(grid), n_seeds=req.n_seeds, n_procs=req.n_procs)
+        return manager.submit(spec).public()
+
     def _run(run_key: str) -> DashRun:
         run = manager.get(run_key)
         if run is None:
             raise HTTPException(404, f"không có lượt chạy {run_key}")
         return manager.ensure_loaded(run)
+
+    @app.get("/api/runs/{run_key}/sweep")
+    def get_sweep(run_key: str) -> dict:
+        run = _run(run_key)
+        if run.kind != "sweep" or run.sweep is None:
+            raise HTTPException(404, "lượt này không phải quét θ")
+        rows = list(run.sweep.get("rows", []))
+        agg = (run.summary or {}).get("sweep") if run.status == "done" else None
+        if agg is None:
+            agg = sweep_aggregate(rows, run.sweep["theta_grid"])
+        return {"status": run.status, "kind": "sweep", "theta_grid": run.sweep["theta_grid"],
+                "n_seeds": run.sweep["n_seeds"], "n_procs": run.sweep.get("n_procs"), "done": len(rows),
+                "total": run.sweep.get("total"), "budget_usd": run.sweep.get("budget_usd"),
+                "kappas": run.sweep.get("kappas"), "rows": rows, "aggregate": agg, "scope": run.scope,
+                "score_fn": run.score_fn, "config_hash": run.config_hash}
 
     @app.get("/api/runs/{run_key}")
     def get_run(run_key: str) -> dict:

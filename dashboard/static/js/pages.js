@@ -1,115 +1,14 @@
-// The six pages. Each receives the selected run (detail of /api/runs/{id}) and fetches what it needs.
-import { html, useState, useEffect, useRef, useMemo, api, useApi, useLocalStorage, useWidth, cssVar, clamp, sum,
+// The pages. Each receives the selected run (detail of /api/runs/{id}) and fetches what it needs.
+// The sweep page ("Tìm θ*") lives in sweep.js; shared bits are in common.js.
+import { html, useState, useEffect, useRef, useMemo, api, useApi, useLocalStorage, useWidth, cssVar, clamp, sum, mean,
   fmtInt, fmtNum, fmtUSD, fmtPct, fmtSigned, fmtClock, fmtHM, fmtDur, compact, driverColors, DRIVER_LABEL, SEQ, seqColor,
   ORDER_STATUS } from "./lib.js";
 import { LineChart, BarChart, Heatmap, StatTile, Meter, Table, Legend } from "./charts.js";
-import { HexMap, MapLegend, useFrames, usePlayer } from "./hexmap.js";
+import { HexMap, HexStatic, MapLegend, useFrames, usePlayer } from "./hexmap.js";
+import { isRunning, S, STATUS_VI, StatusPill, NoRun, SweepOnlyNotice, kappaText, bandsOf } from "./common.js";
+import { ResearchEvidence, FigureGallery } from "./research.js";
 
-const isRunning = (r) => r && !["done", "error"].includes(r.status);
-const S = (i) => cssVar(`--s${i}`);
-const STATUS_VI = { queued: "xếp hàng", loading: "nạp config", budget: "pilot ngân sách B", kappa: "κ auto", simulating: "đang mô phỏng", writing: "ghi bảng", done: "xong", error: "lỗi" };
-
-function StatusPill({ status }) {
-  const cls = status === "done" ? "done" : status === "error" ? "error" : "running";
-  return html`<span className=${"status " + cls}>${STATUS_VI[status] || status}</span>`;
-}
-
-function NoRun({ children }) {
-  return html`<div className="card"><div className="empty">${children || "Chưa chọn lượt chạy. Vào trang \"Mô phỏng\" để chạy một lượt, hoặc chọn một lượt ở thanh trên."}</div></div>`;
-}
-
-function kappaText(run) {
-  if (!run || run.policy !== "threshold") return "–";
-  if (run.kappa == null) return "−∞ (không hạn chế)";
-  return fmtNum(run.kappa, 3);
-}
-
-function RunChips({ run }) {
-  if (!run) return null;
-  const cfg = run.config || {};
-  return html`<div className="row" style=${{ gap: 6 }}>
-    <span className="chip">chính sách <b>${run.policy}</b></span>
-    ${run.policy === "threshold" ? html`<span className="chip">θ <b>${fmtNum(run.theta, 2)}</b></span><span className="chip">ŝ theo <b>${run.scope}</b></span><span className="chip">điểm <b>${run.score_fn}</b></span><span className="chip">κ <b>${kappaText(run)}</b>${run.kappa_pilots ? html` <span className="muted">(${run.kappa_pilots} pilot)</span>` : null}</span>` : null}
-    <span className="chip">B <b>${run.budget_usd == null ? "không áp" : fmtUSD(run.budget_usd, 2) + "/kỳ"}</b></span>
-    ${cfg.supply ? html`<span className="chip">xe <b>${cfg.supply.fleet_size}</b></span>` : null}
-    ${cfg.space ? html`<span className="chip">ô <b>${3 * cfg.space.grid_radius ** 2 + 3 * cfg.space.grid_radius + 1}</b></span>` : null}
-    ${cfg.demand ? html`<span className="chip">cầu ×<b>${cfg.demand.demand_scale}</b></span>` : null}
-    ${cfg.meta ? html`<span className="chip">seed <b>${cfg.meta.run_seed}</b></span>` : null}
-    ${run.config_hash ? html`<span className="chip">config <b>${run.config_hash}</b></span>` : null}
-  </div>`;
-}
-
-// ---------------------------------------------------------------------------
-// 1. Overview
-// ---------------------------------------------------------------------------
-export function OverviewPage({ run, runs, onSelect, go }) {
-  const sumQ = useApi(run && run.status === "done" ? `/api/runs/${run.id}/summary` : null, [run && run.id]);
-  const s = sumQ.data;
-  const k = run && run.kpis;
-  const clock = run && run.clock;
-  const slotCharts = useMemo(() => {
-    if (!s || !s.slot_series) return null;
-    const ss = s.slot_series;
-    const x = ss.t_start.map((t) => t / 3600);
-    const win = clock ? [{ x0: clock.window_start_s / 3600, x1: clock.window_end_s / 3600 }] : [];
-    return { x, win, ss };
-  }, [s, clock]);
-  return html`<div className="stack">
-    <div className="card">
-      <div className="card-head"><h2>Thực nghiệm này đo gì</h2><span className="hint">spec §0–§1, D1–D3</span></div>
-      <div className="grid cols-3">
-        <div className="note"><b>1. Ngân sách B</b> cố định cho mọi chính sách: B = fraction × chi tiêu của pilot <code>all_on</code> không ngân sách (mặc định 0,3). Bất biến sổ cái: đã chi + đã giữ + đang giữ ≤ B mỗi kỳ.</div>
-        <div className="note"><b>2. Tầng ô (cắt vùng):</b> đầu mỗi slot 15 phút, chính sách π<sub>θ</sub> dự báo độ dư cung ŝ = xe rảnh / xe đang đi đón từ snapshot slot trước (không nhìn trước). Ô có ŝ ${"<"} θ bị <b>tắt voucher</b>: cung căng thì khuyến mãi chỉ kéo thêm hủy và chờ.</div>
-        <div className="note"><b>3. Tầng rider (phân phát):</b> trong ô đang bật, session có điểm τ̂ ≥ κ được phát voucher 20 % cước; κ hiệu chỉnh tự động bằng pilot để chi tiêu kỳ vọng ≈ B. Chỉ tiêu chính <b>N(π)</b> = số chuyến hoàn thành trong cửa sổ.</div>
-      </div>
-    </div>
-    ${!run ? html`<${NoRun} />` : html`
-      <div className="card">
-        <div className="card-head"><h2>${run.name} <${StatusPill} status=${run.status} /></h2><span className="hint">${run.created_at ? run.created_at.replace("T", " ").slice(0, 16) : ""}</span></div>
-        <${RunChips} run=${run} />
-        ${isRunning(run) ? html`<p style=${{ marginTop: 10 }} className="ink2">${run.message} · <a href="#/run">theo dõi tiến độ</a> · <a href="#/map">xem bản đồ trực tiếp</a></p>` : null}
-        ${run.error ? html`<p className="err">${run.error}</p>` : null}
-      </div>
-      ${k ? html`<div className="grid cols-6">
-        <${StatTile} hero label="N(π): chuyến hoàn thành trong cửa sổ" value=${fmtInt(k.N_completed)} sub=${`${fmtNum(k.completed_per_h, 1)} chuyến/giờ · ${fmtInt(k.n_requests)} lượt đặt`} />
-        <${StatTile} label="V(π): lợi nhuận nền tảng" value=${compact(k.V_profit_usd) + " USD"} sub="phụ; voucher làm V giảm" />
-        <${StatTile} label="Chi voucher / ngân sách" value=${k.spent_share_of_budget == null ? fmtUSD(k.voucher_spent_usd) : fmtPct(k.spent_share_of_budget, 1)} sub=${k.budget_B_usd == null ? "không áp B" : `${fmtUSD(k.voucher_spent_usd, 0)} / ${fmtUSD(k.budget_B_usd * (clock ? clock.n_periods : 1), 0)}`} />
-        <${StatTile} label="(ô, slot) bị cắt voucher" value=${fmtPct(k.share_cells_off, 1)} sub=${`${fmtNum(k.n_switches_per_cell_day, 1)} lần đổi trạng thái / ô / ngày`} />
-        <${StatTile} label="ETA đón trung bình" value=${fmtNum(k.mean_pickup_eta_min, 2) + " ph"} sub=${`slack TB ${k.mean_slack == null ? "∞" : fmtNum(k.mean_slack, 2)}`} />
-        <${StatTile} label="Hủy + bỏ / lượt đặt" value=${fmtPct((k.abandon_rate || 0) + (k.cancel_rate || 0), 1)} sub=${`${fmtInt(k.n_cancelled)} hủy khi xe đến · ${fmtInt(k.n_abandoned)} bỏ`} />
-      </div>` : null}
-      ${slotCharts ? html`<div className="grid cols-2">
-        <div className="card">
-          <div className="card-head"><h2>Theo slot 15 phút</h2><span className="hint">vùng vàng = cửa sổ đánh giá</span></div>
-          <${LineChart} x=${slotCharts.x} height=${230} bands=${slotCharts.win} xFormat=${(v) => fmtHM(v * 3600)} yLabel="số lượng / slot"
-            series=${[
-              { name: "chuyến hoàn thành", color: S(1), y: slotCharts.ss.n_completed },
-              { name: "lượt đặt xe", color: S(2), y: slotCharts.ss.n_requests },
-              { name: "voucher phát", color: S(4), y: slotCharts.ss.n_offers },
-            ]} />
-        </div>
-        <div className="card">
-          <div className="card-head"><h2>Số ô bị tắt voucher theo slot</h2><span className="hint">tầng ô của π<sub>θ</sub>${run.theta != null ? `, θ = ${fmtNum(run.theta, 2)}` : ""}</span></div>
-          <${LineChart} x=${slotCharts.x} height=${230} bands=${slotCharts.win} xFormat=${(v) => fmtHM(v * 3600)} yLabel="ô tắt" yDomain=${[0, null]}
-            series=${[{ name: "ô bị tắt", color: S(7), y: slotCharts.ss.cells_off }, { name: "ŝ trung bình (cắt ở 10)", color: S(3), y: slotCharts.ss.s_hat_mean, dash: true, format: (v) => fmtNum(v, 2) }]} />
-        </div>
-      </div>` : null}
-    `}
-    <div className="card">
-      <div className="card-head"><h2>Các lượt chạy</h2><a href="#/run" className="btn sm primary">+ Chạy mô phỏng mới</a></div>
-      ${runs && runs.length ? html`<${Table} rowKey=${(r) => r.id} selectedKey=${run && run.id} onRow=${(r) => onSelect(r.id)} rows=${runs}
-        columns=${[
-          { key: "name", label: "Tên" }, { key: "status", label: "Trạng thái", fmt: (v) => html`<${StatusPill} status=${v} />` },
-          { key: "policy", label: "Chính sách", fmt: (v, r) => v ? `${v}${r.theta != null ? ` θ=${r.theta}` : ""}` : "–" },
-          { key: "kpis", label: "N(π)", num: true, fmt: (v) => v ? fmtInt(v.N_completed) : "–" },
-          { key: "kpis", label: "Chi / B", num: true, fmt: (v) => v ? (v.spent_share_of_budget == null ? fmtUSD(v.voucher_spent_usd) : fmtPct(v.spent_share_of_budget)) : "–" },
-          { key: "kpis", label: "% ô tắt", num: true, fmt: (v) => v ? fmtPct(v.share_cells_off) : "–" },
-          { key: "n_frames", label: "tick", num: true, fmt: fmtInt },
-          { key: "created_at", label: "Lúc", fmt: (v) => v ? v.replace("T", " ").slice(5, 16) : "" },
-        ]} />` : html`<div className="empty">Chưa có lượt chạy nào.</div>`}
-    </div>
-  </div>`;
-}
+export { OverviewPage } from "./overview.js";
 
 // ---------------------------------------------------------------------------
 // 2. Run (form + progress)
@@ -156,12 +55,17 @@ const PRESET_FIELDS = {
 // Defined at module level: a component created inside the page would remount its input on every keystroke.
 const Field = ({ label, children, hint }) => html`<label className="field"><span>${label}${hint ? html` <span className="muted">· ${hint}</span>` : null}</span>${children}</label>`;
 
-export function RunPage({ defaults, runs, run, onStarted, onSelect }) {
+export function RunPage({ defaults, runs, run, onStarted, onSelect, params = {} }) {
   const [form, setForm] = useState(null);
   const [check, setCheck] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
   useEffect(() => { if (defaults && !form) setForm(initialForm(defaults.config)); }, [defaults, form]);
+  // "#/run?theta=0.5&scope=ring1&score_fn=..." (from the sweep page): prefill the threshold policy at theta*.
+  useEffect(() => {
+    if (!form || params.theta == null) return;
+    setForm((f) => ({ ...f, policy: "threshold", theta: Number(params.theta), scope: params.scope || f.scope, score_fn: params.score_fn || f.score_fn }));
+  }, [form == null, params.theta, params.scope, params.score_fn]);
   if (!defaults || !form) return html`<div className="card"><div className="empty">Đang nạp config mặc định…</div></div>`;
   const set = (k) => (e) => { const v = e && e.target ? (e.target.type === "checkbox" ? e.target.checked : e.target.value) : e; setForm((f) => ({ ...f, [k]: v })); setCheck(null); };
   const num = (k) => (e) => { setForm((f) => ({ ...f, [k]: e.target.value === "" ? "" : Number(e.target.value) })); setCheck(null); };
@@ -173,7 +77,7 @@ export function RunPage({ defaults, runs, run, onStarted, onSelect }) {
     catch (e) { setErr(String(e.message)); } finally { setBusy(false); }
   };
   const active = run && isRunning(run) ? run : (runs || []).find(isRunning) || run;
-  return html`<div className="grid cols-2" style=${{ gridTemplateColumns: "minmax(0, 3fr) minmax(0, 2fr)" }}>
+  return html`<div className="grid cols-2 run-layout">
     <div className="stack">
       <div className="card">
         <div className="card-head"><h2>Cấu hình lượt chạy</h2><span className="hint">mọi tham số đi qua <code>--set key=value</code> lên <code>config/default.yaml</code></span></div>
@@ -262,7 +166,8 @@ function ProgressCard({ run, onSelect }) {
       <${StatTile} label="Chi voucher" value=${fmtUSD(run.kpis.voucher_spent_usd, 0)} sub=${run.budget_usd != null ? `B = ${fmtUSD(run.budget_usd, 0)}/kỳ` : "không áp B"} />
       <${StatTile} label="% (ô, slot) tắt" value=${fmtPct(run.kpis.share_cells_off)} />
     </div>` : null}
-    ${run.status === "done" || run.status === "simulating" ? html`<div className="row" style=${{ marginBottom: 8 }}><button className="btn sm primary" onClick=${() => { onSelect(run.id); location.hash = "#/map"; }}>Xem bản đồ động</button><button className="btn sm" onClick=${() => { onSelect(run.id); location.hash = "#/overview"; }}>Tổng quan</button></div>` : null}
+    ${run.kind === "sweep" ? html`<div className="row" style=${{ marginBottom: 8 }}><button className="btn sm primary" onClick=${() => { onSelect(run.id); location.hash = "#/sweep"; }}>Xem kết quả quét θ</button></div>`
+      : run.status === "done" || run.status === "simulating" ? html`<div className="row" style=${{ marginBottom: 8 }}><button className="btn sm primary" onClick=${() => { onSelect(run.id); location.hash = "#/map"; }}>Xem bản đồ động</button><button className="btn sm" onClick=${() => { onSelect(run.id); location.hash = "#/overview"; }}>Tổng quan</button></div>` : null}
     ${run.error ? html`<p className="err">${run.error}</p>` : null}
     <div className="log">${(run.log || []).join("\n")}</div>
   </div>`;
@@ -304,6 +209,7 @@ export function MapPage({ run }) {
       off: bandsOf(slots.promo_on.map((row) => !row[selected]), xs, clock.slot_s / 3600) };
   }, [selected, slots, clock]);
   if (!run) return html`<${NoRun} />`;
+  if (run.kind === "sweep") return html`<${SweepOnlyNotice} run=${run} />`;
   if (!run.geometry) return html`<div className="card"><div className="empty">Lượt chạy đang ở giai đoạn ${STATUS_VI[run.status] || run.status}… bản đồ hiện khi mô phỏng bắt đầu.</div></div>`;
   const F = framesRef.current;
   const ui = player.ui;
@@ -326,7 +232,7 @@ export function MapPage({ run }) {
   }
   const col = driverColors();
   const offNow = slotIdx >= 0 ? slots.promo_on[slotIdx].map((v, i) => (v ? -1 : i)).filter((i) => i >= 0) : [];
-  return html`<div className="grid cols-2" style=${{ gridTemplateColumns: "minmax(0, 5fr) minmax(300px, 2fr)" }}>
+  return html`<div className="grid cols-2 map-layout">
     <div className="stack">
       <div className="card">
         <div className="row between" style=${{ marginBottom: 8 }}>
@@ -338,26 +244,26 @@ export function MapPage({ run }) {
             ${[["offer", "phát / hết ngân sách"], ["match", "ghép / hoàn thành"], ["cancel", "hủy / bỏ"], ["request", "đặt xe"]].map(([g, l]) => html`<label key=${g} className="check"><input type="checkbox" checked=${pulses.has(g)} onChange=${() => togglePulse(g)} />${l}</label>`)}
           </div>
         </div>
-        <div ref=${wrapRef}>
+        <div ref=${wrapRef} className="map-measure">
           ${n ? html`<${HexMap} geometry=${run.geometry} slots=${slots} framesRef=${framesRef} player=${player.ref} k=${k} tDisp=${tDisp} mode=${mode}
               selected=${selected} onSelect=${setSelected} pulses=${pulses} width=${width} height=${height} theta=${run.theta} clock=${clock} />`
             : html`<div className="empty" style=${{ height }}>Đang tải frame… (${run.n_frames} tick trên server)</div>`}
         </div>
-        <${MapLegend} mode=${mode} />
+        <${MapLegend} mode=${mode} hasCluster=${slotIdx >= 0 && slots.cluster_id && slots.cluster_id[slotIdx].some((id) => id >= 0)} />
       </div>
       <div className="card">
         <div className="timeline">
           <div className="row">
-            <button className="btn icon" title="về đầu" onClick=${() => seek(0)}>⏮</button>
-            <button className="btn icon primary" title=${ui.playing ? "tạm dừng" : "phát"} onClick=${() => player.set({ playing: !ui.playing, last: null, follow: false })}>${ui.playing ? "⏸" : "▶"}</button>
-            <button className="btn icon" title="đến đầu cửa sổ đánh giá" onClick=${() => seek(winStartTau)}>⏭</button>
+            <button className="btn icon" title="về đầu" aria-label="Về đầu mô phỏng" onClick=${() => seek(0)}>⏮</button>
+            <button className="btn icon primary" title=${ui.playing ? "tạm dừng" : "phát"} aria-label=${ui.playing ? "Tạm dừng mô phỏng" : "Phát mô phỏng"} onClick=${() => player.set({ playing: !ui.playing, last: null, follow: false })}>${ui.playing ? "⏸" : "▶"}</button>
+            <button className="btn icon" title="đến đầu cửa sổ đánh giá" aria-label="Đến đầu cửa sổ đánh giá" onClick=${() => seek(winStartTau)}>⏭</button>
           </div>
-          <select value=${ui.speed} onChange=${(e) => player.set({ speed: Number(e.target.value) })} title="phút mô phỏng mỗi giây thực">
+          <select value=${ui.speed} onChange=${(e) => player.set({ speed: Number(e.target.value) })} title="phút mô phỏng mỗi giây thực" aria-label="Tốc độ phát mô phỏng">
             ${SPEEDS.map((s) => html`<option key=${s} value=${s}>×${s} (${s} ph/s)</option>`)}
           </select>
           <div>
             <div className="ticks"><div className="win" style=${{ left: `${100 * winStartTau / Math.max(1, run.ticks_max || n)}%`, width: `${100 * (winEndTau - winStartTau) / Math.max(1, run.ticks_max || n)}%` }}></div></div>
-            <input type="range" min="0" max=${Math.max(0, n - 1)} step="0.5" value=${ui.tau} onChange=${(e) => seek(Number(e.target.value))} />
+            <input type="range" aria-label="Thời điểm mô phỏng" min="0" max=${Math.max(0, n - 1)} step="0.5" value=${ui.tau} onChange=${(e) => seek(Number(e.target.value))} />
           </div>
           <div className="small ink2 mono" style=${{ textAlign: "right", minWidth: 150 }}>
             <div><b>${fmtClock(tDisp)}</b></div>
@@ -414,16 +320,6 @@ export function MapPage({ run }) {
   </div>`;
 }
 
-function bandsOf(flags, xs, w) {
-  const out = [];
-  let start = null;
-  flags.forEach((f, i) => {
-    if (f && start == null) start = i;
-    if ((!f || i === flags.length - 1) && start != null) { const end = f ? i : i - 1; out.push({ x0: xs[start], x1: xs[end] + w }); start = null; }
-  });
-  return out;
-}
-
 // ---------------------------------------------------------------------------
 // 4. Cells & theta
 // ---------------------------------------------------------------------------
@@ -435,9 +331,16 @@ export function CellsPage({ run }) {
   const [sel, setSel] = useState(0);
   const seq = useMemo(() => SEQ(), []);
   if (!run) return html`<${NoRun} />`;
+  if (run.kind === "sweep") return html`<${SweepOnlyNotice} run=${run} />`;
   const slots = slotsQ.data;
   if (!slots || !slots.n_slots) return html`<div className="card"><div className="empty">Chưa có slot nào được ghi.</div></div>`;
   const N = slots.promo_on[0].length, Sn = slots.n_slots;
+  // Cut share by hour of day (the "by time" pattern) and slots cut per cell (the "by zone" pattern).
+  const byHour = Array.from({ length: 24 }, (_, h) => {
+    const vals = slots.t_start.map((t, i) => (Math.floor((t % 86400) / 3600) === h ? slots.promo_on[i].filter((v) => !v).length / N : null)).filter((v) => v != null);
+    return vals.length ? mean(vals) : null;
+  });
+  const hoursSeen = byHour.map((v, h) => (v == null ? -1 : h)).filter((h) => h >= 0);
   const clock = run.clock;
   const theta = run.theta;
   // matrix [cell][slot]
@@ -487,8 +390,21 @@ export function CellsPage({ run }) {
         <p className="small muted">ŝ của slot k chỉ dùng snapshot slot ${"<"} k (không nhìn trước): đường liền đi sau đường đứt một slot khi dự báo persistence.</p>
       </div>
       <div className="card">
+        <div className="card-head"><h2>Cắt theo giờ trong ngày</h2><span className="hint">tỷ lệ ô bị tắt, trung bình các slot của giờ đó</span></div>
+        <${BarChart} height=${240} categories=${hoursSeen.map((h) => `${h}h`)} yFormat=${(v) => fmtPct(v, 0)} legend=${false}
+          series=${[{ name: "tỷ lệ ô bị tắt", color: S(7), values: hoursSeen.map((h) => byHour[h]), format: (v) => fmtPct(v, 1) }]} />
+        <p className="small muted">Cùng một θ, nhưng giờ cao điểm (cầu lên, xe rảnh ít) có nhiều ô ŝ ${"<"} θ hơn: ngưỡng chung, cắt theo giờ là kết quả.</p>
+      </div>
+    </div>
+    <div className="grid cols-2">
+      <div className="card">
+        <div className="card-head"><h2>Cắt theo vùng</h2><span className="hint">số slot bị tắt của từng ô</span></div>
+        ${run.geometry ? html`<${HexStatic} geometry=${run.geometry} values=${offCount} format=${(v) => fmtInt(v)} width=${440} height=${380} />` : null}
+        <p className="small muted">Ô thiếu xe rảnh so với xe đang đi đón (ŝ thấp) bị cắt nhiều hơn; top: ${top.slice(0, 5).map((t) => `ô ${t.cell} (${t.off})`).join(", ")}.</p>
+      </div>
+      <div className="card">
         <div className="card-head"><h2>Ô bị cắt nhiều nhất</h2><span className="hint">số slot tắt</span></div>
-        <${BarChart} horizontal height=${240} categories=${top.map((t) => `ô ${t.cell}`)} series=${[{ name: "slot bị tắt", color: S(7), values: top.map((t) => t.off) }]} legend=${false} />
+        <${BarChart} horizontal height=${300} categories=${top.map((t) => `ô ${t.cell}`)} series=${[{ name: "slot bị tắt", color: S(7), values: top.map((t) => t.off) }]} legend=${false} />
       </div>
     </div>
     <div className="card">
@@ -504,8 +420,9 @@ export function CellsPage({ run }) {
 // 5. Distribution
 // ---------------------------------------------------------------------------
 export function DistributionPage({ run }) {
-  const sumQ = useApi(run && run.status === "done" ? `/api/runs/${run.id}/summary` : null, [run && run.id]);
+  const sumQ = useApi(run && run.status === "done" && run.kind !== "sweep" ? `/api/runs/${run.id}/summary` : null, [run && run.id]);
   if (!run) return html`<${NoRun} />`;
+  if (run.kind === "sweep") return html`<${SweepOnlyNotice} run=${run} />`;
   if (run.status !== "done") return html`<div className="card"><div className="empty">Trang này cần lượt chạy đã xong (đang ${STATUS_VI[run.status] || run.status}).</div></div>`;
   const s = sumQ.data;
   if (!s || !s.distribution) return html`<div className="card"><div className="empty">Đang tải…</div></div>`;
@@ -572,7 +489,7 @@ export function ResultsPage() {
   const [metric, setMetric] = useState("N");
   const sweeps = (sweepsQ.data && sweepsQ.data.sweeps) || [];
   const selected = useMemo(() => {
-    if (picked && picked.length) return picked.filter((k) => sweeps.some((s) => s.key === k));
+    if (picked != null) return picked.filter((k) => sweeps.some((s) => s.key === k));
     const pref = ["b7b_h21/sweep_theta_ref", "s5/sweep_ring1_dr", "s5/sweep_ring1_heuristic"].filter((k) => sweeps.some((s) => s.key === k));
     return pref.length ? pref : sweeps.slice(0, 2).map((s) => s.key);
   }, [picked, sweeps]);
@@ -583,7 +500,7 @@ export function ResultsPage() {
     const idx = new Map(s.theta.map((t, j) => [t, j]));
     const y = thetas.map((t) => (idx.has(t) ? (metric === "N" ? s.N_mean[idx.get(t)] : metric === "V" ? s.V_mean[idx.get(t)] : s.spent_mean[idx.get(t)]) : null));
     const se = thetas.map((t) => (idx.has(t) ? (metric === "N" ? s.N_se[idx.get(t)] : metric === "V" ? s.V_se[idx.get(t)] : 0) : null));
-    return { name: s.key, color: S(i + 1), y, band: metric === "spent" ? null : { lo: y.map((v, j) => (v == null ? null : v - se[j])), hi: y.map((v, j) => (v == null ? null : v + se[j])) }, dots: true, format: (v) => fmtNum(v, 1) };
+    return { name: s.key, color: S(i + 1), y, band: metric === "spent" ? null : { lo: y.map((v, j) => (v == null || se[j] == null ? null : v - se[j])), hi: y.map((v, j) => (v == null || se[j] == null ? null : v + se[j])) }, dots: true, format: (v) => fmtNum(v, 1) };
   });
   const marks = metric === "N" ? chosen.map((s, i) => { const j = thetas.indexOf(s.argmax_theta); const jj = s.theta.indexOf(s.argmax_theta); return j < 0 || jj < 0 ? null : { x: j, y: s.N_mean[jj], color: S(i + 1), label: `θ* = ${s.argmax_theta}` }; }).filter(Boolean) : [];
   const groups = useMemo(() => { const g = {}; for (const s of sweeps) (g[s.group] = g[s.group] || []).push(s); return g; }, [sweeps]);
@@ -593,7 +510,12 @@ export function ResultsPage() {
   const ev = (evQ.data && evQ.data.tables) || [];
   const figs = (figQ.data && figQ.data.figures) || [];
   const [showEv, setShowEv] = useState(false);
+  const queries = [sweepsQ, ptQ, tpQ, gteQ, evQ, figQ];
   return html`<div className="stack">
+    ${queries.some((q) => q.error) ? html`<div className="card err" role="alert">Không tải được một phần kết quả: ${queries.filter((q) => q.error).map((q) => q.error).join(" · ")}<button className="btn sm" onClick=${() => queries.forEach((q) => q.reload())}>Thử lại</button></div>` : null}
+    ${queries.some((q) => q.loading) ? html`<div className="note" role="status">Đang tải các bảng kết quả và hình nghiên cứu…</div>` : null}
+    <${ResearchEvidence} sweeps=${sweeps} policies=${pt} throughput=${tp} gte=${gte} figures=${figs} />
+    <div className="note">Cách đọc: <b>N(π)</b> là chỉ tiêu chính; V(π) là lợi nhuận phụ. <b>± SE</b> là sai số chuẩn, không phải CI 95%. Chỉ so sánh chính sách trong cùng ngân sách, cửa sổ và cấu hình; các đường sweep chồng lên nhau có thể thuộc các kịch bản khác nhau.</div>
     <div className="card">
       <div className="card-head"><h2>Đường N(π<sub>θ</sub>) theo θ: tìm θ* để tắt khuyến mãi</h2><span className="hint">results/theta_sweep.parquet · dải = ± 1 SE theo seed · chấm đậm = argmax</span></div>
       <div className="row" style=${{ marginBottom: 8 }}>
@@ -611,7 +533,7 @@ export function ResultsPage() {
     ${pt.map((t) => {
       const rows = [...t.rows].sort((a, b) => (b.N_mean || 0) - (a.N_mean || 0));
       const ref = rows.find((r) => r.dN_vs_ref === 0);
-      return html`<div className="card" key=${t.key}>
+      return html`<div className="card" key=${t.key} id=${t === pt[0] ? "evidence-policies" : undefined}>
         <div className="card-head"><h2>N(π) của các chính sách dưới cùng B</h2><span className="hint">runs/${t.key} · ΔN so với ${ref ? ref.label : "tham chiếu"}, ghép cặp theo seed ± SE</span></div>
         <${BarChart} horizontal height=${Math.max(220, rows.length * 24 + 50)} categories=${rows.map((r) => r.label)} errors=${rows.map((r) => r.dN_vs_ref_se)} yFormat=${(v) => fmtSigned(v, 0)}
           series=${[{ name: "ΔN so với tham chiếu", color: S(1), values: rows.map((r) => r.dN_vs_ref) }]} legend=${false} />
@@ -620,14 +542,15 @@ export function ResultsPage() {
           { key: "V_mean", label: "V (USD)", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "spent_mean", label: "Chi (USD)", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "share_cells_off", label: "% ô tắt", num: true, fmt: (v) => fmtPct(v) }]} />
       </div>`;
     })}
-    <div className="grid cols-2">
+    ${pt.length ? null : html`<div className="card empty-state" id="evidence-policies"><h2>Chưa có bảng so sánh chính sách</h2><p>Cần bảng policy_table dưới ngân sách chung để trả lời RQ2. Lượt mô phỏng đơn chưa đủ để kết luận chính sách tốt hơn.</p><a className="btn" href="#/run">Thiết kế thực nghiệm</a></div>`}
+    <div className="grid cols-2" id="evidence-capacity">
       ${tp.map((c) => html`<div className="card" key=${c.key}>
         <div className="card-head"><h2>Đường throughput (A1)</h2><span className="hint">runs/${c.key} · ${c.fleet_size} xe luôn online, giờ tham chiếu</span></div>
         <${LineChart} x=${c.rows.map((r) => r.demand_scale)} height=${230} xFormat=${(v) => "×" + fmtNum(v, 2)} yLabel="chuyến / giờ"
           series=${[{ name: "hoàn thành / giờ", color: S(1), y: c.rows.map((r) => r.completed_per_h), dots: true }, { name: "lượt đặt / giờ", color: S(2), y: c.rows.map((r) => r.requests_per_h), dash: true }]} />
         <${LineChart} x=${c.rows.map((r) => r.demand_scale)} height=${170} xFormat=${(v) => "×" + fmtNum(v, 2)} yFormat=${(v) => fmtNum(v, 1)} yLabel="phút"
           series=${[{ name: "ETA đón trung bình (phút)", color: S(3), y: c.rows.map((r) => r.mean_pickup_eta_min), format: (v) => fmtNum(v, 2) }]} legend=${false} />
-        <p className="small muted">Throughput tăng rồi giảm khi cầu vượt cung (wild goose chase): căn cứ để cắt voucher ở vùng căng.</p>
+        <p className="small muted">Kiểm tra throughput có giảm khi tăng cầu vượt cung trong mô phỏng này hay không; đọc đồng thời ETA và số lượt đặt xe.</p>
       </div>`)}
       <div className="card">
         <div className="card-head"><h2>GTE = N(all_on) − N(all_off)</h2><span className="hint">không ngân sách, ghép cặp theo seed</span></div>
@@ -637,10 +560,7 @@ export function ResultsPage() {
           ${gte.length ? null : html`<div className="empty">không có bảng gte</div>`}</div>
       </div>
     </div>
-    <div className="card">
-      <div className="card-head"><h2>Hình trong notebook kết quả</h2><span className="hint">docs/figures/</span></div>
-      ${figs.length ? html`<div className="figure-grid">${figs.map((f) => html`<div key=${f.name}><a href=${f.url} target="_blank"><img src=${f.url} alt=${f.name} loading="lazy" /></a><div className="cap">${f.name}</div></div>`)}</div>` : html`<div className="empty">chưa có hình</div>`}
-    </div>
+    <${FigureGallery} figures=${figs} />
     <div className="card">
       <div className="card-head"><h2>Mọi bảng policy_results trong runs/</h2><button className="btn sm" onClick=${() => setShowEv(!showEv)}>${showEv ? "ẩn" : `hiện ${ev.length} bảng`}</button></div>
       ${showEv ? html`<${Table} maxHeight=${480} rows=${ev.flatMap((t) => t.rows.map((r) => ({ ...r, key: t.key })))} columns=${[{ key: "key", label: "Thư mục" }, { key: "policy", label: "Chính sách" }, { key: "theta", label: "θ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 2)) }, { key: "n_seeds", label: "seed", num: true },

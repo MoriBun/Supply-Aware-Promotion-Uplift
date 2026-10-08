@@ -28,7 +28,7 @@ export function Legend({ items }) {
  * hlines [{y,label,color}], bands [{x0,x1}] shaded x ranges, marks [{x,y,label,color}].
  */
 export function LineChart({ x, series, height = 220, yFormat = (v) => fmtNum(v, 0), xFormat = (v) => fmtNum(v, 0),
-  xLabels = null, hlines = [], bands = [], marks = [], yDomain = null, yLabel = "", title = "", xTicks = null, legend = true }) {
+  xLabels = null, hlines = [], vlines = [], bands = [], marks = [], yDomain = null, yLabel = "", title = "", xTicks = null, legend = true }) {
   const ref = useRef(null);
   const width = useWidth(ref, 640);
   const [hover, setHover] = useState(null);
@@ -87,6 +87,8 @@ export function LineChart({ x, series, height = 220, yFormat = (v) => fmtNum(v, 
       ${series.map((s) => s.band ? html`<path key=${"band" + s.name} d=${area(s.band.lo, s.band.hi)} fill=${s.color} opacity="0.12" />` : null)}
       ${hlines.map((h, i) => html`<g key=${"h" + i}><line x1=${M.left} x2=${M.left + pw} y1=${sy(h.y)} y2=${sy(h.y)} stroke=${h.color || ink} strokeWidth="1.5" strokeDasharray=${h.dash === false ? null : "5 4"} />
         ${h.label ? html`<text x=${M.left + pw - 2} y=${sy(h.y) - 4} textAnchor="end" style=${{ fontSize: 11, fill: ink }}>${h.label}</text>` : null}</g>`)}
+      ${vlines.map((v, i) => html`<g key=${"v" + i}><line x1=${sx(v.x)} x2=${sx(v.x)} y1=${M.top} y2=${M.top + ph} stroke=${v.color || ink} strokeWidth="1.5" strokeDasharray="5 4" />
+        ${v.label ? html`<text x=${sx(v.x) + 4} y=${M.top + 11 + (i % 3) * 13} style=${{ fontSize: 11, fill: v.color || ink, fontWeight: 600 }}>${v.label}</text>` : null}</g>`)}
       ${series.map((s) => html`<path key=${"l" + s.name} d=${path(s.y)} fill="none" stroke=${s.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" strokeDasharray=${s.dash ? "4 3" : null} opacity=${s.opacity ?? 1} />`)}
       ${series.map((s) => s.dots ? s.y.map((v, i) => v == null ? null : html`<circle key=${"d" + s.name + i} cx=${sx(x[i])} cy=${sy(v)} r="4" fill=${s.color} stroke="var(--surface)" strokeWidth="2" />`) : null)}
       ${marks.map((m, i) => html`<g key=${"m" + i}><circle cx=${sx(m.x)} cy=${sy(m.y)} r="6" fill=${m.color || ink} stroke="var(--surface)" strokeWidth="2" />
@@ -233,11 +235,11 @@ export function Meter({ segments, max, format = (v) => fmtNum(v, 0) }) {
 
 /** Simple table: columns [{key, label, fmt, num}], rows (objects). */
 export function Table({ columns, rows, onRow = null, selectedKey = null, rowKey = null, maxHeight = null }) {
-  const body = html`<table className="tbl"><thead><tr>${columns.map((c) => html`<th key=${c.key} className=${c.num ? "num" : ""}>${c.label}</th>`)}</tr></thead>
+  const body = html`<table className="tbl"><thead><tr>${columns.map((c, i) => html`<th key=${c.key + i} scope="col" className=${c.num ? "num" : ""}>${c.label}</th>`)}</tr></thead>
     <tbody>${rows.map((r, i) => {
       const k = rowKey ? rowKey(r) : i;
-      return html`<tr key=${k} className=${(onRow ? "click " : "") + (selectedKey != null && selectedKey === k ? "sel" : "")} onClick=${onRow ? () => onRow(r) : null}>
-        ${columns.map((c) => html`<td key=${c.key} className=${c.num ? "num" : ""}>${c.fmt ? c.fmt(r[c.key], r) : r[c.key]}</td>`)}</tr>`;
+      return html`<tr key=${k} tabIndex=${onRow ? 0 : undefined} aria-label=${onRow ? `Xem ${r.name || k}` : undefined} aria-current=${selectedKey != null && selectedKey === k ? "true" : undefined} className=${(onRow ? "click " : "") + (selectedKey != null && selectedKey === k ? "sel" : "")} onClick=${onRow ? () => onRow(r) : null} onKeyDown=${onRow ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onRow(r); } } : undefined}>
+        ${columns.map((c, j) => html`<td key=${c.key + j} className=${c.num ? "num" : ""}>${c.fmt ? c.fmt(r[c.key], r) : r[c.key]}</td>`)}</tr>`;
     })}</tbody></table>`;
   return html`<div className=${"scroll-x" + (maxHeight ? " scroll-y" : "")} style=${maxHeight ? { maxHeight } : null}>${body}</div>`;
 }

@@ -99,9 +99,18 @@ def gte_tables(runs_dir: Path) -> list[dict]:
                                                "voucher_spent_usd"])
         except Exception:  # noqa: BLE001
             continue
+        # GTE is the unrestricted all-on / all-off contrast. Budgeted policy
+        # comparisons may live in the same file and must not enter this estimand.
+        t = t[t["budget_B_usd"].isna() & t["policy"].isin(("all_on", "all_off"))]
         pol = set(t["policy"].unique())
         if not {"all_on", "all_off"} <= pol:
             continue
+        if t.duplicated(["policy", "seed"]).any():
+            continue  # Multiple scenarios per seed: no unambiguous paired contrast.
+        paired = set(t.loc[t["policy"] == "all_on", "seed"]) & set(t.loc[t["policy"] == "all_off", "seed"])
+        if not paired:
+            continue
+        t = t[t["seed"].isin(paired)]
         g = gte_summary(t)
         out.append({"key": _rel(path.parents[1], runs_dir), **{k: _f(v) for k, v in g.items()}})
     return out

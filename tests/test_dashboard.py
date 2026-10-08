@@ -89,6 +89,33 @@ def trace_clock(cfg: Config):
     return Clock.from_config(cfg)
 
 
+def test_gte_discovery_excludes_budgeted_and_unpaired_runs(tmp_path: Path) -> None:
+    """The unrestricted GTE cannot include budgeted all-on or unmatched seeds."""
+    import pandas as pd
+    from dashboard.results import gte_tables
+
+    target = tmp_path / "mixed" / "results"
+    target.mkdir(parents=True)
+    rows = [
+        ("all_on", 0, 110, None), ("all_off", 0, 100, None),
+        ("all_on", 1, 130, None), ("all_off", 1, 100, None),
+        ("all_on", 2, 9999, None),
+        ("all_on", 0, 500, 50), ("all_off", 0, 100, 50),
+    ]
+    table = pd.DataFrame(rows, columns=["policy", "seed", "N_completed", "budget_B_usd"])
+    table["V_profit_usd"] = 0.0
+    table["voucher_spent_usd"] = 0.0
+    table.to_parquet(target / "policy_results.parquet", index=False)
+    got = gte_tables(tmp_path)
+    assert len(got) == 1
+    assert got[0]["GTE"] == 20.0 and got[0]["GTE_se"] == 10.0
+    assert got[0]["N_on"] == 120.0 and got[0]["N_off"] == 100.0
+    assert got[0]["n_seeds"] == 2
+    table.loc[:, "budget_B_usd"] = 50.0
+    table.to_parquet(target / "policy_results.parquet", index=False)
+    assert gte_tables(tmp_path) == []
+
+
 def test_torus_display_vectors_are_shortest_images(tiny_cfg: Config) -> None:
     world, _, _ = _setup(tiny_cfg)
     space = world.space
@@ -145,3 +172,47 @@ def test_api_runs_a_tiny_run(tmp_path: Path) -> None:
     assert again["t"] == frames["t"][:5] and again["events"][0] == frames["events"][0]
     assert client2.get(f"/api/runs/{rid}/summary").json()["kpis"]["N_completed"] == summary["kpis"]["N_completed"]
     assert client2.get("/api/results/sweeps").status_code == 200
+
+
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
+def test_api_sweep_finds_theta_star(tmp_path: Path) -> None:
+    """A sweep from the API builds the jobs of runner.sweep_theta, runs them in a pool and reports theta*."""
+    pytest.importorskip("fastapi")
+    import pandas as pd
+    from fastapi.testclient import TestClient
+
+    from dashboard.server import create_app
+    from dashboard.sweep import aggregate
+
+    client = TestClient(create_app(ROOT, runs_dir=tmp_path))
+    body = {"name": "tiny sweep", "layers": ["tests/fixtures/tiny.yaml"], "theta_grid": [0.0, 0.5, 1.0], "n_seeds": 2,
+            "n_procs": 2}
+    run = client.post("/api/sweeps", json=body).json()
+    assert run["kind"] == "sweep" and run["sweep"]["total"] == 6
+    rid = run["id"]
+    for _ in range(1500):
+        info = client.get(f"/api/runs/{rid}").json()
+        if info["status"] in ("done", "error"):
+            break
+        time.sleep(0.2)
+    assert info["status"] == "done", info.get("error")
+    sweep = client.get(f"/api/runs/{rid}/sweep").json()
+    assert len(sweep["rows"]) == 6 and sweep["done"] == 6
+    agg = sweep["aggregate"]
+    assert agg["argmax_theta"] in (0.0, 0.5, 1.0) and agg["star"]["n_seeds"] == 2
+    assert all(p["n"] == 2 for p in agg["per_theta"])
+    assert len(sweep["kappas"]) == 3 and all(k["n_pilots"] >= 1 for k in sweep["kappas"])
+    # same B for every theta, and the on-disk tables are the ones of mode sweep_theta
+    assert len({r["budget_B_usd"] for r in sweep["rows"]}) == 1
+    table = pd.read_parquet(tmp_path / rid / "results" / "policy_results.parquet")
+    assert len(table) == 6 and set(table["theta"]) == {0.0, 0.5, 1.0} and table["run_id"].str.startswith("sweep_theta-").all()
+    star = pd.read_parquet(tmp_path / rid / "results" / "theta_sweep.parquet")
+    assert float(star.loc[star["is_argmax"], "theta"].iloc[0]) == agg["argmax_theta"]
+    # the aggregate recomputed from the rows matches what the run reported
+    again = aggregate(sweep["rows"], sweep["theta_grid"])
+    assert again["argmax_theta"] == agg["argmax_theta"] and again["star"]["lo"] == agg["star"]["lo"]
+    # reload from disk: listed as a sweep with its brief, rows readable
+    client2 = TestClient(create_app(ROOT, runs_dir=tmp_path))
+    listed = client2.get("/api/runs").json()["runs"][0]
+    assert listed["kind"] == "sweep" and listed["sweep_summary"]["argmax_theta"] == agg["argmax_theta"]
+    assert len(client2.get(f"/api/runs/{rid}/sweep").json()["rows"]) == 6

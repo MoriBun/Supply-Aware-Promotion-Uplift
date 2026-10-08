@@ -33,7 +33,10 @@ from sim.logger import write_metadata, write_results, write_run
 from sim.policies import make_policy
 from sim.population import build_world
 from sim.rng import Rng
-from sim.runner import Job, KappaAuto, calibrate_budget, kappa_auto, metadata_table, policy_results_table, run_id
+from sim.runner import (
+    Job, KappaAuto, budget_for, calibrate_budget, kappa_auto, metadata_table, policy_results_table, resolve_kappas,
+    run_id,
+)
 from sim.state import Clock
 
 from dashboard import summary as summ
@@ -59,13 +62,30 @@ class RunSpec:
         return dataclasses.asdict(self)
 
 
+@dataclass(frozen=True)
+class SweepSpec:
+    """A theta sweep: the grid, seeds per theta and the pool size, on top of the config layers / overrides."""
+
+    name: str
+    overrides: tuple[str, ...] = ()
+    layers: tuple[str, ...] = ()
+    theta_grid: tuple[float, ...] = ()
+    n_seeds: int = 3
+    n_procs: int | None = None
+
+    def to_dict(self) -> dict:
+        return dataclasses.asdict(self)
+
+
 @dataclass
 class DashRun:
     id: str
     name: str
-    spec: RunSpec
+    spec: RunSpec | SweepSpec
     created_at: str
     out_dir: Path
+    kind: str = "single"              # single | sweep
+    sweep: dict | None = None         # sweep progress and rows (kind = sweep)
     status: str = "queued"
     progress: float = 0.0
     tick: int = 0
@@ -108,9 +128,14 @@ class DashRun:
             self.note(text)
 
     def public(self) -> dict:
-        """JSON view without the heavy parts (frames, slots, summary)."""
+        """JSON view without the heavy parts (frames, slots, summary, sweep rows)."""
+        sweep = None
+        if self.sweep is not None:
+            sweep = {k: v for k, v in self.sweep.items() if k != "rows"}
+            sweep["n_rows"] = len(self.sweep.get("rows", []))
         return {
-            "id": self.id, "name": self.name, "created_at": self.created_at, "status": self.status,
+            "id": self.id, "name": self.name, "created_at": self.created_at, "status": self.status, "kind": self.kind,
+            "sweep": sweep, "sweep_summary": (self.summary or {}).get("sweep_brief"),
             "progress": self.progress, "tick": self.tick, "t_s": self.t_s, "ticks_max": self.ticks_max,
             "message": self.message, "log": self.log[-40:], "error": self.error,
             "stage_elapsed_s": time.time() - self.stage_started if self.status not in ("done", "error") else None,
@@ -150,17 +175,22 @@ class RunManager:
 
     # --- public ------------------------------------------------------------------
 
-    def submit(self, spec: RunSpec) -> DashRun:
-        run_key = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{_slug(spec.name)}"
+    def submit(self, spec: RunSpec | SweepSpec) -> DashRun:
+        kind = "sweep" if isinstance(spec, SweepSpec) else "single"
+        run_key = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{'sweep-' if kind == 'sweep' else ''}{_slug(spec.name)}"
         with self._lock:
             n = 2
             base = run_key
             while run_key in self.runs:
                 run_key = f"{base}-{n}"
                 n += 1
-            run = DashRun(id=run_key, name=spec.name, spec=spec,
+            run = DashRun(id=run_key, name=spec.name, spec=spec, kind=kind,
                           created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
                           out_dir=self.runs_dir / run_key)
+            if kind == "sweep":
+                run.sweep = {"theta_grid": [float(t) for t in spec.theta_grid], "n_seeds": int(spec.n_seeds),
+                             "n_procs": spec.n_procs, "done": 0, "total": len(spec.theta_grid) * int(spec.n_seeds),
+                             "budget_usd": None, "kappas": None, "rows": []}
             self.runs[run_key] = run
         run.note("Đã xếp hàng")
         self._queue.put(run_key)
@@ -195,7 +225,10 @@ class RunManager:
             if run is None:
                 continue
             try:
-                self._execute(run)
+                if run.kind == "sweep":
+                    self._execute_sweep(run)
+                else:
+                    self._execute(run)
             except Exception as exc:  # noqa: BLE001 - reported to the page
                 run.error = f"{type(exc).__name__}: {exc}"
                 run.note(f"Lỗi: {run.error}")
@@ -223,7 +256,10 @@ class RunManager:
         run.score_fn = cfg.policy.threshold.score_fn if is_threshold else None
 
         # 1. Budget B (spec §4.3): explicit, or the all_on pilot of runner.calibrate_budget.
-        enforce = bool(cfg.budget.enforce)
+        # M10 assigns treatment without a budget constraint so its propensity is
+        # the configured experiment probability.  This mirrors sim.runner and
+        # keeps the dashboard form's “Thí nghiệm không áp ngân sách” statement true.
+        enforce = bool(cfg.experiment.budget_enforce if cfg.policy.name == "experiment" else cfg.budget.enforce)
         budget: float | None = None
         if enforce:
             if spec.budget_usd is not None:
@@ -303,6 +339,91 @@ class RunManager:
         run.set_stage("done", f"Hoàn tất trong {run.runtime['total_s']:.1f} s; ghi {run.out_dir.as_posix()}")
         run.result = None   # buffers are on disk now; keep the trace for the pages
 
+    def _execute_sweep(self, run: DashRun) -> None:
+        """theta sweep: B once, kappa-auto per theta, every (theta, seed) job, live rows, tables of mode sweep_theta."""
+        from dashboard import sweep as sw
+
+        spec: SweepSpec = run.spec  # type: ignore[assignment]
+        wall = time.perf_counter()
+        run.set_stage("loading", "Nạp config")
+        layers = [self.root / "config" / "default.yaml"] + [self.root / p for p in spec.layers]
+        cfg = load_config(layers, list(spec.overrides))
+        n_procs = int(spec.n_procs) if spec.n_procs else sw.default_n_procs()
+        base = sw.sweep_config(cfg, n_procs)
+        run.cfg = base
+        run.config = to_dict(base)
+        run.config_hash = config_hash(base)
+        clock = Clock.from_config(base)
+        run.clock = _clock_dict(clock)
+        run.policy = "threshold"
+        run.scope = base.policy.threshold.scope
+        run.score_fn = base.policy.threshold.score_fn
+        grid = [float(t) for t in spec.theta_grid]
+        if not grid:
+            raise ValueError("theta_grid trống")
+        state = run.sweep
+        assert state is not None
+        state["n_procs"] = n_procs
+
+        run.set_stage("budget", "Pilot all_on không ngân sách để lấy B (chung cho mọi θ)")
+        t0 = time.perf_counter()
+        budget = budget_for(base)
+        run.runtime["budget_pilot_s"] = time.perf_counter() - t0
+        run.budget_usd = budget
+        state["budget_usd"] = budget
+        run.note("Không áp ngân sách" if budget is None else f"B = {budget:,.2f} USD/kỳ cho mọi θ")
+
+        run.set_stage("kappa", f"κ auto cho {len(grid)} θ: pilot threshold không ngân sách, lặp đến điểm bất động, "
+                               f"{n_procs} tiến trình (H-21)")
+        t0 = time.perf_counter()
+        kappas = resolve_kappas(base, grid, budget) or [KappaAuto(kappa=-math.inf) for _ in grid]
+        run.runtime["kappa_pilots_s"] = time.perf_counter() - t0
+        state["kappas"] = [{"theta": t, "kappa": _json_float(k.kappa), "n_pilots": k.n_pilots} for t, k in zip(grid, kappas)]
+        run.note(f"κ auto xong: {sum(k.n_pilots for k in kappas)} pilot, {run.runtime['kappa_pilots_s']:.0f} s")
+
+        jobs = sw.build_jobs(base, grid, int(spec.n_seeds), budget, kappas)
+        state["total"] = len(jobs)
+        run.set_stage("simulating", f"Chạy {len(jobs)} lượt ({len(grid)} θ × {spec.n_seeds} seed), {n_procs} tiến trình")
+        t0 = time.perf_counter()
+
+        def on_result(i: int, job: Job, res: RunResult) -> None:
+            state["rows"].append(sw.row_of(job, res))
+            state["done"] = len(state["rows"])
+            run.progress = state["done"] / max(1, state["total"])
+            run.message = (f"{state['done']} / {state['total']} lượt xong · θ = {job.theta:g}, seed {job.seed}: "
+                           f"N = {res.N_completed}")
+
+        results = sw.run_jobs_live(jobs, n_procs=n_procs, on_result=on_result)
+        run.runtime["simulate_s"] = time.perf_counter() - t0
+        run.progress = 1.0
+
+        run.set_stage("writing", "Ghi bảng sweep_theta và tổng hợp θ*")
+        run.out_dir.mkdir(parents=True, exist_ok=True)
+        sw.write_tables(run.out_dir, jobs, results)
+        agg = sw.aggregate(state["rows"], grid)
+        run.summary = {"sweep": agg, "sweep_brief": _sweep_brief(agg)}
+        self._write_sweep_meta(run)
+        run.runtime["total_s"] = time.perf_counter() - wall
+        star = agg.get("star")
+        run.set_stage("done", f"θ* = {agg['argmax_theta']:g}"
+                      + (f", tập θ* = [{star['lo']:g}; {star['hi']:g}] ({star['n_seeds']} seed)" if star else "")
+                      + f" · {run.runtime['total_s']:.0f} s")
+
+    def _write_sweep_meta(self, run: DashRun) -> None:
+        d = run.out_dir / "dashboard"
+        d.mkdir(parents=True, exist_ok=True)
+        state = dict(run.sweep or {})
+        rows = state.pop("rows", [])
+        meta = {
+            "id": run.id, "name": run.name, "kind": "sweep", "created_at": run.created_at, "spec": run.spec.to_dict(),
+            "config": run.config, "config_hash": run.config_hash, "clock": run.clock, "policy": run.policy,
+            "scope": run.scope, "score_fn": run.score_fn, "budget_usd": run.budget_usd, "runtime": run.runtime,
+            "log": run.log, "sweep": state, "sweep_brief": (run.summary or {}).get("sweep_brief"),
+        }
+        (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+        (d / "sweep.json").write_text(json.dumps({"rows": rows, "summary": run.summary}, ensure_ascii=False),
+                                      encoding="utf-8")
+
     # --- files -------------------------------------------------------------------
 
     def _write(self, run: DashRun, cfg: Config, world, result: RunResult, trace: Trace, budget: float | None,
@@ -343,9 +464,22 @@ class RunManager:
             run_key = meta.get("id") or meta_path.parents[1].name
             if run_key in self.runs:
                 continue
-            spec = RunSpec(**{k: (tuple(v) if isinstance(v, list) else v) for k, v in meta.get("spec", {}).items()})
-            run = DashRun(id=run_key, name=meta.get("name", run_key), spec=spec, created_at=meta.get("created_at", ""),
-                          out_dir=meta_path.parents[1], status="done", progress=1.0)
+            kind = meta.get("kind", "single")
+            spec_cls = SweepSpec if kind == "sweep" else RunSpec
+            spec = spec_cls(**{k: (tuple(v) if isinstance(v, list) else v) for k, v in meta.get("spec", {}).items()})
+            run = DashRun(id=run_key, name=meta.get("name", run_key), spec=spec, kind=kind,
+                          created_at=meta.get("created_at", ""), out_dir=meta_path.parents[1], status="done",
+                          progress=1.0)
+            if kind == "sweep":
+                run.sweep = {**meta.get("sweep", {}), "rows": []}
+                if meta.get("sweep_brief"):
+                    run.summary = {"sweep_brief": meta["sweep_brief"]}
+            elif (meta_path.parent / "summary.json").exists():
+                # KPIs are shown in the run list, so the (small) summary is read now; frames stay lazy.
+                try:
+                    run.summary = json.loads((meta_path.parent / "summary.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    pass
             for k in ("config", "config_hash", "clock", "policy", "theta", "scope", "score_fn", "budget_usd", "kappa",
                       "kappa_pilots", "kappa_detail", "runtime"):
                 if k in meta and meta[k] is not None:
@@ -363,6 +497,13 @@ class RunManager:
         if run.status != "done":
             return run
         d = run.out_dir / "dashboard"
+        if run.kind == "sweep":
+            if run.sweep is not None and not run.sweep.get("rows") and (d / "sweep.json").exists():
+                data = json.loads((d / "sweep.json").read_text(encoding="utf-8"))
+                run.sweep["rows"] = data.get("rows", [])
+                run.sweep["done"] = len(run.sweep["rows"])
+                run.summary = data.get("summary") or run.summary
+            return run
         if run.geometry is None and (d / "geometry.json").exists():
             run.geometry = json.loads((d / "geometry.json").read_text(encoding="utf-8"))
         if run.summary is None and (d / "summary.json").exists():
@@ -382,6 +523,15 @@ class RunManager:
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
+
+
+def _sweep_brief(agg: dict) -> dict:
+    """The few numbers the run list shows for a sweep."""
+    star = agg.get("star")
+    best = next((p for p in agg["per_theta"] if p["theta"] == agg.get("argmax_theta")), None)
+    return {"argmax_theta": agg.get("argmax_theta"), "N_best": best.get("N_mean") if best else None,
+            "star_lo": star["lo"] if star else None, "star_hi": star["hi"] if star else None,
+            "n_rows": agg.get("n_rows", 0), "gain_vs_zero": agg.get("gain_vs_zero")}
 
 
 def _clock_dict(clock: Clock) -> dict:
