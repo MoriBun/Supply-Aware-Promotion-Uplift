@@ -18,6 +18,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=8"]
 analysis = ["matplotlib>=3.8", "lightgbm>=4.0", "ipykernel>=6"]   # gate plots, DR-learner, notebooks (decisions T-13, H-27); sim/ never imports them
+dashboard = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "httpx>=0.27"]   # management dashboard (dashboard/, decisions T-38); sim/ never imports them
 
 [tool.setuptools.packages.find]
 include = ["sim*", "analysis*"]   # analysis: importable from notebooks/ (decisions H-27)
