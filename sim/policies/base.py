@@ -257,7 +257,7 @@ class OracleHiddenView:
 
     Second gate to hidden variables after :class:`LegacyHiddenView` (hard rule 3, decisions T-40, KN 3.1).
     Built only by ``make_policy`` for ``policy.name = threshold`` with ``score_fn = oracle``; the run is
-    flagged ``uses_hidden`` in ``meta/run_metadata``. Never reaches ``SessionBatch`` or the logs.
+    recorded as ``hidden_view = "oracle"`` in ``meta/run_metadata``. Never reaches ``SessionBatch`` or the logs.
     """
 
     def __init__(self, alpha: np.ndarray, beta_price: np.ndarray, beta_eta: np.ndarray, delta_promo: np.ndarray) -> None:

@@ -40,8 +40,16 @@ def make_policy(cfg: Config, world, *, rng: Rng | None = None, theta: float | No
     raise ValueError(f"unknown policy {name!r}")
 
 
-def uses_hidden(cfg: Config) -> bool:
-    """True when the policy of ``cfg`` reads hidden variables: legacy (``u_latent``) or threshold with the
-    oracle score (``alpha``, ``beta_*``, ``delta_promo``). Written to ``meta/run_metadata.uses_hidden`` (T-40)."""
+HIDDEN_VIEWS = ("none", "legacy", "oracle")
+
+
+def hidden_view(cfg: Config) -> str:
+    """Which gate to hidden variables the policy of ``cfg`` opens: ``"legacy"`` (``LegacyHiddenView``,
+    ``u_latent``), ``"oracle"`` (``OracleHiddenView``, threshold with the oracle score) or ``"none"``.
+    Written to ``meta/run_metadata.hidden_view`` (decisions T-40, T-41; phan_cong_v3 B9 item 5)."""
     name = cfg.policy.name
-    return name == "legacy" or (name == "threshold" and is_oracle(cfg.policy.threshold.score_fn))
+    if name == "legacy":
+        return "legacy"
+    if name == "threshold" and is_oracle(cfg.policy.threshold.score_fn):
+        return "oracle"
+    return "none"

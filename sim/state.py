@@ -165,8 +165,7 @@ SESSION_COLUMNS: tuple[Column, ...] = (
     _col("budget_period", "int16", -1, "quote"),
     _col("score", "float32", NAN, "quote"),
     _col("slack_hat", "float32", NAN, "quote"),
-    _col("slack_lag_cell", "float64", NAN, "quote"),          # T-40: published slack of the pickup cell in slot k-1, every policy (T7.4)
-    _col("lag_slot_same_block", "bool", True, "quote"),      # T-40: slot k-1 in the same switchback block (T7.4)
+    _col("lag_slot_same_block", "bool", True, "quote"),      # T-40/T-41: slot k-1 in the same switchback block (T7.4)
     _col("requested", "bool", False, "decide"),
     _col("in_window", "bool", False, "spawn"),
     # hidden/sessions_hidden

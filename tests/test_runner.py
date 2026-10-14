@@ -334,7 +334,7 @@ def test_evaluate_mode(th_cfg, tmp_path):
     assert (meta["policy"] == "threshold").all() and meta["run_id"].is_unique
     from sim.runner import pilot_seed
     assert (meta["budget_pilot_seed"] == pilot_seed(th_cfg)).all() and (meta["budget_pilot_spent_usd"] > 0).all()   # T-40
-    assert not meta["uses_hidden"].any() and (disk["world_seed"] == th_cfg.meta.world_seed).all()
+    assert (meta["hidden_view"] == "none").all() and (disk["world_seed"] == th_cfg.meta.world_seed).all()
 
 
 def test_evaluate_without_budget_enforcement(tiny_layers, tmp_path):

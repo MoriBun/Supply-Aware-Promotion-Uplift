@@ -8,7 +8,7 @@ import pytest
 
 from sim import experiment
 from sim.config import load_config
-from sim.policies import make_policy, uses_hidden
+from sim.policies import hidden_view, make_policy
 from sim.policies.base import (
     FORBIDDEN_IN_BATCH, SNAPSHOT_FIELDS, CellDecision, LegacyHiddenView, LookAheadError, OfferDecision,
     OracleHiddenView, Policy,
@@ -580,10 +580,10 @@ def test_oracle_is_gated_to_the_threshold_policy(default_yaml, monkeypatch):
     for name in ("all_on", "all_off", "legacy", "experiment"):
         other = load_config(default_yaml, ["policy.threshold.score_fn=oracle", f"policy.name={name}"])
         make_policy(other, world)
-        assert not uses_hidden(other) or name == "legacy"
+        assert hidden_view(other) == ("legacy" if name == "legacy" else "none")
     assert built == []                                                              # gate opened for threshold only
     make_policy(oracle_cfg, world)
     assert built == [1]
-    assert uses_hidden(oracle_cfg) and uses_hidden(load_config(default_yaml, ["policy.name=legacy"]))
-    assert not uses_hidden(load_config(default_yaml))
+    assert hidden_view(oracle_cfg) == "oracle" and hidden_view(load_config(default_yaml, ["policy.name=legacy"])) == "legacy"
+    assert hidden_view(load_config(default_yaml)) == "none"
     assert FORBIDDEN_IN_BATCH & {"alpha", "beta_price", "beta_eta", "delta_promo"}  # still hidden from SessionBatch

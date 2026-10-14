@@ -79,7 +79,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [U] κ auto: chi tiêu thực tế của lượt đánh giá nằm trong [0,85B; 1,0B].
 
 - [U] `scope = city`: mọi ô cùng ŝ = (Σ idle)/(Σ enroute) toàn thành phố, cùng một quyết định; quy tắc H-14 và chặn ở `slack_cap` áp ở cấp thành phố; không cần bảng ô kề (T-40).
-- [U] Oracle: điểm = (p1 − p0)/(v·p1) khớp `choice.request_probability` với voucher từ `pricing.voucher_cents`; v = 0 → NaN → không phát; `load_score_fn("oracle")` raise; `OracleHiddenView` chỉ được tạo khi `policy.name = threshold`; `uses_hidden` đúng với legacy và threshold+oracle, sai với các lượt khác (T-40).
+- [U] Oracle: điểm = (p1 − p0)/(v·p1) khớp `choice.request_probability` với voucher từ `pricing.voucher_cents`; v = 0 → NaN → không phát; `load_score_fn("oracle")` raise; `OracleHiddenView` chỉ được tạo khi `policy.name = threshold`; `hidden_view` bằng `legacy` với chính sách cũ, `oracle` với threshold+oracle, `none` với các lượt khác (T-40, T-41).
 - [U] Runner (`tests/test_runner.py`): `run_metadata` có `budget_pilot_seed = pilot_seed(cfg)` và `budget_pilot_spent_usd > 0` khi áp ngân sách, −1 và NaN khi không; `policy_results` có `world_seed` (T-40).
 
 ### Cấu hình (`tests/test_config.py`)
