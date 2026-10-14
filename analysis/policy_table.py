@@ -64,16 +64,16 @@ DEFAULT_SPECS = (
     PolicySpec("random", "threshold", 0.0, "random"),
     PolicySpec("heuristic", "threshold", 0.0, "heuristic_low_freq"),
     PolicySpec("tau_x", "threshold", 0.0, "analysis.score_ties:tau_x_baseline"),
-    PolicySpec("tau_per_usd", "threshold", 0.0, "analysis.score_ties:tau_per_dollar_baseline"),
+    PolicySpec("tau_per_vnd", "threshold", 0.0, "analysis.score_ties:tau_per_dollar_baseline"),
     PolicySpec("tau_x_dr_all", "threshold", 0.0, DR + "tau_x_dr_all"),
     PolicySpec("tau_xs_dr_all", "threshold", 0.0, DR + "tau_xs_dr_all"),
-    PolicySpec("tau_x_dr_all_usd", "threshold", 0.0, DR + "tau_x_dr_all_per_dollar"),
-    PolicySpec("tau_xs_dr_all_usd", "threshold", 0.0, DR + "tau_xs_dr_all_per_dollar"),
-    PolicySpec("tau_x_dr_usd", "threshold", 0.0, DR + "tau_x_dr_per_dollar"),
-    PolicySpec("tau_xs_dr_usd", "threshold", 0.0, DR + "tau_xs_dr_per_dollar"),
+    PolicySpec("tau_x_dr_all_vnd", "threshold", 0.0, DR + "tau_x_dr_all_per_dollar"),
+    PolicySpec("tau_xs_dr_all_vnd", "threshold", 0.0, DR + "tau_xs_dr_all_per_dollar"),
+    PolicySpec("tau_x_dr_vnd", "threshold", 0.0, DR + "tau_x_dr_per_dollar"),
+    PolicySpec("tau_xs_dr_vnd", "threshold", 0.0, DR + "tau_xs_dr_per_dollar"),
     PolicySpec("pi_theta_0.5_heuristic", "threshold", 0.5, "heuristic_low_freq"),
-    PolicySpec("pi_thetahatA_ring1_dr_usd", "threshold", 0.25, DR + "tau_x_dr_all_per_dollar", scope="ring1"),
-    PolicySpec("pi_thetahatB_ring1_dr_usd", "threshold", 5.0, DR + "tau_x_dr_all_per_dollar", scope="ring1"),
+    PolicySpec("pi_thetahatA_ring1_dr_vnd", "threshold", 0.25, DR + "tau_x_dr_all_per_dollar", scope="ring1"),
+    PolicySpec("pi_thetahatB_ring1_dr_vnd", "threshold", 5.0, DR + "tau_x_dr_all_per_dollar", scope="ring1"),
 )
 REFERENCE = "all_on_B"
 
@@ -123,7 +123,7 @@ def run_policy_table(cfg: Config, specs, out_dir: Path, *, n_seeds: int | None =
     if reference not in labels:
         raise ValueError(f"reference {reference!r} is not one of the labels {labels}")
     bp = budget_and_pilot(cfg, engine=engine)
-    budget = bp.budget_usd
+    budget = bp.budget_vnd
     seeds = seeds_for(cfg, cfg.sweep.n_seeds if n_seeds is None else int(n_seeds))
     jobs: list[Job] = []
     job_labels: list[str] = []
@@ -135,7 +135,7 @@ def run_policy_table(cfg: Config, specs, out_dir: Path, *, n_seeds: int | None =
         found = resolve_kappas(c, [theta], b, engine=engine)
         ka = KappaAuto(kappa=NAN) if found is None else found[0]
         for s in seeds:
-            jobs.append(Job(cfg=c, seed=s, theta=theta, kappa=None if found is None else ka.kappa, budget_usd=b,
+            jobs.append(Job(cfg=c, seed=s, theta=theta, kappa=None if found is None else ka.kappa, budget_vnd=b,
                             enforce_budget=b is not None, kappa_pilots=ka.n_pilots,
                             **(bp.job_fields if spec.budget else {})))
             job_labels.append(spec.label)
@@ -174,18 +174,18 @@ def summarize(runs: pd.DataFrame, *, reference: str = REFERENCE, order=None) -> 
     """Per label: N, V, spend (mean, SE over seeds) and ``label - reference`` paired by seed (CRN)."""
     order = list(dict.fromkeys(runs["label"])) if order is None else list(order)
     by_seed = {m: runs.pivot(index="seed", columns="label", values=m)
-               for m in ("N_completed", "V_profit_usd", "voucher_spent_usd")}
+               for m in ("N_completed", "V_profit_vnd", "voucher_spent_vnd")}
     rows = []
     for label in order:
         g = runs[runs["label"] == label]
         row = {"label": label, "policy": g["policy"].iloc[0], "score_fn": g["score_fn"].iloc[0],
                "theta": float(g["theta"].iloc[0]), "kappa": float(g["kappa"].iloc[0]),
                "kappa_pilots": int(g["kappa_pilots"].iloc[0]), "n_seeds": int(len(g)),
-               "budget_B_usd": float(g["budget_B_usd"].iloc[0])}
-        for metric, prefix in (("N_completed", "N"), ("V_profit_usd", "V"), ("voucher_spent_usd", "spent")):
+               "budget_B_vnd": float(g["budget_B_vnd"].iloc[0])}
+        for metric, prefix in (("N_completed", "N"), ("V_profit_vnd", "V"), ("voucher_spent_vnd", "spent")):
             row[f"{prefix}_mean"], row[f"{prefix}_se"] = _mean_se(g[metric])
         row["share_cells_off"] = float(g["share_cells_off"].mean())
-        for metric, prefix in (("N_completed", "dN"), ("V_profit_usd", "dV")):
+        for metric, prefix in (("N_completed", "dN"), ("V_profit_vnd", "dV")):
             diff = (by_seed[metric][label] - by_seed[metric][reference]).dropna()
             row[f"{prefix}_vs_ref"], row[f"{prefix}_vs_ref_se"] = _mean_se(diff)
         rows.append(row)
@@ -219,11 +219,11 @@ def _vn(x: float, digits: int = 1) -> str:
 def markdown(summary: pd.DataFrame) -> str:
     """The table as Markdown rows for docs/log.md and the report."""
     ref = summary.attrs.get("reference", REFERENCE)
-    head = (f"| Chính sách | θ | κ | N (± SE) | V (USD, ± SE) | Chi / B | % (ô, slot) tắt | N − {ref} (± SE) |\n"
+    head = (f"| Chính sách | θ | κ | N (± SE) | V (đ, ± SE) | Chi / B | % (ô, slot) tắt | N − {ref} (± SE) |\n"
             "|---|---|---|---|---|---|---|---|")
     lines = [head]
     for r in summary.itertuples():
-        spent = r.spent_mean / r.budget_B_usd if r.budget_B_usd > 0 else NAN
+        spent = r.spent_mean / r.budget_B_vnd if r.budget_B_vnd > 0 else NAN
         dn = "0 (mốc)" if r.label == ref else f"{_vn(r.dN_vs_ref)} ± {_vn(r.dN_vs_ref_se)}"
         lines.append(f"| `{r.label}` | {_vn(r.theta, 2) if not math.isnan(r.theta) else '—'} | {_vn(r.kappa, 3)} | "
                      f"{_vn(r.N_mean)} ± {_vn(r.N_se)} | {_vn(r.V_mean)} ± {_vn(r.V_se)} | {_vn(spent, 3)} | "
@@ -243,7 +243,7 @@ def main(argv=None) -> int:
     cfg = load_config(args.config, args.overrides)
     specs = [parse_spec(s) for s in args.spec] if args.spec else list(DEFAULT_SPECS)
     summary = run_policy_table(cfg, specs, args.out, n_seeds=args.n_seeds, reference=args.reference)
-    print(f"B = {summary['budget_B_usd'].dropna().max():.2f} USD per period; {int(summary['n_seeds'].iloc[0])} seeds")
+    print(f"B = {summary['budget_B_vnd'].dropna().max():,.0f} VND per period; {int(summary['n_seeds'].iloc[0])} seeds")
     print(markdown(summary))
     return 0
 

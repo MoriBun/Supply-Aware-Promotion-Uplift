@@ -17,7 +17,7 @@ What a frame holds (all per tick, after step 10):
   interpolate a moving driver between two cell centres;
 - per-cell live counters ``idle / enroute / ontrip / waiting``;
 - cumulative counters: orders by status, sessions / offers / budget-blocked / requests;
-- the budget ledger of the current period: ``spent, committed, reserved, limit`` (cents);
+- the budget ledger of the current period: ``spent, committed, reserved, limit`` (dong);
 - the events of the tick (request, match, pickup, complete, abandon, cancel,
   offer, blocked) with their cells, for the pulses of the animation.
 
@@ -34,7 +34,7 @@ from collections.abc import Callable
 import numpy as np
 
 from sim import cancel, choice, demand, matching, reposition, supply, trips
-from sim.budget import CENTS_PER_USD
+from sim.budget import DONG_PER_VND
 from sim.config import Config
 from sim.engine import RunResult, _aggregate, _truncate_open_orders, build_context
 from sim.policies.base import CellDecision, Policy
@@ -49,7 +49,7 @@ EVENT_CODE: dict[str, int] = {name: i for i, name in enumerate(EVENT_TYPES)}
 SLOT_SNAPSHOT_FIELDS: tuple[str, ...] = (
     "idle_avg", "enroute_avg", "ontrip_avg", "waiting_avg", "slack", "utilization", "mean_pickup_eta_min",
     "n_sessions", "n_offers", "n_requests", "n_matched", "n_completed", "n_abandoned", "n_cancelled",
-    "voucher_spent_usd",
+    "voucher_spent_vnd",
 )
 
 _ON_TRIP = int(DriverStatus.ON_TRIP)
@@ -70,7 +70,7 @@ class Trace:
         self.cooldown_max_s = float(clock.cooldown_max_s)
         self.n_drivers = int(n_drivers)
         self.n_cells = int(n_cells)
-        self.budget_cents: int | None = None
+        self.budget_dong: int | None = None
 
         self.t: list[float] = []
         self.status: list[np.ndarray] = []
@@ -172,7 +172,7 @@ class Trace:
         period = ctx.clock.period_of(t)
         period = max(-1, min(period, ctx.clock.n_periods - 1))
         spent, committed, reserved = ctx.ledger.totals(period)
-        limit = ctx.ledger.limit_cents(period)
+        limit = ctx.ledger.limit_dong(period)
         self.ledger.append(np.array([period, spent, committed, reserved, -1 if limit is None else limit],
                                     dtype=np.int64))
         self.t.append(float(t))
@@ -253,7 +253,7 @@ def _events(code: int, a: np.ndarray, b: np.ndarray | None = None) -> np.ndarray
 ProgressFn = Callable[[int, float, int], None]
 
 
-def run_traced(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_usd: float | None = None,
+def run_traced(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_vnd: float | None = None,
                enforce_budget: bool | None = None, on_progress: ProgressFn | None = None,
                on_trace: Callable[[Trace], None] | None = None,
                progress_every: int = 15) -> tuple[RunResult, Trace]:
@@ -265,10 +265,10 @@ def run_traced(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_us
     once before the first tick, so a caller can read frames while the run is going.
     """
     t_wall = time.perf_counter()
-    ctx = build_context(cfg, world, policy, rng, budget_usd=budget_usd, enforce_budget=enforce_budget)
+    ctx = build_context(cfg, world, policy, rng, budget_vnd=budget_vnd, enforce_budget=enforce_budget)
     clock, ledger, layer, monitor = ctx.clock, ctx.ledger, ctx.layer, ctx.monitor
     trace = Trace(cfg, clock, ctx.drivers.n, ctx.n_cells)
-    trace.budget_cents = ledger.budget_cents
+    trace.budget_dong = ledger.budget_dong
     if on_trace is not None:
         on_trace(trace)
     supply.init_drivers(ctx)
@@ -315,7 +315,7 @@ def run_traced(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_us
 
     n_truncated = _truncate_open_orders(ctx)
     ledger.check_invariant()
-    result = _aggregate(ctx, policy, sim_end_s, n_truncated, budget_usd, sum_idle_ticks, sum_enroute_ticks)
+    result = _aggregate(ctx, policy, sim_end_s, n_truncated, budget_vnd, sum_idle_ticks, sum_enroute_ticks)
     result.runtime_s = time.perf_counter() - t_wall
     result.sessions = ctx.sessions
     result.orders = ctx.orders
@@ -326,14 +326,14 @@ def run_traced(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_us
 
 
 def budget_period_table(ledger_frames: np.ndarray, n_periods: int) -> list[dict]:
-    """Final ``spent / committed / reserved / limit`` (USD) per period from the last frame of each period."""
+    """Final ``spent / committed / reserved / limit`` (VND) per period from the last frame of each period."""
     out = []
     for p in range(-1, n_periods):
         rows = ledger_frames[ledger_frames[:, 0] == p]
         if len(rows) == 0:
             continue
         last = rows[-1]
-        limit = None if last[4] < 0 else last[4] / CENTS_PER_USD
-        out.append({"period": int(p), "spent_usd": last[1] / CENTS_PER_USD, "committed_usd": last[2] / CENTS_PER_USD,
-                    "reserved_usd": last[3] / CENTS_PER_USD, "limit_usd": limit})
+        limit = None if last[4] < 0 else last[4] / DONG_PER_VND
+        out.append({"period": int(p), "spent_vnd": last[1] / DONG_PER_VND, "committed_vnd": last[2] / DONG_PER_VND,
+                    "reserved_vnd": last[3] / DONG_PER_VND, "limit_vnd": limit})
     return out

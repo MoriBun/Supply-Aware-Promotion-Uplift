@@ -6,6 +6,7 @@ import math
 import numpy as np
 import pytest
 
+from sim.budget import DONG_PER_VND
 from sim import experiment
 from sim.config import load_config
 from sim.policies import hidden_view, make_policy
@@ -543,18 +544,18 @@ def test_threshold_city_scope_gives_every_cell_the_system_slack_and_one_decision
 # --- oracle score (T7.3, decisions T-40; KN 3.1) -------------------------------------------------
 
 
-def test_oracle_score_is_extra_bookings_per_expected_usd(default_yaml):
+def test_oracle_score_is_extra_bookings_per_expected_vnd(default_yaml):
     from sim.choice import request_probability
-    from sim.pricing import voucher_cents
+    from sim.pricing import voucher_dong
     cfg = load_config(default_yaml, ["policy.threshold.score_fn=oracle"])
     world = stub_world(cfg)
     pol = make_policy(cfg, world, theta=0.0, kappa=-math.inf)
     assert isinstance(pol, ThresholdPolicy) and pol.score_fn.__name__ == "oracle"
-    batch = make_batch(6, 37, fare_usd=18.0)
+    batch = make_batch(6, 37, fare_vnd=18.0)
     score = score_batch(pol.score_fn, batch, np.full(6, np.nan))
     r, rid = world.riders, batch.rider_id
-    fare, eta = batch.quoted_fare_usd.astype(np.float64), batch.quoted_eta_min.astype(np.float64)
-    v = voucher_cents(cfg, fare) / 100.0
+    fare, eta = batch.quoted_fare_vnd.astype(np.float64), batch.quoted_eta_min.astype(np.float64)
+    v = voucher_dong(cfg, fare) / DONG_PER_VND
     coef = (r.alpha[rid], r.beta_price[rid], r.beta_eta[rid], r.delta_promo[rid])
     p1 = request_probability(*coef, fare, v, eta)
     p0 = request_probability(*coef, fare, 0.0, eta)
@@ -562,7 +563,7 @@ def test_oracle_score_is_extra_bookings_per_expected_usd(default_yaml):
     assert np.isfinite(score).all() and (score > 0).all()                          # delta > 0, beta_price < 0
     cd = pol.cell_state(0, SnapshotView(SnapshotStore(37, 96), 0))
     assert pol.offer(batch, cd, make_ledger()).offer.all()                          # kappa = -inf: everyone
-    zero = make_batch(3, 37, fare_usd=0.0)                                          # v = 0: NaN score, no offer
+    zero = make_batch(3, 37, fare_vnd=0.0)                                          # v = 0: NaN score, no offer
     assert np.isnan(score_batch(pol.score_fn, zero, np.full(3, np.nan))).all()
     assert not pol.offer(zero, cd, make_ledger()).offer.any()
 

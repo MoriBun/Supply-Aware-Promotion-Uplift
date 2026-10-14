@@ -40,9 +40,9 @@ def confounded_frame(n=40_000, seed=4) -> pd.DataFrame:
     return pd.DataFrame({
         "rider_id": g.integers(0, 5000, n), "x_freq": xf, "x_tenure": g.uniform(0, 24, n), "x_segment": seg,
         "slack_lag_slot": g.uniform(0, 3, n), "slack_lag_day": g.uniform(0, 3, n), "hour": g.integers(0, 24, n),
-        "quoted_fare_usd": fare, "quoted_eta_min": g.uniform(1, 10, n), "no_supply": False, "promo_on_cell": True,
+        "quoted_fare_vnd": fare, "quoted_eta_min": g.uniform(1, 10, n), "no_supply": False, "promo_on_cell": True,
         "assign_mechanism": np.where(explore, "explore", "legacy_rule"), "T": t, "Y": y,
-        "known_e": np.where(explore, 0.5, np.nan), "voucher_value_usd": np.where(t == 1, 0.2 * fare, 0.0),
+        "known_e": np.where(explore, 0.5, np.nan), "voucher_value_vnd": np.where(t == 1, 0.2 * fare, 0.0),
     }), tau
 
 
@@ -108,7 +108,7 @@ def realistic_batch(n=12):
     return dataclasses.replace(b, x_freq=g.gamma(2.0, 1.0, n).astype(np.float32),
                                x_tenure=g.uniform(0, 24, n).astype(np.float32),
                                x_segment=np.tile([0, 1, 2], n // 3).astype(np.int8),
-                               quoted_fare_usd=g.uniform(10, 30, n).astype(np.float32),
+                               quoted_fare_vnd=g.uniform(10, 30, n).astype(np.float32),
                                quoted_eta_min=g.uniform(1, 10, n).astype(np.float32))
 
 

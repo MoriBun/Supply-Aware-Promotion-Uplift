@@ -89,7 +89,7 @@ def check_run_dir(run_dir: Path) -> tuple[list[str], dict]:
         "design": "", "n_runs": len(meta), "seeds": f"{meta['seed'].min()}–{meta['seed'].max()}" if len(meta) > 1
         else str(meta["seed"].iloc[0]),
         "days": (meta["window_end_s"].iloc[0] - meta["window_start_s"].iloc[0]) / 86400.0,
-        "budget_B_usd": float(meta["budget_B_usd"].iloc[0]), "size_mb": dir_size_mb(run_dir),
+        "budget_B_vnd": float(meta["budget_B_vnd"].iloc[0]), "size_mb": dir_size_mb(run_dir),
     }
     if "experiment" in set(meta["policy"]):
         e = cfg0["experiment"]
@@ -103,7 +103,7 @@ def check_run_dir(run_dir: Path) -> tuple[list[str], dict]:
         if set(results["run_id"]) != set(meta["run_id"]):
             problems.append("results/policy_results and meta/run_metadata list different runs")
         summary["N_mean"] = float(results["N_completed"].mean())
-        summary["spent_mean"] = float(results["voucher_spent_usd"].mean())
+        summary["spent_mean"] = float(results["voucher_spent_vnd"].mean())
     else:
         results = None
 
@@ -159,13 +159,13 @@ def markdown_row(summary: dict) -> str:
     if summary.get("design"):
         policy += f" ({summary['design']})"
     return (f"| `{summary['name']}` | {summary.get('mode', '')} | {policy} | {num('days', '.0f')} | "
-            f"{summary.get('seeds', '')} | {num('budget_B_usd', ',.2f')} | {num('sessions', ',d')} | "
+            f"{summary.get('seeds', '')} | {num('budget_B_vnd', ',.2f')} | {num('sessions', ',d')} | "
             f"{num('orders', ',d')} | {num('N_completed', ',d') if 'N_completed' in summary else num('N_mean', ',.1f')} | "
             f"{num('share_arm', '.1%')} | {num('share_blocked', '.1%')} | {num('size_mb', '.1f')} | "
             f"`{summary.get('config_hash', '')}` |")
 
 
-MARKDOWN_HEADER = ("| Thư mục | Mode | Chính sách | Ngày | Seed | B (USD/kỳ) | Session | Order | N hoàn thành | "
+MARKDOWN_HEADER = ("| Thư mục | Mode | Chính sách | Ngày | Seed | B (đ/kỳ) | Session | Order | N hoàn thành | "
                    "Tỷ lệ phát | Tỷ lệ chặn | MB | config_hash |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|")
 
 

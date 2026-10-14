@@ -42,8 +42,8 @@ def discover_sweeps(runs_dir: Path) -> list[dict]:
         pr = run_dir / "results" / "policy_results.parquet"
         if pr.exists():
             try:
-                res = pd.read_parquet(pr, columns=["budget_B_usd", "N_completed"])
-                budget = _f(res["budget_B_usd"].dropna().iloc[0]) if res["budget_B_usd"].notna().any() else None
+                res = pd.read_parquet(pr, columns=["budget_B_vnd", "N_completed"])
+                budget = _f(res["budget_B_vnd"].dropna().iloc[0]) if res["budget_B_vnd"].notna().any() else None
                 n_runs = int(len(res))
             except Exception:  # noqa: BLE001
                 pass
@@ -54,7 +54,7 @@ def discover_sweeps(runs_dir: Path) -> list[dict]:
             "N_se": [_f(v) for v in sweep["N_se"]], "V_mean": [_f(v) for v in sweep["V_mean"]],
             "V_se": [_f(v) for v in sweep["V_se"]], "spent_mean": [_f(v) for v in sweep["spent_mean"]],
             "n_seeds": int(sweep["n_seeds"].iloc[0]) if len(sweep) else 0,
-            "argmax_theta": _f(argmax.iloc[0]) if len(argmax) else None, "budget_B_usd": budget, "n_runs": n_runs,
+            "argmax_theta": _f(argmax.iloc[0]) if len(argmax) else None, "budget_B_vnd": budget, "n_runs": n_runs,
         })
     return out
 
@@ -95,13 +95,13 @@ def gte_tables(runs_dir: Path) -> list[dict]:
     out = []
     for path in sorted(runs_dir.glob("**/results/policy_results.parquet")):
         try:
-            t = pd.read_parquet(path, columns=["policy", "seed", "N_completed", "budget_B_usd", "V_profit_usd",
-                                               "voucher_spent_usd"])
+            t = pd.read_parquet(path, columns=["policy", "seed", "N_completed", "budget_B_vnd", "V_profit_vnd",
+                                               "voucher_spent_vnd"])
         except Exception:  # noqa: BLE001
             continue
         # GTE is the unrestricted all-on / all-off contrast. Budgeted policy
         # comparisons may live in the same file and must not enter this estimand.
-        t = t[t["budget_B_usd"].isna() & t["policy"].isin(("all_on", "all_off"))]
+        t = t[t["budget_B_vnd"].isna() & t["policy"].isin(("all_on", "all_off"))]
         pol = set(t["policy"].unique())
         if not {"all_on", "all_off"} <= pol:
             continue
@@ -132,8 +132,8 @@ def evaluate_tables(runs_dir: Path, limit: int = 60) -> list[dict]:
             rows.append({
                 "policy": policy, "theta": None if theta < 0 else _f(theta), "n_seeds": int(n),
                 "N_mean": _f(g["N_completed"].mean()), "N_se": _f(g["N_completed"].std(ddof=1) / math.sqrt(n)) if n > 1 else None,
-                "V_mean": _f(g["V_profit_usd"].mean()), "spent_mean": _f(g["voucher_spent_usd"].mean()),
-                "budget_B_usd": _f(g["budget_B_usd"].dropna().iloc[0]) if g["budget_B_usd"].notna().any() else None,
+                "V_mean": _f(g["V_profit_vnd"].mean()), "spent_mean": _f(g["voucher_spent_vnd"].mean()),
+                "budget_B_vnd": _f(g["budget_B_vnd"].dropna().iloc[0]) if g["budget_B_vnd"].notna().any() else None,
                 "share_cells_off": _f(g["share_cells_off"].mean()), "mean_pickup_eta_min": _f(g["mean_pickup_eta_min"].mean()),
             })
         out.append({"key": _rel(path.parents[1], runs_dir), "rows": rows})

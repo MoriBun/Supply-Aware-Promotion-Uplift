@@ -1,11 +1,15 @@
 # tests/fixtures/regression_s7_pinned.yaml: ghim config/default.yaml tại commit 1c2eb85 (trước Sprint 7)
 # cho bộ kiểm hồi quy G7 (tests/test_regression_s7.py, decisions T-39). Nạp đè lên default.yaml hiện tại:
 #   load_config([config/default.yaml, tests/fixtures/regression_s7_pinned.yaml])
-# KHÔNG sửa các giá trị bên dưới. Khóa mới của S7 được thêm ở mục này với GIÁ TRỊ CŨ (hợp đồng B9):
-#   matching.ring_tiebreak: lowest_id
-#   cancel.exact_time: false
-#   shocks.enabled: false
-# (bỏ comment từng dòng khi khóa đó đã có trong config.py; chưa có mà đặt thì load_config báo khóa lạ)
+# KHÔNG sửa các giá trị bên dưới. Khóa mới của S7 được ghi với GIÁ TRỊ CŨ (hợp đồng B9, decisions H-29, H-30),
+# ngay trong mục tương ứng (YAML không cho lặp mục):
+#   matching.ring_tiebreak: lowest_id    (mục matching)
+#   cancel.exact_time: false             (mục cancel)
+#   shocks.enabled: false                (mục shocks, cuối file)
+# Khóa mới không đổi hành vi (scope city, score_fn oracle, calibration_targets.*) lấy từ default.yaml.
+# Tiền (B9, decisions H-33): VND, sổ ngân sách bằng đồng nguyên; giá trị cũ viết theo đơn vị mới, 1 USD = 100 đ
+# (open_fare 300, per_min 170, β 1,0 trên 1.000đ, reservation_wage 2000). Mốc regression_s7.json sinh lại một lần
+# sau kiểm tương đương đơn vị (đính chính T-39 b).
 
 # =====================================================================
 # config/default.yaml — tham số mặc định của simulator
@@ -13,7 +17,7 @@
 # Quy ước:
 #   - Mọi hằng số dùng trong code phải nằm ở file này. Không hard-code.
 #   - Đơn vị ghi trong tên khóa: _s (giây), _min (phút), _h (giờ),
-#     _km, _kmh, _usd. Không có hậu tố = không thứ nguyên.
+#     _km, _kmh, _vnd. Không có hậu tố = không thứ nguyên.
 #   - Mỗi tham số có chú thích nguồn:
 #       [report]  báo cáo thiết kế (Simulation_design_fix.pdf)
 #       [data]    báo cáo dữ liệu NYC / số liệu mentor nêu trong review
@@ -92,7 +96,7 @@ riders:
   alpha_freq: 0.4                 # hệ số với x_freq đã chuẩn hóa [assume]
   alpha_u: 0.4                    # hệ số với u_latent (tạo confounding) [assume]
   alpha_noise_sd: 0.3             # [assume]
-  beta_price_per_usd: 0.10        # |β_p| trung vị, dấu âm trong công thức [assume]
+  beta_price_per_kvnd: 1.0        # B9: 0,10/USD theo đơn vị mới
   beta_price_seg_mult: [1.0, 1.6, 0.6]   # nhân theo x_segment [assume]
   beta_price_noise_sd: 0.25       # log-normal quanh trung vị [assume]
   beta_eta_per_min: 0.10          # |β_η| trung vị [assume]
@@ -109,20 +113,22 @@ riders:
 # M3 Pricing & voucher
 # ---------------------------------------------------------------------
 pricing:
-  base_fare_usd: 3.0              # a_f [assume]
-  per_min_usd: 1.70               # b_f, theo T[pu,do,h] tính bằng phút [hiệu chỉnh P3, H-17: giá TB 19,0 USD; trước 1,4]
-  target_mean_fare_usd: 19.1      # mục tiêu hiệu chỉnh a_f, b_f (±10%) [data]
+  open_fare_vnd: 300.0            # B9: 3 USD theo đơn vị mới
+  open_km: 0.0
+  per_km_vnd: 0.0
+  per_min_vnd: 170.0              # B9: 1,70 USD theo đơn vị mới
+  platform_fee_vnd: 0.0
   commission_rate: 0.24           # tài xế nhận 76% giá gốc [data]
 
 voucher:
   pct_of_fare: 0.20               # voucher = 20% giá gốc [data]
-  max_usd: null                   # không trần
+  max_vnd: null                   # không trần
 
 budget:
   enforce: true                   # false cho các lượt GTE / thí nghiệm [report]
   mode: fraction_of_all_on        # B = fraction * chi tiêu voucher khi bật mọi ô, mọi rider
   fraction: 0.30                  # [assume]
-  fixed_usd: null                 # dùng khi mode = fixed
+  fixed_vnd: null                 # dùng khi mode = fixed
   pilot_seed_offset: 9000         # seed của lượt pilot (không dùng để đánh giá)
 
 # ---------------------------------------------------------------------
@@ -160,6 +166,7 @@ policy:
 matching:
   max_pickup_eta_min: 30.0        # rộng để WGC xuất hiện [report] [pending]
   max_ring: null                  # null = mở rộng đến hết lưới hoặc chạm max_pickup_eta
+  ring_tiebreak: lowest_id        # B9: giá trị cũ
 
 # ---------------------------------------------------------------------
 # M7 Cancellation
@@ -170,6 +177,7 @@ cancel:
   base_per_min: 0.005             # [assume]
   slope_per_min2: 0.004           # [assume]
   eta_free_min: 3.0               # [assume]
+  exact_time: false               # B9: giá trị cũ
 
 # ---------------------------------------------------------------------
 # M8 SupplyModel
@@ -188,7 +196,7 @@ supply:
   shift_len_sd_h: 1.5
   shift_len_clip_h: [4.0, 11.0]
   early_exit_enabled: false       # rời sớm theo thu nhập — MẶC ĐỊNH TẮT [report]
-  reservation_wage_usd_h: 20.0    # chỉ dùng khi bật [assume]
+  reservation_wage_vnd_h: 2000.0  # B9: 20 USD/giờ theo đơn vị mới
 
 # ---------------------------------------------------------------------
 # M9 Repositioning (quy tắc cố định, không nhìn cầu hiện tại)
@@ -240,9 +248,12 @@ runner:
 calibration_targets:
   p_request_no_voucher: [0.13, 0.17]          # [data: 15%]
   request_uplift_surplus: [0.35, 0.70]        # +50% khi dư cung [data: bảng đề bài]
-  mean_gross_fare_usd: [17.2, 21.0]           # 19,1 ± 10% [data]
+  # mean_gross_fare_vnd: bỏ ở B9 (H-31); chỉ tiêu hiệu chỉnh, không ảnh hưởng mô phỏng
   share_cellslots_slack_below_0_35: [0.10, 0.35]  # có vùng căng thật
   share_cellslots_slack_above_1: [0.30, 0.80]     # có vùng dư thật
 
 performance:
   max_seconds_per_sim_day: 30     # [report]
+
+shocks:
+  enabled: false                  # B9: giá trị cũ (không biến động)

@@ -149,8 +149,8 @@ SESSION_COLUMNS: tuple[Column, ...] = (
     _col("slot_of_day", "int16", -1, "spawn"),
     _col("pu_cell", "int16", -1, "spawn"),
     _col("do_cell", "int16", -1, "spawn"),
-    _col("quoted_fare_usd", "float32", NAN, "quote"),
-    _col("voucher_value_usd", "float32", 0.0, "quote"),
+    _col("quoted_fare_vnd", "float32", NAN, "quote"),
+    _col("voucher_value_vnd", "float32", 0.0, "quote"),
     _col("quoted_eta_min", "float32", NAN, "quote"),
     _col("no_supply", "bool", False, "quote"),
     _col("promo_on_cell", "bool", False, "quote"),
@@ -182,7 +182,7 @@ SESSION_COLUMNS: tuple[Column, ...] = (
     _col("e_cancel", "float64", NAN, "spawn", hidden=True),
     # internal
     _col("order_idx", "int64", -1, "decide", internal=True),
-    _col("voucher_cents", "int64", 0, "quote", internal=True),
+    _col("voucher_dong", "int64", 0, "quote", internal=True),
 )
 
 # observed/orders (docs/schema.md) + internal bookkeeping. order_id = session_id.
@@ -201,17 +201,17 @@ ORDER_COLUMNS: tuple[Column, ...] = (
     _col("dropoff_time_s", "float64", NAN, "advance"),
     _col("trip_time_min", "float32", NAN, "match"),
     _col("trip_km", "float32", NAN, "match"),
-    _col("gross_fare_usd", "float32", NAN, "decide"),
-    _col("voucher_value_usd", "float32", 0.0, "decide"),
-    _col("net_fare_usd", "float32", NAN, "decide"),
-    _col("driver_pay_usd", "float32", 0.0, "advance"),
-    _col("platform_profit_usd", "float32", 0.0, "advance"),
+    _col("gross_fare_vnd", "float32", NAN, "decide"),
+    _col("voucher_value_vnd", "float32", 0.0, "decide"),
+    _col("net_fare_vnd", "float32", NAN, "decide"),
+    _col("driver_pay_vnd", "float32", 0.0, "advance"),
+    _col("platform_profit_vnd", "float32", 0.0, "advance"),
     _col("status", "int8", int(OrderStatus.WAITING), "decide", codes=ORDER_STATUS_NAMES),
     _col("cancel_reason", "int8", int(CancelReason.NONE), "en_route", codes=CANCEL_REASON_NAMES),
     _col("in_window", "bool", False, "decide"),
     # internal
     _col("session_idx", "int64", -1, "decide", internal=True),
-    _col("voucher_cents", "int64", 0, "decide", internal=True),
+    _col("voucher_dong", "int64", 0, "decide", internal=True),
 )
 
 
@@ -321,7 +321,7 @@ class DriverState:
         self.order = np.full(n, -1, dtype=np.int64)         # index into OrderBuffer, -1 if none
         self.shift_start_s = np.full(n, NAN, dtype=np.float64)  # current/next shift, absolute seconds
         self.shift_end_s = np.full(n, NAN, dtype=np.float64)
-        self.earnings_usd = np.zeros(n, dtype=np.float64)
+        self.earnings_vnd = np.zeros(n, dtype=np.float64)
         self.reposition_count = np.zeros(n, dtype=np.int32)  # DRIVER stream counter (spec §4.9)
 
     def count_by_status(self) -> dict[DriverStatus, int]:
@@ -359,7 +359,7 @@ class SlotCounters:
         self.n_cancelled = np.zeros(n_cells, dtype=np.int32)
         self.sum_pickup_eta_min = np.zeros(n_cells, dtype=np.float64)
         self.n_pickup_eta = np.zeros(n_cells, dtype=np.int32)
-        self.voucher_spent_cents = np.zeros(n_cells, dtype=np.int64)
+        self.voucher_spent_dong = np.zeros(n_cells, dtype=np.int64)
 
     def reset(self) -> None:
         for name, arr in vars(self).items():

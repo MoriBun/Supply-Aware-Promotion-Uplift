@@ -83,7 +83,7 @@ def en_route(ctx: SimContext, t: float) -> None:
 def _release_vouchers(ctx: SimContext, o_idx: np.ndarray) -> None:
     """committed -> released for the orders that held a voucher."""
     orders = ctx.orders
-    voucher = orders.voucher_cents[o_idx]
+    voucher = orders.voucher_dong[o_idx]
     session_id = orders.session_id[o_idx]
     for i in np.flatnonzero(voucher > 0):
         ctx.ledger.release_committed(int(session_id[i]))

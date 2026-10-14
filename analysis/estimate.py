@@ -99,7 +99,7 @@ def experiment_frame(run_dir: Path | str) -> pd.DataFrame:
     sessions, orders, snaps = run["sessions"], run["orders"], run["slot_snapshots"]
 
     s = sessions.loc[sessions["in_window"], ["session_id", "slot", "pu_cell", "hour", "arm", "requested",
-                                             "cluster_id", "block", "in_burnin", "voucher_value_usd"]].copy()
+                                             "cluster_id", "block", "in_burnin", "voucher_value_vnd"]].copy()
     if (s["block"] < 0).any():
         raise ValueError(f"{run_dir}: not an experiment run (block = -1)")
     s["completed"] = completed_outcome(s, orders)

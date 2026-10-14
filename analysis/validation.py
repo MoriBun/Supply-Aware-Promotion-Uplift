@@ -15,6 +15,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import yaml
 
 from analysis.io import load_hidden, load_run
 from analysis.plots import vn
@@ -75,6 +76,17 @@ def full_run_dirs(mode_dir: Path, policy: str) -> list[Path]:
     return dirs
 
 
+def _run_metadata_row(run_dir: Path) -> pd.Series:
+    """``meta/run_metadata`` row of a run: in the run directory (single-run mode) or in the mode
+    output two levels up (``<mode_dir>/runs/<run_id>``, see :func:`full_run_dirs`)."""
+    run_dir = Path(run_dir)
+    own = run_dir / "meta" / "run_metadata.parquet"
+    if own.exists():
+        return pd.read_parquet(own).iloc[0]
+    meta = pd.read_parquet(run_dir.parent.parent / "meta" / "run_metadata.parquet")
+    return meta[meta["run_id"] == run_dir.name].iloc[0]
+
+
 def _calibration_counts(run_dir: Path) -> dict[str, float]:
     run, hidden = load_run(run_dir), load_hidden(run_dir)
     s = run["sessions"]
@@ -87,22 +99,33 @@ def _calibration_counts(run_dir: Path) -> dict[str, float]:
     window = snaps[snaps["slot"].isin(np.unique(s["slot"]))]["slack"].to_numpy(dtype=float)
     o = run["orders"]
     done = o[o["in_window"] & (o["status"] == "Completed")]
+    meta = _run_metadata_row(run_dir)
+    fleet = yaml.safe_load(meta["config_yaml"])["supply"]["fleet_size"]
+    days = (float(meta["window_end_s"]) - float(meta["window_start_s"])) / 86400.0
+    hour = (done["request_time_s"].to_numpy(np.float64) % 86400.0 // 3600.0).astype(np.int64)
+    busy = np.zeros(24)
+    np.add.at(busy, hour, done["trip_time_min"].to_numpy(np.float64) / 60.0)
     return {"requested": float(s["requested"].to_numpy()[surplus].sum()), "sessions": float(surplus.sum()),
             "p_treat": float(s["p_request_treat"].to_numpy(np.float64)[surplus].sum()),
             "p_control": float(s["p_request_control"].to_numpy(np.float64)[surplus].sum()),
             "n_slack": float(window.size), "n_tight": float((window < 0.35).sum()),
             "n_surplus": float((window > 1.0).sum()),
-            "fare_sum": float(done["gross_fare_usd"].astype(np.float64).sum()), "fare_n": float(len(done))}
+            "km_sum": float(done["trip_km"].astype(np.float64).sum()), "n_done": float(len(done)),
+            "driver_days": float(fleet * days),
+            **{f"busy_{h}": float(busy[h]) for h in range(24)}}
 
 
 def calibration_metrics(run_dirs) -> dict[str, float]:
-    """The five CAL quantities, pooled over full-log all_off runs (as ``calibration_metrics`` of the slow test).
+    """The CAL quantities, pooled over full-log all_off runs (as ``calibration_metrics`` of the slow test).
 
     - surplus session: the slack its cell had in the previous slot (``slack_lag_slot``) is above 1
       (decisions H-15); P(request) without voucher and the request uplift
       ``sum p_request_treat / sum p_request_control - 1`` are taken over those sessions (H-16);
-    - mean gross fare of completed in-window orders;
-    - shares of (cell, slot) of the window with slack < 0.35 and > 1 (their own slot, H-14).
+    - shares of (cell, slot) of the window with slack < 0.35 and > 1 (their own slot, H-14);
+    - ``busy_rel_h6/h7/h8``: trip hours of completed in-window orders by hour of the request over the
+      busiest hour (decisions H-31, definition of ``analysis/tlc_hourly.py``);
+    - ``mean_trip_km`` of completed in-window orders; ``trips_per_driver_day`` = completed in-window
+      orders / (``fleet_size`` x days of the window), as the slow test.
     """
     total: dict[str, float] = {}
     for d in run_dirs:
@@ -111,9 +134,11 @@ def calibration_metrics(run_dirs) -> dict[str, float]:
     return {
         "p_request_no_voucher": total["requested"] / total["sessions"],
         "request_uplift_surplus": total["p_treat"] / total["p_control"] - 1.0,
-        "mean_gross_fare_usd": total["fare_sum"] / total["fare_n"],
         "share_cellslots_slack_below_0_35": total["n_tight"] / total["n_slack"],
         "share_cellslots_slack_above_1": total["n_surplus"] / total["n_slack"],
+        **{f"busy_rel_h{h}": total[f"busy_{h}"] / max(total[f"busy_{k}"] for k in range(24)) for h in (6, 7, 8)},
+        "mean_trip_km": total["km_sum"] / total["n_done"],
+        "trips_per_driver_day": total["n_done"] / total["driver_days"],
     }
 
 

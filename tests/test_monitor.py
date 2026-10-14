@@ -45,7 +45,7 @@ def test_accumulate_and_publish_means(monitor):
     acc.n_matched[0] = 2
     acc.sum_pickup_eta_min[0] = 9.0
     acc.n_pickup_eta[0] = 2
-    acc.voucher_spent_cents[3] = 250
+    acc.voucher_spent_dong[3] = 250
     cd = CellDecision.blank(0, 7, promo_on=True, mechanism=Mechanism.FIXED)
     rec = mon.publish(0, clock.slot_s, acc, cd)
     assert set(rec) == set(SNAPSHOT_FIELDS)
@@ -53,7 +53,7 @@ def test_accumulate_and_publish_means(monitor):
     assert rec["slack"][0] == 2.0 and np.isinf(rec["slack"][1])
     assert rec["utilization"][0] == pytest.approx(1 / 3) and rec["utilization"][1] == pytest.approx(3 / 5)
     assert rec["mean_pickup_eta_min"][0] == 4.5 and np.isnan(rec["mean_pickup_eta_min"][1])
-    assert rec["voucher_spent_usd"][3] == np.float32(2.5) and rec["n_matched"][0] == 2
+    assert rec["voucher_spent_vnd"][3] == np.float32(250.0) and rec["n_matched"][0] == 2
     assert rec["promo_on"].all() and (rec["assign_mechanism_cell"] == int(Mechanism.FIXED)).all()
     assert rec["block"][0] == -1 and not rec["in_burnin"].any()
     assert np.isnan(rec["slack_lag_slot"]).all() and np.isnan(rec["slack_lag_day"]).all()
@@ -100,15 +100,15 @@ def test_event_counters_add_up_per_cell_and_reset(monitor):
     assert acc.n_offers[3] == 1 and acc.n_requests.tolist() == [0, 0, 0, 1, 0, 1, 0]
     assert acc.n_matched[3] == 2 and acc.sum_pickup_eta_min[3] == 12.0 and acc.n_pickup_eta[3] == 2
     assert acc.n_abandoned[1] == 1 and acc.n_cancelled[2] == 1
-    assert acc.n_completed[3] == 2 and acc.voucher_spent_cents[3] == 340
+    assert acc.n_completed[3] == 2 and acc.voucher_spent_dong[3] == 340
     mon.accumulate(CellCounters(7), acc)
     rec = mon.publish(0, clock.slot_s, acc, None)
     assert rec["mean_pickup_eta_min"][3] == 6.0 and rec["mean_pickup_eta_min"][5] == 5.0
-    assert rec["voucher_spent_usd"][3] == np.float32(3.4) and rec["n_completed"][3] == 2
+    assert rec["voucher_spent_vnd"][3] == np.float32(340.0) and rec["n_completed"][3] == 2
     assert rec["n_sessions"][3] == 2 and rec["n_matched"][5] == 1
     for name in ("n_sessions", "n_offers", "n_requests", "n_matched", "n_completed", "n_abandoned", "n_cancelled"):
         assert rec[name].dtype == np.int32 and getattr(acc, name).sum() == 0     # copied, then reset
-    assert acc.voucher_spent_cents.sum() == 0 and acc.n_pickup_eta.sum() == 0
+    assert acc.voucher_spent_dong.sum() == 0 and acc.n_pickup_eta.sum() == 0
 
 
 # --- lags and time fields -----------------------------------------------------------------

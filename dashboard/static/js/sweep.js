@@ -1,5 +1,5 @@
 // "Tìm θ*": launch a theta sweep (the experiment of spec D2) and watch N(π_θ) build up seed by seed.
-import { html, useState, useEffect, useMemo, api, useApi, useLocalStorage, cssVar, fmtInt, fmtNum, fmtUSD, fmtPct,
+import { html, useState, useEffect, useMemo, api, useApi, useLocalStorage, cssVar, fmtInt, fmtNum, fmtVND, fmtPct,
   fmtSigned, fmtDur } from "./lib.js";
 import { LineChart, BarChart, StatTile, Table } from "./charts.js";
 import { isRunning, S, StatusPill, STATUS_VI, gridIndex, parseNumbers } from "./common.js";
@@ -82,7 +82,7 @@ export function SweepPage({ defaults, runs, run, onStarted, onSelect }) {
           <div className="card-head"><h2>Cấu hình quét θ</h2></div>
           <div className="row" style=${{ marginBottom: 10 }}>${SWEEP_PRESETS.map((p) => html`<button key=${p.key} className="btn sm" onClick=${() => preset(p)}>${p.label}</button>`)}</div>
           <div className="stack">
-            <${Field} label="Tên"><input type="text" value=${form.name} onChange=${set("name")} placeholder="ví dụ: quét θ ring1 DR/USD" /><//>
+            <${Field} label="Tên"><input type="text" value=${form.name} onChange=${set("name")} placeholder="ví dụ: quét θ ring1 DR/đ" /><//>
             <${Field} label="Lưới θ" hint="phân cách bằng dấu phẩy"><input type="text" value=${form.grid} onChange=${set("grid")} /><//>
             <div className="form-grid">
               <${Field} label="Seed mỗi θ" hint="báo cáo: 10; B7b: 30"><input type="number" min="1" max="100" value=${form.n_seeds} onChange=${num("n_seeds")} /><//>
@@ -162,8 +162,8 @@ export function SweepResult({ run, data, marksText = "", onMarks = null }) {
     <div className="grid cols-4">
       <${StatTile} hero label="θ* = argmax N(π_θ)" value=${agg.argmax_theta == null ? "–" : String(agg.argmax_theta)} sub=${done ? `${data.n_seeds} seed × ${grid.length} θ · ŝ theo ${data.scope} · ${data.score_fn}` : `tạm tính trên ${agg.n_rows || 0} / ${data.total || "?"} lượt`} />
       <${StatTile} label="Tập θ* (không khác θ tốt nhất)" value=${star ? `[${star.lo}; ${star.hi}]` : "–"} sub=${star ? `${star.rows.filter((r) => r.in_set).length} / ${grid.length} θ trong tập · ${star.n_seeds} seed ghép cặp · α = ${star.alpha}` : "cần ≥ 2 seed đủ mọi θ"} />
-      <${StatTile} label="N tại θ*" value=${best && best.N_mean != null ? fmtNum(best.N_mean, 1) : "–"} sub=${best && best.N_se != null ? `± ${fmtNum(best.N_se, 1)} SE · chi ${fmtUSD(best.spent_mean, 0)} · ${fmtPct(best.share_off_mean)} (ô, slot) tắt` : ""} />
-      <${StatTile} label="Lợi ích của tầng ô: N(θ*) − N(θ = 0)" value=${gain ? fmtSigned(gain.dN, 1) : (agg.argmax_theta === 0 ? "0" : "–")} sub=${gain ? `± ${fmtNum(gain.dN_se, 1)} SE, ghép cặp ${gain.n_seeds} seed · B = ${fmtUSD(data.budget_usd, 0)}/kỳ` : (data.budget_usd ? `B = ${fmtUSD(data.budget_usd, 0)}/kỳ` : "")} />
+      <${StatTile} label="N tại θ*" value=${best && best.N_mean != null ? fmtNum(best.N_mean, 1) : "–"} sub=${best && best.N_se != null ? `± ${fmtNum(best.N_se, 1)} SE · chi ${fmtVND(best.spent_mean, 0)} · ${fmtPct(best.share_off_mean)} (ô, slot) tắt` : ""} />
+      <${StatTile} label="Lợi ích của tầng ô: N(θ*) − N(θ = 0)" value=${gain ? fmtSigned(gain.dN, 1) : (agg.argmax_theta === 0 ? "0" : "–")} sub=${gain ? `± ${fmtNum(gain.dN_se, 1)} SE, ghép cặp ${gain.n_seeds} seed · B = ${fmtVND(data.budget_vnd, 0)}/kỳ` : (data.budget_vnd ? `B = ${fmtVND(data.budget_vnd, 0)}/kỳ` : "")} />
     </div>
     <div className="card">
       <div className="card-head"><h2>Đường N(π<sub>θ</sub>) theo θ</h2><span className="hint">dải = ± 1 SE theo seed · vùng xanh = tập θ* · trục θ cách đều theo lưới</span></div>
@@ -178,9 +178,9 @@ export function SweepResult({ run, data, marksText = "", onMarks = null }) {
       </div>
       <div className="card">
         <div className="card-head"><h2>Chi voucher theo θ</h2><span className="hint">cùng B; cắt nhiều thì chi không hết</span></div>
-        <${LineChart} x=${x} xLabels=${xLabels} height=${200} legend=${false} yFormat=${(v) => fmtUSD(v, 0)}
-          hlines=${data.budget_usd ? [{ y: data.budget_usd * (run.clock ? run.clock.n_periods : 1), label: "B", color: S(8) }] : []}
-          series=${[{ name: "chi voucher trung bình", color: S(3), y: per.map((p) => p.spent_mean ?? null), dots: true, format: (v) => fmtUSD(v, 0) }]} />
+        <${LineChart} x=${x} xLabels=${xLabels} height=${200} legend=${false} yFormat=${(v) => fmtVND(v, 0)}
+          hlines=${data.budget_vnd ? [{ y: data.budget_vnd * (run.clock ? run.clock.n_periods : 1), label: "B", color: S(8) }] : []}
+          series=${[{ name: "chi voucher trung bình", color: S(3), y: per.map((p) => p.spent_mean ?? null), dots: true, format: (v) => fmtVND(v, 0) }]} />
       </div>
     </div>
     <div className="card">
@@ -189,8 +189,8 @@ export function SweepResult({ run, data, marksText = "", onMarks = null }) {
         { key: "theta", label: "θ", num: true }, { key: "n", label: "seed xong", num: true },
         { key: "N_mean", label: "N ± SE", num: true, fmt: (v, r) => (v == null ? "–" : `${fmtNum(v, 1)}${r.N_se != null ? ` ± ${fmtNum(r.N_se, 1)}` : ""}`) },
         { key: "in_set", label: "tập θ*", fmt: (v) => (v == null ? "–" : v ? "✓" : "") },
-        { key: "V_mean", label: "V (USD)", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 0)) },
-        { key: "spent_mean", label: "Chi (USD)", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 0)) },
+        { key: "V_mean", label: "V (đ)", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 0)) },
+        { key: "spent_mean", label: "Chi (đ)", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 0)) },
         { key: "share_off_mean", label: "% ô tắt", num: true, fmt: (v) => (v == null ? "–" : fmtPct(v)) },
         { key: "eta_mean", label: "ETA (ph)", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 2)) },
         { key: "kappa_n", label: "κ (pilot)", num: true, fmt: (v) => (v ? `${v.kappa == null ? "−∞" : fmtNum(v.kappa, 3)} (${v.n_pilots})` : "–") }]} />

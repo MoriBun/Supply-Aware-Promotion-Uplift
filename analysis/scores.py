@@ -50,7 +50,7 @@ def fit_tau_strata(sessions: pd.DataFrame, riders: pd.DataFrame, completed: np.n
     seg = s["x_segment"].to_numpy(np.int64)
     arm, y = s["arm"].to_numpy() == 1, s["y"].to_numpy()
 
-    cost = (s["voucher_value_usd"].to_numpy(np.float64) * y)       # paid only when the trip completes
+    cost = (s["voucher_value_vnd"].to_numpy(np.float64) * y)       # paid only when the trip completes
 
     def effect(mask: np.ndarray) -> tuple[float, float, int, int]:
         y1, y0 = y[mask & arm], y[mask & ~arm]
@@ -85,8 +85,8 @@ def fit_tau_strata(sessions: pd.DataFrame, riders: pd.DataFrame, completed: np.n
         "x_freq_edges": [float(e) for e in edges],
         "raw_effect": raw.tolist(), "n_sessions": counts.tolist(), "between_variance": between,
         "tau": tau.tolist(),
-        "overall_cost_per_offer_usd": overall_cost,
-        "cost_per_offer_usd": np.where(np.isfinite(cost_per_offer), cost_per_offer, overall_cost).tolist(),
+        "overall_cost_per_offer_vnd": overall_cost,
+        "cost_per_offer_vnd": np.where(np.isfinite(cost_per_offer), cost_per_offer, overall_cost).tolist(),
     }
 
 
@@ -98,10 +98,10 @@ def save_table(table: dict, path: Path = BASELINE_PATH) -> Path:
 
 @lru_cache(maxsize=4)
 def load_table(path: str = str(BASELINE_PATH)) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """``(x_freq_edges, tau[segment, freq_bin], cost_per_offer_usd[segment, freq_bin])`` of a saved table."""
+    """``(x_freq_edges, tau[segment, freq_bin], cost_per_offer_vnd[segment, freq_bin])`` of a saved table."""
     table = json.loads(Path(path).read_text(encoding="utf-8"))
     return (np.asarray(table["x_freq_edges"], dtype=np.float64), np.asarray(table["tau"], dtype=np.float64),
-            np.asarray(table["cost_per_offer_usd"], dtype=np.float64))
+            np.asarray(table["cost_per_offer_vnd"], dtype=np.float64))
 
 
 def score_from_table(x_freq, x_segment, edges: np.ndarray, tau: np.ndarray) -> np.ndarray:
@@ -171,9 +171,9 @@ def main(argv: list[str]) -> int:
     path = save_table(table)
     print(f"saved {path}: overall effect {table['overall_effect']:.4f} (se {table['overall_se']:.4f}), "
           f"n = {table['n_treated']} + {table['n_control']}")
-    for g, (row, cost) in enumerate(zip(table["tau"], table["cost_per_offer_usd"])):
+    for g, (row, cost) in enumerate(zip(table["tau"], table["cost_per_offer_vnd"])):
         print(f"  segment {g}: tau " + "  ".join(f"{v:.4f}" for v in row)
-              + "   | trips per 100 USD " + "  ".join(f"{100 * v / c:.2f}" for v, c in zip(row, cost)))
+              + "   | trips per 100.000đ " + "  ".join(f"{100_000 * v / c:.2f}" for v, c in zip(row, cost)))
     return 0
 
 

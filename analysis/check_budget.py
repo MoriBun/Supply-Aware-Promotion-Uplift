@@ -30,7 +30,7 @@ def period_limits(meta_row: pd.Series) -> tuple[float, float]:
     t = cfg["time"]
     window = t["window_min"] if t["window_min"] is not None else t["days_per_run"] * 1440
     period = min(1440, window)
-    budget = float(meta_row["budget_B_usd"])
+    budget = float(meta_row["budget_B_vnd"])
     return budget, budget * t["warmup_min"] / period
 
 
@@ -41,7 +41,7 @@ def audit_run(run_id: str, folder: Path, meta: pd.DataFrame) -> bool:
     budget, warmup_budget = period_limits(row)
     ok = True
     print(f"\n{run_id}")
-    print(f"  policy={row['policy']}  B={budget:.2f} USD/kỳ  kappa={row['kappa']}")
+    print(f"  policy={row['policy']}  B={budget:,.0f} đ/kỳ  kappa={row['kappa']}")
 
     win = s[s["in_window"]]
     n_on = int(win["promo_on_cell"].sum())
@@ -57,7 +57,7 @@ def audit_run(run_id: str, folder: Path, meta: pd.DataFrame) -> bool:
         print("  không áp ngân sách")
 
     spent = (o[o["status"] == "Completed"].merge(s[["session_id", "budget_period"]], on="session_id")
-             .groupby("budget_period")["voucher_value_usd"].sum())
+             .groupby("budget_period")["voucher_value_vnd"].sum())
     print("  chi tiêu (voucher của order Completed) theo kỳ:")
     for period, value in spent.items():
         limit = warmup_budget if period < 0 else budget
@@ -67,7 +67,7 @@ def audit_run(run_id: str, folder: Path, meta: pd.DataFrame) -> bool:
 
     blocked = win[win["budget_blocked"]]
     if len(blocked):
-        clean = bool((blocked["arm"] == 0).all() and (blocked["voucher_value_usd"] == 0).all())
+        clean = bool((blocked["arm"] == 0).all() and (blocked["voucher_value_vnd"] == 0).all())
         # A blocked session is one the policy wanted to treat: its cell is on, or it is in the
         # explore slice of the legacy policy, which offers whatever the cell state (spec §6).
         off_cell = blocked[~blocked["promo_on_cell"]]
@@ -76,13 +76,13 @@ def audit_run(run_id: str, folder: Path, meta: pd.DataFrame) -> bool:
         print(f"  session bị chặn: arm = 0 và voucher = 0: {'OK' if clean else 'SAI'}; "
               f"{len(off_cell)} session ở ô tắt, đều thuộc lát explore: {'OK' if explore_only else 'SAI'}")
 
-    with_voucher = s[s["voucher_value_usd"] > 0]
+    with_voucher = s[s["voucher_value_vnd"] > 0]
     fate = with_voucher.merge(o[["session_id", "status"]], on="session_id", how="left")
     fate["kết cục"] = fate["status"].fillna("không đặt")
-    counts = fate.groupby("kết cục")["voucher_value_usd"].agg(["size", "sum"])
+    counts = fate.groupby("kết cục")["voucher_value_vnd"].agg(["size", "sum"])
     print("  số phận của voucher đã phát (Completed = chi, còn lại = nhả):")
-    for name, (n, usd) in counts.iterrows():
-        print(f"    {name:<12} {int(n):7d} session  {usd:10.2f} USD")
+    for name, (n, vnd) in counts.iterrows():
+        print(f"    {name:<12} {int(n):7d} session  {vnd:14,.0f} đ")
     return ok
 
 

@@ -1,6 +1,6 @@
 """Voucher budget ledger (spec §4.3, decisions L11, T-03).
 
-Money is kept in integer cents so the invariant ``spent + committed + reserved
+Money is kept in integer dong so the invariant ``spent + committed + reserved
 <= B`` is exact. The ledger is keyed by ``session_id``; every reservation belongs
 to the budget period of the session's ``open_time`` and stays there when the
 order ends later (cool-down included). Period -1 is the warm-up, with budget
@@ -21,33 +21,33 @@ import numpy as np
 
 from sim.config import Config
 
-CENTS_PER_USD = 100
+DONG_PER_VND = 1                   # ledger unit = 1 đồng (decisions H-33; was 100 cents per USD)
 
 
-def resolve_budget_usd(cfg: Config, pilot_spent_by_period_usd=None) -> float:
-    """Budget B in USD for this configuration (spec §4.3).
+def resolve_budget_vnd(cfg: Config, pilot_spent_by_period_vnd=None) -> float:
+    """Budget B in VND for this configuration (spec §4.3).
 
-    ``budget.mode = fixed`` returns ``budget.fixed_usd``. ``fraction_of_all_on``
+    ``budget.mode = fixed`` returns ``budget.fixed_vnd``. ``fraction_of_all_on``
     returns ``fraction`` times the mean voucher spend per budget period of the
-    all_on pilot (warm-up excluded), passed as ``RunResult.spent_by_period_usd``.
+    all_on pilot (warm-up excluded), passed as ``RunResult.spent_by_period_vnd``.
     """
     b = cfg.budget
     if b.mode == "fixed":
-        return float(b.fixed_usd)
-    if pilot_spent_by_period_usd is None:
-        raise ValueError("budget.mode = fraction_of_all_on needs the pilot's spent_by_period_usd")
-    spent = np.asarray(pilot_spent_by_period_usd, dtype=np.float64)
+        return float(b.fixed_vnd)
+    if pilot_spent_by_period_vnd is None:
+        raise ValueError("budget.mode = fraction_of_all_on needs the pilot's spent_by_period_vnd")
+    spent = np.asarray(pilot_spent_by_period_vnd, dtype=np.float64)
     if spent.size == 0:
-        raise ValueError("pilot spent_by_period_usd is empty")
+        raise ValueError("pilot spent_by_period_vnd is empty")
     return float(b.fraction * spent.mean())
 
 
-def usd_to_cents(usd: float) -> int:
-    return int(round(float(usd) * CENTS_PER_USD))
+def vnd_to_dong(vnd: float) -> int:
+    return int(round(float(vnd) * DONG_PER_VND))
 
 
-def cents_to_usd(cents: int) -> float:
-    return float(cents) / CENTS_PER_USD
+def dong_to_vnd(dong: int) -> float:
+    return float(dong) / DONG_PER_VND
 
 
 class LedgerState(enum.IntEnum):
@@ -62,16 +62,16 @@ class BudgetLedger:
 
     WARMUP_PERIOD = -1
 
-    def __init__(self, *, enforce: bool, budget_cents: int | None, window_start_s: float,
+    def __init__(self, *, enforce: bool, budget_dong: int | None, window_start_s: float,
                  period_s: float, n_periods: int, warmup_s: float) -> None:
-        if enforce and budget_cents is None:
+        if enforce and budget_dong is None:
             raise ValueError("budget.enforce is true but no budget B was given")
         if period_s <= 0 or n_periods < 1:
             raise ValueError("period_s must be > 0 and n_periods >= 1")
         if warmup_s < 0:
             raise ValueError("warmup_s must be >= 0")
         self.enforce = bool(enforce)
-        self.budget_cents = None if budget_cents is None else int(budget_cents)
+        self.budget_dong = None if budget_dong is None else int(budget_dong)
         self.window_start_s = float(window_start_s)
         self.period_s = float(period_s)
         self.n_periods = int(n_periods)
@@ -82,10 +82,10 @@ class BudgetLedger:
         self._committed = np.zeros(size, dtype=np.int64)
         self._reserved = np.zeros(size, dtype=np.int64)
         self._limit = np.full(size, -1, dtype=np.int64)  # -1 = no limit
-        if self.budget_cents is not None:
-            self._limit[1:] = self.budget_cents
-            self._limit[0] = math.floor(self.budget_cents * self.warmup_s / self.period_s)
-        self._sessions: dict[int, tuple[int, int, int]] = {}  # sid -> (period, cents, state)
+        if self.budget_dong is not None:
+            self._limit[1:] = self.budget_dong
+            self._limit[0] = math.floor(self.budget_dong * self.warmup_s / self.period_s)
+        self._sessions: dict[int, tuple[int, int, int]] = {}  # sid -> (period, dong, state)
 
     # --- periods -----------------------------------------------------------
 
@@ -103,83 +103,83 @@ class BudgetLedger:
             raise ValueError(f"period {period} out of range")
         return period + 1
 
-    def limit_cents(self, period: int) -> int | None:
-        """Budget of a period in cents; None when the ledger has no budget."""
+    def limit_dong(self, period: int) -> int | None:
+        """Budget of a period in dong; None when the ledger has no budget."""
         v = int(self._limit[self._idx(period)])
         return None if v < 0 else v
 
     def totals(self, period: int) -> tuple[int, int, int]:
-        """``(spent, committed, reserved)`` of a period, in cents."""
+        """``(spent, committed, reserved)`` of a period, in dong."""
         i = self._idx(period)
         return int(self._spent[i]), int(self._committed[i]), int(self._reserved[i])
 
-    def used_cents(self, period: int) -> int:
+    def used_dong(self, period: int) -> int:
         return sum(self.totals(period))
 
-    def available_cents(self, period: int) -> int | None:
-        """Cents still grantable in a period; None when not enforced or no budget."""
-        limit = self.limit_cents(period)
+    def available_dong(self, period: int) -> int | None:
+        """Dong still grantable in a period; None when not enforced or no budget."""
+        limit = self.limit_dong(period)
         if not self.enforce or limit is None:
             return None
-        return limit - self.used_cents(period)
+        return limit - self.used_dong(period)
 
-    def can_reserve(self, open_time_s: float, cents: int) -> bool:
-        avail = self.available_cents(self.period_of(open_time_s))
-        return avail is None or cents <= avail
+    def can_reserve(self, open_time_s: float, dong: int) -> bool:
+        avail = self.available_dong(self.period_of(open_time_s))
+        return avail is None or dong <= avail
 
     # --- session state machine -----------------------------------------------
 
-    def reserve(self, session_id: int, open_time_s: float, cents: int) -> bool:
+    def reserve(self, session_id: int, open_time_s: float, dong: int) -> bool:
         """Reserve a voucher at quote time. Returns False (and records nothing) when blocked."""
         sid = int(session_id)
         if sid in self._sessions:
             raise ValueError(f"session {sid} already has a ledger entry")
-        if cents < 0:
-            raise ValueError("cents must be >= 0")
+        if dong < 0:
+            raise ValueError("dong must be >= 0")
         period = self.period_of(open_time_s)
-        if not self.can_reserve(open_time_s, cents):
+        if not self.can_reserve(open_time_s, dong):
             return False
-        self._reserved[self._idx(period)] += cents
-        self._sessions[sid] = (period, int(cents), int(LedgerState.RESERVED))
+        self._reserved[self._idx(period)] += dong
+        self._sessions[sid] = (period, int(dong), int(LedgerState.RESERVED))
         return True
 
     def release_reserved(self, session_id: int) -> None:
         """Rider did not book (step 6)."""
-        period, cents = self._transition(session_id, LedgerState.RESERVED, LedgerState.RELEASED)
-        self._reserved[self._idx(period)] -= cents
+        period, dong = self._transition(session_id, LedgerState.RESERVED, LedgerState.RELEASED)
+        self._reserved[self._idx(period)] -= dong
 
     def commit(self, session_id: int) -> None:
         """Rider booked (step 6): reserved -> committed."""
-        period, cents = self._transition(session_id, LedgerState.RESERVED, LedgerState.COMMITTED)
+        period, dong = self._transition(session_id, LedgerState.RESERVED, LedgerState.COMMITTED)
         i = self._idx(period)
-        self._reserved[i] -= cents
-        self._committed[i] += cents
+        self._reserved[i] -= dong
+        self._committed[i] += dong
 
     def release_committed(self, session_id: int) -> None:
         """Order Abandoned, Cancelled or Truncated: committed -> released."""
-        period, cents = self._transition(session_id, LedgerState.COMMITTED, LedgerState.RELEASED)
-        self._committed[self._idx(period)] -= cents
+        period, dong = self._transition(session_id, LedgerState.COMMITTED, LedgerState.RELEASED)
+        self._committed[self._idx(period)] -= dong
 
     def settle(self, session_id: int) -> None:
         """Order Completed (step 1): committed -> spent."""
-        period, cents = self._transition(session_id, LedgerState.COMMITTED, LedgerState.SPENT)
+        period, dong = self._transition(session_id, LedgerState.COMMITTED, LedgerState.SPENT)
         i = self._idx(period)
-        self._committed[i] -= cents
-        self._spent[i] += cents
+        self._committed[i] -= dong
+        self._spent[i] += dong
 
     def _transition(self, session_id: int, expected: LedgerState, new: LedgerState) -> tuple[int, int]:
         sid = int(session_id)
         try:
-            period, cents, state = self._sessions[sid]
+            period, dong, state = self._sessions[sid]
         except KeyError:
             raise KeyError(f"session {sid} has no ledger entry") from None
         if state != expected:
             raise ValueError(f"session {sid}: expected {expected.name}, is {LedgerState(state).name}")
-        self._sessions[sid] = (period, cents, int(new))
-        return period, cents
+        self._sessions[sid] = (period, dong, int(new))
+        return period, dong
 
     def entry(self, session_id: int) -> tuple[int, int, LedgerState] | None:
-        """``(period, cents, state)`` of a session, or None if it never held a voucher."""
+        """``(period, dong, state)`` of a session, or None if it never held a voucher."""
         e = self._sessions.get(int(session_id))
         return None if e is None else (e[0], e[1], LedgerState(e[2]))
 
@@ -197,12 +197,12 @@ class BudgetLedger:
             p = int(np.flatnonzero(bad)[0]) - 1
             raise AssertionError(f"budget invariant violated in period {p}: used {used[p + 1]} > {self._limit[p + 1]}")
 
-    def spent_by_period_usd(self) -> np.ndarray:
-        """Spent voucher value of periods 0..n_periods-1 in USD (warm-up excluded)."""
-        return self._spent[1:] / CENTS_PER_USD
+    def spent_by_period_vnd(self) -> np.ndarray:
+        """Spent voucher value of periods 0..n_periods-1 in VND (warm-up excluded)."""
+        return self._spent[1:] / DONG_PER_VND
 
-    def warmup_spent_usd(self) -> float:
-        return cents_to_usd(int(self._spent[0]))
+    def warmup_spent_vnd(self) -> float:
+        return dong_to_vnd(int(self._spent[0]))
 
     @property
     def n_entries(self) -> int:

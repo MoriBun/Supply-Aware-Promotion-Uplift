@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 
+from sim.budget import DONG_PER_VND
 from sim import cancel, matching, trips
 from sim.budget import LedgerState
 from sim.cancel import cancel_hazard_per_min
@@ -30,21 +31,21 @@ def idle_driver(ctx, driver_id, cell, idle_since=0.0):
     return driver_id
 
 
-def booked_order(ctx, pu_cell, do_cell, *, request_time_s=T0, rider_id=0, fare_usd=20.0, voucher_cents=0,
+def booked_order(ctx, pu_cell, do_cell, *, request_time_s=T0, rider_id=0, fare_vnd=2000.0, voucher_dong=0,
                  trip_noise=1.0, e_cancel=1e9):
     """A booked session and its Waiting order, as steps 4-6 leave them (voucher reserved and committed)."""
     sid = 5000 + ctx.sessions.n
     s_idx = ctx.sessions.append(session_id=sid, rider_id=rider_id, pu_cell=pu_cell, do_cell=do_cell,
                                 open_time_s=request_time_s, trip_noise=trip_noise, e_cancel=e_cancel,
-                                requested=True, voucher_cents=voucher_cents)
+                                requested=True, voucher_dong=voucher_dong)
     o_idx = ctx.orders.append(order_id=sid, session_id=sid, rider_id=rider_id, pu_cell=pu_cell, do_cell=do_cell,
-                              request_time_s=request_time_s, gross_fare_usd=fare_usd,
-                              voucher_value_usd=voucher_cents / 100.0, net_fare_usd=fare_usd - voucher_cents / 100.0,
-                              session_idx=s_idx, voucher_cents=voucher_cents, in_window=True)
+                              request_time_s=request_time_s, gross_fare_vnd=fare_vnd,
+                              voucher_value_vnd=voucher_dong / DONG_PER_VND, net_fare_vnd=fare_vnd - voucher_dong / DONG_PER_VND,
+                              session_idx=s_idx, voucher_dong=voucher_dong, in_window=True)
     ctx.sessions.order_idx[s_idx] = o_idx
     ctx.cells.waiting[pu_cell] += 1
-    if voucher_cents:
-        assert ctx.ledger.reserve(sid, request_time_s, voucher_cents)
+    if voucher_dong:
+        assert ctx.ledger.reserve(sid, request_time_s, voucher_dong)
         ctx.ledger.commit(sid)
     return o_idx
 
@@ -114,22 +115,22 @@ def test_pickup_is_match_plus_eta_and_dropoff_is_pickup_plus_trip_time(ctx):
 
 
 def test_payments_at_completion(cfg, ctx):
-    order = booked_order(ctx, 4, 9, fare_usd=25.0, voucher_cents=500)
+    order = booked_order(ctx, 4, 9, fare_vnd=2500.0, voucher_dong=500)
     driver = idle_driver(ctx, 0, 4)
     matching.match(ctx, T0)
     o = ctx.orders
-    assert o.driver_pay_usd[order] == 0.0 and o.platform_profit_usd[order] == 0.0     # nothing before completion
+    assert o.driver_pay_vnd[order] == 0.0 and o.platform_profit_vnd[order] == 0.0     # nothing before completion
     run_until(ctx, T0 + 60, T0 + 3600, cancellation=False)
     assert o.status[order] == COMPLETED
     assert cfg.pricing.commission_rate == 0.24
-    assert o.driver_pay_usd[order] == pytest.approx(0.76 * 25.0)                       # 76% of the gross fare
-    assert o.net_fare_usd[order] == pytest.approx(20.0)
-    assert o.platform_profit_usd[order] == pytest.approx(20.0 - 0.76 * 25.0)           # net - driver pay
-    assert ctx.drivers.earnings_usd[driver] == pytest.approx(0.76 * 25.0)
+    assert o.driver_pay_vnd[order] == pytest.approx(0.76 * 2500.0)                     # 76% of the gross fare
+    assert o.net_fare_vnd[order] == pytest.approx(2000.0)
+    assert o.platform_profit_vnd[order] == pytest.approx(2000.0 - 0.76 * 2500.0)       # net - driver pay
+    assert ctx.drivers.earnings_vnd[driver] == pytest.approx(0.76 * 2500.0)
     # Voucher: committed -> spent, counted in the pickup cell at dropoff time (T-15).
     sid = int(o.session_id[order])
     assert ctx.ledger.entry(sid) == (ctx.ledger.period_of(T0), 500, LedgerState.SPENT)
-    assert ctx.slot_counters.voucher_spent_cents[4] == 500
+    assert ctx.slot_counters.voucher_spent_dong[4] == 500
     ctx.ledger.check_invariant()
 
 
@@ -139,7 +140,7 @@ def test_order_without_voucher_never_touches_the_ledger(ctx):
     matching.match(ctx, T0)
     run_until(ctx, T0 + 60, T0 + 3600)
     assert ctx.orders.status[0] == COMPLETED and ctx.ledger.n_entries == 0
-    assert ctx.slot_counters.voucher_spent_cents.sum() == 0
+    assert ctx.slot_counters.voucher_spent_dong.sum() == 0
 
 
 def test_driver_serves_one_order_after_another(ctx):
@@ -176,7 +177,7 @@ def test_waiting_order_is_abandoned_after_max_wait(ctx):
     riders = ctx.world.riders
     rider = int(np.argmin(np.abs(riders.max_wait_min - 5.0)))
     max_wait_s = float(riders.max_wait_min[rider]) * 60
-    order = booked_order(ctx, 6, 8, rider_id=rider, voucher_cents=300)
+    order = booked_order(ctx, 6, 8, rider_id=rider, voucher_dong=300)
     last_ok = T0 + math.ceil(max_wait_s / 60) * 60 - 60
     run_until(ctx, T0, last_ok)
     assert ctx.orders.status[order] == WAITING and ctx.cells.waiting[6] == 1
@@ -218,7 +219,7 @@ def test_cancelled_driver_is_idle_where_they_stand(cfg, ctx, cancel_after_min, a
     assert eta / 2 > 2 and eta > 12 > eta / 2
     # e_cancel chosen so that the cumulative hazard reaches it exactly after `cancel_after_min` minutes.
     threshold = float(cancel_hazard_per_min(cfg, eta)) * cancel_after_min
-    order = booked_order(ctx, 0, 5, e_cancel=threshold, voucher_cents=400)
+    order = booked_order(ctx, 0, 5, e_cancel=threshold, voucher_dong=400)
     other = booked_order(ctx, 0, 5, request_time_s=T0 + 60)
     driver = idle_driver(ctx, 2, source)
     matching.match(ctx, T0)

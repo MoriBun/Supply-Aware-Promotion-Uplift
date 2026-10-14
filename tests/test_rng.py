@@ -212,3 +212,10 @@ def test_no_global_randomness_in_sim(path):
     assert random_violations(path.read_text(encoding="utf-8"), is_rng) == [], (
         "use rng.rng_for(stream, *key) (CLAUDE.md hard rule 4)"
     )
+
+
+def test_s7_contract_stream_and_kind_codes_are_fixed():
+    # B9 (decisions H-30): codes are part of the CRN contract; never renumber.
+    from sim.rng import ShockKind
+    assert Stream.SHOCK == 8 and [s.value for s in Stream] == list(range(1, 9))
+    assert {k.name: k.value for k in ShockKind} == {"DAY_DEMAND": 1, "EVENT": 2, "RAIN": 3, "ATTEND": 4, "JITTER": 5}

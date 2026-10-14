@@ -44,13 +44,13 @@ def summarize(mode: str, table: pd.DataFrame) -> str:
                 f"(se={s['GTE_se']:.1f}, n_seeds={s['n_seeds']})")
     if mode == "calibrate_budget":
         row = table.iloc[0]
-        return f"budget_B_usd={row['budget_B_usd']:.2f} per period (mode={row['mode']}, fraction={row['fraction']})"
+        return f"budget_B_vnd={row['budget_B_vnd']:.2f} per period (mode={row['mode']}, fraction={row['fraction']})"
     if mode in ("evaluate", "generate"):
         n = len(table)
         se = table["N_completed"].std(ddof=1) / math.sqrt(n) if n > 1 else float("nan")
         line = (f"policy={table['policy'].iloc[0]} n_seeds={n} N_mean={table['N_completed'].mean():.1f} "
-                f"(se={se:.1f}) V_mean={table['V_profit_usd'].mean():.1f} "
-                f"spent_mean={table['voucher_spent_usd'].mean():.1f} B={table['budget_B_usd'].iloc[0]}")
+                f"(se={se:.1f}) V_mean={table['V_profit_vnd'].mean():.1f} "
+                f"spent_mean={table['voucher_spent_vnd'].mean():.1f} B={table['budget_B_vnd'].iloc[0]}")
         if mode == "generate":
             line += "\nwritten: observed/, market/, hidden/, results/, meta/ (docs/schema.md)"
         return line

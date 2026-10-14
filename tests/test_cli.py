@@ -70,7 +70,7 @@ def test_gte_and_sweep_with_real_demand(capsys, tiny_layers, tmp_path):
     gte = pd.read_parquet(tmp_path / "gte" / "results" / "policy_results.parquet")
     assert gte["policy"].tolist() == ["all_on", "all_off"] and (gte["n_sessions"] > 0).all()
     assert (gte["N_completed"] > 0).all()
-    assert gte["voucher_spent_usd"][0] > 0 and gte["voucher_spent_usd"][1] == 0   # only all_on spends
+    assert gte["voucher_spent_vnd"][0] > 0 and gte["voucher_spent_vnd"][1] == 0   # only all_on spends
     assert "GTE=" in capsys.readouterr().out
     assert main(["run", "--mode", "sweep_theta"] + _configs(tiny_layers) + SMALL + ["--out", str(tmp_path / "sw")]) == 0
     sweep = pd.read_parquet(tmp_path / "sw" / "results" / "theta_sweep.parquet")
@@ -84,5 +84,5 @@ def test_python_dash_m_entry_point(tiny_layers, tmp_path):
         capture_output=True, text=True, check=False, cwd=ROOT,
     )
     assert result.returncode == 0, result.stderr
-    assert "config_hash=" in result.stdout and "budget_B_usd=" in result.stdout
+    assert "config_hash=" in result.stdout and "budget_B_vnd=" in result.stdout
     assert (tmp_path / "meta" / "run_metadata.parquet").exists()

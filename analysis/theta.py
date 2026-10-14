@@ -112,7 +112,7 @@ def hour_effects(frame: pd.DataFrame, *, n_boot: int = 500, seed: int = 0, drop_
     weights shared by ``tau`` and ``cost``.
     """
     f = frame[~frame["in_burnin"]] if drop_burnin else frame
-    f = f.assign(paid=f["voucher_value_usd"].to_numpy(np.float64) * f["completed"].to_numpy(np.float64))
+    f = f.assign(paid=f["voucher_value_vnd"].to_numpy(np.float64) * f["completed"].to_numpy(np.float64))
     u = f.groupby(["hour", "unit"]).agg(arm=("arm", "first"), n=("arm", "size"), y=("completed", "sum"),
                                          paid=("paid", "sum")).reset_index()
     units = u["unit"].unique()

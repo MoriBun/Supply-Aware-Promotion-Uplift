@@ -411,7 +411,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S6 phần Hoàng xong: H6.1 (nền notebook), H6.2 (notebook 04), H6.3 (notebook 05); đính chính H-28 (τ̂(x, s)/USD hơn τ̂(x)/USD +20,4 ± 4,9; học lại τ̂(x, s) trên `ring1` là việc mở). Chờ PR `develop2` → `develop`. Gate P6 chờ mentor xác nhận T-31.
+**Đang làm:** S7 (Hoàng làm, Tình review; `docs/phan_cong_v3.md`). B9 xong trên `develop2`, chờ PR và Tình duyệt (cần Tình đồng ý sinh lại mốc G7, H-33 c). Tiếp: H7.1 quy mô Hà Nội và đo A5-HN, rồi H7.2–H7.8.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -782,3 +782,12 @@ Mẫu:
 - Lệch spec / quyết định mới: H-28 (d)
 - Bàn giao: không
 - Còn lại / bước tiếp: S6 phần Hoàng xong; PR `develop2` → `develop`
+
+### 2026-10-14 · B9 · hợp đồng S7 (phần Hoàng) + đổi tiền sang VND · xong
+- Nhánh/PR: `develop2` → `develop` (PR B9), review: Tình. Kế thừa phần đã gộp của Tình (PR #24, #26: `city`, oracle, `lag_slot_same_block`, `hidden_view`, `budget_pilot_*`, `world_seed`); bản nháp cũ trùng các phần đó bỏ đi.
+- Đã làm: khóa `ring_tiebreak`, `exact_time`, mục `shocks:` (danh sách `events.venues`, giá trị ĐX B5), khóa giá `open_fare_vnd`/`open_km`/`per_km_vnd`/`per_min_vnd`/`platform_fee_vnd`, `voucher.max_vnd`, `beta_price_per_kvnd`; `NotImplementedError` cho khóa chưa cài (`engine._NOT_YET`); `Stream.SHOCK = 8`, `ShockKind`, `WorldPart.VENUES = 4`; chỉ tiêu CAL `busy_rel_h6/h7/h8`, `mean_trip_km`, `trips_per_driver_day` (bỏ `mean_gross_fare_usd`) trong test chậm và `analysis/validation.py`; script đổi tên USD → VND (973 chỗ, 72 file; notebook để T10.9) + sửa tay giá, β, nhãn; `schema.md` (`meta/shocks`), `spec.md`, `tests.md`; A5-HN 60 giây (`default.yaml`, quy tắc 7 `CLAUDE.md`); `decisions.md` H-29, H-30, H-31, H-33, H-34, H-35 (gồm H1, H2, P1–P3).
+- Kiểm tương đương đơn vị (4 lượt G7, trước/sau đổi tên): số dòng, số đếm, trạng thái, quyết định trùng hết; cột tiền = 100 × USD cũ, sai số tương đối tối đa 9,3e-7; xác suất đặt ẩn lệch ≤ 1,2e-7 (float32). Sinh lại `regression_s7.json` một lần: N hoàn thành 3944 / 4222 / 3993 / 3759, như mốc cũ.
+- Test: `pytest -q` → 583 passed, 12 deselected (~115 s; py3.12, `.venv`); hồi quy G7 `pytest -q -m slow tests/test_regression_s7.py` → 4 passed (57 s). Test chậm khác: không chạy (CAL chậm sẽ không đạt cho tới S8 vì chỉ tiêu mới, H-31).
+- Lệch spec / quyết định mới: H-29, H-30, H-31, H-33 (đính chính T-39 b), H-34 (sửa quy tắc 7), H-35. Số H-32 bỏ trống (phần cột schema đã có ở T-40, T-41).
+- Bàn giao: giao B9; người nhận kiểm tra: `pytest -q`, bảng tương đương đơn vị ở trên, G7 pass.
+- Còn lại / bước tiếp: H7.1 (quy mô Hà Nội, đo A5-HN ngay).

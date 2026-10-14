@@ -37,8 +37,8 @@ from sim.state import (
 RESULTS_TABLES: dict[str, dict[str, str]] = {
     "policy_results": {
         "run_id": "string", "policy": "string", "theta": "float64", "seed": "int32", "world_seed": "int64",
-        "N_completed": "int64", "V_profit_usd": "float64", "voucher_spent_usd": "float64",
-        "budget_B_usd": "float64",
+        "N_completed": "int64", "V_profit_vnd": "float64", "voucher_spent_vnd": "float64",
+        "budget_B_vnd": "float64",
         "n_sessions": "int64", "n_requests": "int64", "n_abandoned": "int64", "n_cancelled": "int64",
         "mean_pickup_eta_min": "float64", "share_cells_off": "float64", "n_switches_per_cell_day": "float64",
         "runtime_s": "float64",
@@ -57,7 +57,7 @@ RESULTS_TABLES: dict[str, dict[str, str]] = {
 META_COLUMNS: dict[str, str] = {
     "run_id": "string", "mode": "string", "config_hash": "string", "config_yaml": "string", "git_sha": "string",
     "policy": "string", "hidden_view": "string", "theta": "float64", "seed": "int32", "world_seed": "int64",
-    "budget_B_usd": "float64", "budget_pilot_seed": "int64", "budget_pilot_spent_usd": "float64",
+    "budget_B_vnd": "float64", "budget_pilot_seed": "int64", "budget_pilot_spent_vnd": "float64",
     "kappa": "float64", "kappa_pilots": "int32", "window_start_s": "float64", "window_end_s": "float64", "sim_end_s": "float64",
     "n_truncated_orders": "int32", "runtime_s": "float64", "created_at": "string",
 }
@@ -91,7 +91,7 @@ SNAPSHOT_COLUMNS = {
     "idle_avg": "float32", "enroute_avg": "float32", "ontrip_avg": "float32", "waiting_avg": "float32",
     "slack": "float64", "utilization": "float32", "mean_pickup_eta_min": "float32",
     "n_sessions": "int32", "n_offers": "int32", "n_requests": "int32", "n_matched": "int32", "n_completed": "int32",
-    "n_abandoned": "int32", "n_cancelled": "int32", "voucher_spent_usd": "float32",
+    "n_abandoned": "int32", "n_cancelled": "int32", "voucher_spent_vnd": "float32",
     "promo_on": "bool", "cell_propensity": "float32", "assign_mechanism_cell": "string", "cluster_id": "int16",
     "block": "int32", "in_burnin": "bool", "slack_lag_slot": "float64", "slack_lag_day": "float64",
     "published_at_s": "float64",

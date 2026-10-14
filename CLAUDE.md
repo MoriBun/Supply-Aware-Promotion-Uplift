@@ -50,7 +50,7 @@ Tài liệu nền (không phải nguồn sự thật cho code): `docs/problem_st
 7. **Hiệu năng.**
    - Trạng thái xe, order, session lưu dạng struct-of-arrays numpy. Không tạo object Python cho mỗi xe hay khách trong vòng lặp nóng.
    - Không lặp qua toàn bộ đội xe mỗi tick.
-   - Mục tiêu ≤ 30 giây / ngày mô phỏng.
+   - Mục tiêu ≤ 60 giây / ngày mô phỏng / một tiến trình trên cấu hình quy mô Hà Nội (A5-HN, decisions H-34; trước S7 là 30 giây cho thành phố 54 km²). Mọi lệnh sinh dữ liệu và quét dùng `runner.n_procs` = số lõi.
 8. **Ngân sách.** Bất biến `spent + committed + reserved ≤ B` phải luôn đúng khi `budget.enforce = true`.
 9. **Không thêm tính năng ngoài spec** (surge pricing, pooling, học mô hình uplift…). Học mô hình uplift chỉ làm trong `analysis/` (tuần 5), không bao giờ trong `sim/`.
 10. **Không có log thì chưa xong.** Mọi task kết thúc (xong hoặc dừng dở) đều phải có mục trong `docs/log.md` (xem "Nhật ký công việc").

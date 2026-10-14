@@ -6,11 +6,12 @@ import warnings
 import numpy as np
 import pytest
 
+from sim.budget import DONG_PER_VND
 from sim import choice, demand
 from sim.budget import LedgerState
 from sim.choice import request_probability
 from sim.config import load_config
-from sim.pricing import base_fare_usd, voucher_cents
+from sim.pricing import base_fare_vnd, voucher_dong
 from sim.state import HIDDEN_COLUMNS, SESSION_COLUMNS, OrderStatus
 from tests.conftest import ROOT
 from tests.fakes import make_context, with_forbidden
@@ -24,15 +25,15 @@ def quote_by_hand(ctx, *, voucher: bool, eta_min: float = 4.0) -> None:
     start, stop = ctx.tick_sessions
     s, space = ctx.sessions, ctx.world.space
     rows = slice(start, stop)
-    fare = base_fare_usd(ctx.cfg, space.T[s.pu_cell[rows], s.do_cell[rows], s.hour[rows]])
-    s.quoted_fare_usd[rows] = fare
+    fare = base_fare_vnd(ctx.cfg, space.T[s.pu_cell[rows], s.do_cell[rows], s.hour[rows]])
+    s.quoted_fare_vnd[rows] = fare
     s.quoted_eta_min[rows] = eta_min
     if voucher:
-        cents = voucher_cents(ctx.cfg, fare)
+        dong = voucher_dong(ctx.cfg, fare)
         for i in range(start, stop):
-            if ctx.ledger.reserve(int(s.session_id[i]), float(s.open_time_s[i]), int(cents[i - start])):
-                s.voucher_cents[i] = cents[i - start]
-                s.voucher_value_usd[i] = cents[i - start] / 100.0
+            if ctx.ledger.reserve(int(s.session_id[i]), float(s.open_time_s[i]), int(dong[i - start])):
+                s.voucher_dong[i] = dong[i - start]
+                s.voucher_value_vnd[i] = dong[i - start] / DONG_PER_VND
                 s.arm[i] = 1
 
 
@@ -97,7 +98,7 @@ def test_delta_applies_only_with_a_voucher():
 
 def test_u_book_is_the_same_under_two_policies(off, on):
     assert off.sessions.n == on.sessions.n > 3000
-    for name in ("session_id", "rider_id", "pu_cell", "do_cell", "u_book", "quoted_fare_usd"):
+    for name in ("session_id", "rider_id", "pu_cell", "do_cell", "u_book", "quoted_fare_vnd"):
         np.testing.assert_array_equal(off.sessions.col(name), on.sessions.col(name), err_msg=name)
 
 
@@ -127,9 +128,9 @@ def test_direct_effect_is_treat_minus_control(cfg, off, on):
         np.testing.assert_allclose(s.col("direct_request_effect_fixed_market"),
                                    s.col("p_request_treat") - s.col("p_request_control"), atol=1e-6)
         rider = s.col("rider_id")
-        fare = s.col("quoted_fare_usd").astype(np.float64)
+        fare = s.col("quoted_fare_vnd").astype(np.float64)
         treat = request_probability(r.alpha[rider], r.beta_price[rider], r.beta_eta[rider], r.delta_promo[rider],
-                                    fare, voucher_cents(cfg, fare) / 100.0, s.col("quoted_eta_min"))
+                                    fare, voucher_dong(cfg, fare) / DONG_PER_VND, s.col("quoted_eta_min"))
         np.testing.assert_allclose(s.col("p_request_treat"), treat, atol=1e-6)
         assert (s.col("p_request_treat") > 0).all() and (s.col("p_request_treat") < 1).all()
     # Ground truth is a property of the context, not of the arm: identical under both policies.
@@ -166,20 +167,20 @@ def test_one_waiting_order_per_booking(which, request):
     np.testing.assert_array_equal(s.col("order_idx")[booked], np.arange(o.n))
     assert (s.col("order_idx")[~s.col("requested")] == -1).all()
     np.testing.assert_array_equal(o.col("session_idx"), booked)
-    for name in ("session_id", "rider_id", "pu_cell", "do_cell", "in_window", "voucher_cents"):
+    for name in ("session_id", "rider_id", "pu_cell", "do_cell", "in_window", "voucher_dong"):
         np.testing.assert_array_equal(o.col(name), s.col(name)[booked], err_msg=name)
     np.testing.assert_array_equal(o.col("order_id"), o.col("session_id"))
     np.testing.assert_array_equal(o.col("request_time_s"), s.col("open_time_s")[booked])
-    np.testing.assert_array_equal(o.col("gross_fare_usd"), s.col("quoted_fare_usd")[booked])
-    np.testing.assert_allclose(o.col("net_fare_usd"), o.col("gross_fare_usd") - o.col("voucher_value_usd"), atol=1e-5)
-    np.testing.assert_allclose(o.col("voucher_value_usd"), o.col("voucher_cents") / 100.0, atol=1e-6)
+    np.testing.assert_array_equal(o.col("gross_fare_vnd"), s.col("quoted_fare_vnd")[booked])
+    np.testing.assert_allclose(o.col("net_fare_vnd"), o.col("gross_fare_vnd") - o.col("voucher_value_vnd"), atol=1e-5)
+    np.testing.assert_allclose(o.col("voucher_value_vnd"), o.col("voucher_dong") / DONG_PER_VND, atol=1e-6)
     assert (o.col("status") == int(OrderStatus.WAITING)).all() and o.count_open() == o.n
     # Later steps have written nothing yet.
     assert (o.col("driver_id") == -1).all() and np.isnan(o.col("matched_time_s")).all()
     if which == "off":
-        assert (o.col("voucher_cents") == 0).all()
+        assert (o.col("voucher_dong") == 0).all()
     else:
-        assert (o.col("voucher_cents") > 0).all()
+        assert (o.col("voucher_dong") > 0).all()
 
 
 def test_counters_follow_the_new_orders(on):
@@ -195,15 +196,15 @@ def test_counters_follow_the_new_orders(on):
 
 def test_voucher_is_committed_by_a_booking_and_released_otherwise(on):
     s, ledger = on.sessions, on.ledger
-    assert (s.col("voucher_cents") > 0).all()
+    assert (s.col("voucher_dong") > 0).all()
     committed = 0
     for i in range(0, s.n, 37):                               # a spread sample of sessions
-        _, cents, state = ledger.entry(int(s.col("session_id")[i]))
-        assert cents == s.col("voucher_cents")[i]
+        _, dong, state = ledger.entry(int(s.col("session_id")[i]))
+        assert dong == s.col("voucher_dong")[i]
         assert state == (LedgerState.COMMITTED if s.col("requested")[i] else LedgerState.RELEASED)
     spent, committed, reserved = ledger.totals(ledger.period_of(float(s.col("open_time_s")[0])))
     assert reserved == 0 and spent == 0
-    assert committed == int(s.col("voucher_cents")[s.col("requested")].sum())
+    assert committed == int(s.col("voucher_dong")[s.col("requested")].sum())
     ledger.check_invariant()
 
 
@@ -213,16 +214,16 @@ def test_sessions_without_voucher_never_touch_the_ledger(off):
 
 def test_budget_block_leaves_the_session_without_voucher(tiny_cfg):
     # With a small enforced budget some sessions are refused at quote time; they decide at v = 0.
-    ctx = run_ticks(tiny_cfg, range(60, 180), voucher=True, budget_usd=30.0, enforce_budget=True)
+    ctx = run_ticks(tiny_cfg, range(60, 180), voucher=True, budget_vnd=3000.0, enforce_budget=True)
     s = ctx.sessions
-    granted = s.col("voucher_cents") > 0
+    granted = s.col("voucher_dong") > 0
     assert granted.any() and (~granted).any()
     np.testing.assert_array_equal(s.col("requested")[~granted],
                                   (s.col("u_book") < s.col("p_request_control").astype(np.float64))[~granted])
     assert all(ctx.ledger.entry(int(sid)) is None for sid in s.col("session_id")[~granted][:20])
     ctx.ledger.check_invariant()
     period = ctx.ledger.period_of(float(s.col("open_time_s")[-1]))
-    assert ctx.ledger.used_cents(period) <= ctx.ledger.limit_cents(period)
+    assert ctx.ledger.used_dong(period) <= ctx.ledger.limit_dong(period)
 
 
 # --- step contract --------------------------------------------------------------

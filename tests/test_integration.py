@@ -45,17 +45,17 @@ def test_smoke_day(day, policy):
     assert 0 < res.mean_pickup_eta_min <= cfg.matching.max_pickup_eta_min
     assert np.isfinite(res.mean_slack) and res.mean_slack > 0
     assert res.runtime_s < cfg.performance.max_seconds_per_sim_day          # a safety bound, not the A5 measure
-    assert res.V_profit_usd != 0.0
+    assert res.V_profit_vnd != 0.0
     if policy == "all_on":
-        assert res.voucher_spent_usd > 0 and res.promo_on.all() and res.offer_completed.sum() > 0
+        assert res.voucher_spent_vnd > 0 and res.promo_on.all() and res.offer_completed.sum() > 0
     else:
-        assert res.voucher_spent_usd == 0.0 and not res.promo_on.any() and len(res.offer_score) == 0
+        assert res.voucher_spent_vnd == 0.0 and not res.promo_on.any() and len(res.offer_score) == 0
 
 
 def test_voucher_raises_requests(day):
     _, results = day
     assert results["all_on"].n_requests > results["all_off"].n_requests
-    assert results["all_on"].V_profit_usd < results["all_off"].V_profit_usd  # a 20% voucher eats the margin (D1)
+    assert results["all_on"].V_profit_vnd < results["all_off"].V_profit_vnd  # a 20% voucher eats the margin (D1)
 
 
 # --- test_conservation ----------------------------------------------------------
@@ -87,9 +87,9 @@ def test_conservation(day, policy):
     assert res.n_requests == res.N_completed + res.n_abandoned + res.n_cancelled + (in_w & (status == TRUNCATED)).sum()
     # Money: completed orders carry payments, the others none.
     done = status == COMPLETED
-    assert (o.col("driver_pay_usd")[done] > 0).all() and (o.col("driver_pay_usd")[~done] == 0).all()
-    assert res.V_profit_usd == pytest.approx(float(o.col("platform_profit_usd")[in_w & done].sum()))
-    assert res.voucher_spent_usd == pytest.approx(float(o.col("voucher_value_usd")[in_w & done].sum()))
+    assert (o.col("driver_pay_vnd")[done] > 0).all() and (o.col("driver_pay_vnd")[~done] == 0).all()
+    assert res.V_profit_vnd == pytest.approx(float(o.col("platform_profit_vnd")[in_w & done].sum()))
+    assert res.voucher_spent_vnd == pytest.approx(float(o.col("voucher_value_vnd")[in_w & done].sum()))
 
 
 @pytest.mark.parametrize("policy", POLICIES)
@@ -197,7 +197,7 @@ def test_driver_state_consistency(monkeypatch, policy):
 def test_same_seed_gives_the_same_run():
     cfg = load_config(TINY)
     a, b = simulate(cfg, "all_on"), simulate(cfg, "all_on")
-    assert (a.N_completed, a.V_profit_usd, a.n_requests, a.n_cancelled) == (b.N_completed, b.V_profit_usd,
+    assert (a.N_completed, a.V_profit_vnd, a.n_requests, a.n_cancelled) == (b.N_completed, b.V_profit_vnd,
                                                                              b.n_requests, b.n_cancelled)
     for name in ("status", "driver_id", "pickup_time_s", "dropoff_time_s"):
         np.testing.assert_array_equal(a.orders.col(name), b.orders.col(name), err_msg=name)

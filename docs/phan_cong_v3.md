@@ -39,8 +39,9 @@ Quy ước ký hiệu:
 
 **Trạng thái ngày 14/10:**
 - Đã gộp vào `develop`: PR #23 (Tình: T7.1 chặn ŝ, bộ kiểm hồi quy G7, T-39); PR #24 (Tình: `scope = city`, oracle qua `OracleHiddenView`, cột `lag_slot_same_block`, `budget_pilot_*`, `world_seed`, T-40); PR #25 (Hoàng: kế hoạch v3 Hà Nội, ĐX).
-- Trên `develop1`, chưa commit: đính chính T-41 (`uses_hidden` → `hidden_view`, bỏ cột `slack_lag_cell`, `slack_hat` nhận nghĩa mới). Tình commit và PR trước khi Hoàng bắt đầu S7, để B9 không phải sửa lại.
-- Bản nháp code của B9 (khóa mô hình, luồng `SHOCK`, cột schema, chỉ tiêu xe bận) nằm trên `develop2`, chưa commit. Còn thiếu: phần VND, khóa giá cước, danh sách địa điểm sự kiện.
+- Đính chính T-41 (`uses_hidden` → `hidden_view`, bỏ cột `slack_lag_cell`, `slack_hat` nhận nghĩa mới) đã gộp ở PR #26.
+- **B9 ✅ xong** (Hoàng, `develop2`, chờ PR và Tình duyệt): khóa mô hình, `shocks:`, luồng `SHOCK`, chỉ tiêu CAL mới, đổi tiền sang VND, A5-HN; kiểm tương đương đơn vị đạt và mốc G7 sinh lại một lần (H-29…H-35). `pytest -q` 583 passed; G7 4 passed.
+- **S7 chưa xong:** còn H7.1–H7.8, rồi kiểm tra cuối sprint G7 và bàn giao B10.
 
 ---
 
@@ -81,7 +82,7 @@ Quy ước ký hiệu:
 
 ### Sprint 7 (Hoàng): Sửa simulator, quy mô Hà Nội, VND (Giai đoạn 1)
 
-**Đầu S7: PR hợp đồng B9** (Hoàng soạn tiếp từ bản nháp trên `develop2`, sau khi kéo `develop` có PR #24 và đính chính T-41; Tình duyệt).
+**Đầu S7: PR hợp đồng B9 — ✅ xong 14/10 (chờ Tình duyệt PR)** (Hoàng soạn tiếp từ bản nháp trên `develop2`, sau khi kéo `develop` có PR #24 và đính chính T-41; Tình duyệt).
 
 1. **Khóa mô hình**, mặc định bằng hành vi cũ:
    - `matching.ring_tiebreak: lowest_id | most_idle` (B9: `lowest_id`);
@@ -218,7 +219,7 @@ Ngân sách máy ~8,5 giờ với 8 lõi (ĐX mục E): chạy T10.1, T10.2, T10
 
 | ID | Từ → Đến | Nội dung | Khi | Người nhận kiểm tra |
 |---|---|---|---|---|
-| B9 | Hoàng → Tình (duyệt) | PR hợp đồng: khóa config, VND, luồng `SHOCK`, cột schema, mốc G7 sinh lại | đầu S7 | `pytest -q`; bảng tương đương đơn vị; G7 pass |
+| B9 | Hoàng → Tình (duyệt) | PR hợp đồng: khóa config, VND, luồng `SHOCK`, cột schema, mốc G7 sinh lại | đầu S7 (✅ 14/10) | `pytest -q`; bảng tương đương đơn vị; G7 pass |
 | B10 | Hoàng → Tình | simulator đã sửa xong S7 (việc 1.0–1.5), PR S7 | cuối S7 | hồi quy G7; CRN khi bật biến động; A5 Hà Nội; test giá 83.638đ; oracle chỉ với chính sách ngưỡng |
 | B11 | Tình → Hoàng | `default.yaml` hiệu chỉnh (W0), `world_w1.yaml`, toàn bộ dữ liệu, `datasets.md` | cuối S8 | A1, A2, A5, CAL đạt; `check_dataset` pass; `config_hash` khớp |
 | B12 | Hoàng → Tình | hàm điểm, chỉ số độ căng, ngưỡng mới/cũ, giờ có hại, thác nước, burn-in | cuối S9 | nạp được trong tiến trình con; tất định; thác nước cộng khớp |

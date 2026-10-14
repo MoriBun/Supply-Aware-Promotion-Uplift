@@ -44,7 +44,7 @@ def test_policy_table_runs_every_policy_on_the_same_seeds_and_budget(tmp_path):
     summary = run_policy_table(cfg, specs, tmp_path, n_seeds=3, engine=FAKE)
     assert summary["label"].tolist() == ["all_off", "all_on_B", "random", "pi"]
     assert (summary["n_seeds"] == 3).all()
-    budgets = summary.set_index("label")["budget_B_usd"]
+    budgets = summary.set_index("label")["budget_B_vnd"]
     assert math.isnan(budgets["all_off"]) and budgets["all_on_B"] > 0
     assert budgets["random"] == budgets["pi"] == budgets["all_on_B"]                 # one B for every policy
     th = summary[summary["policy"] == "threshold"]
@@ -196,7 +196,7 @@ def test_offer_efficiency_by_hand():
     # 8 sessions over 2 days; score >= kappa offers the first four; slack known for all but one.
     sessions = pd.DataFrame({"day": [0, 0, 0, 0, 1, 1, 1, 1], "slot": [1, 1, 2, 2, 97, 97, 98, 98],
                              "pu_cell": [0, 1, 0, 1, 0, 1, 0, 1],
-                             "voucher_value_usd": [4.0, 6.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0]})
+                             "voucher_value_vnd": [4.0, 6.0, 5.0, 5.0, 9.0, 9.0, 9.0, 9.0]})
     snaps = pd.DataFrame({"slot": [1, 1, 2, 97, 97, 98, 98], "cell": [0, 1, 0, 0, 1, 0, 1],
                           "slack_lag_slot": [0.0, 2.0, 0.0, 1.0, 1.0, 1.0, 1.0]})
     data = {"sessions": sessions, "snapshots": snaps,
@@ -205,12 +205,12 @@ def test_offer_efficiency_by_hand():
     eff = offer_efficiency(data, {"a": score, "none": score}, {"a": 1.0, "none": math.inf}).set_index("label")
     a = eff.loc["a"]
     assert a["share_offered"] == 0.5 and a["q1"] == 1.0 and a["q0"] == 0.5          # treated 0, 1; control 2, 3
-    assert a["voucher_per_offer_usd"] == 5.0
-    assert a["voucher_cost_per_day"] == pytest.approx(5.0 * 2)                       # 4 offers / 2 days, 5 USD each
+    assert a["voucher_per_offer_vnd"] == 5.0
+    assert a["voucher_cost_per_day"] == pytest.approx(5.0 * 2)                       # 4 offers / 2 days, 5 VND each
     assert a["extra_trips_per_day"] == pytest.approx(0.5 * 2)
-    assert a["extra_trips_per_100usd"] == pytest.approx(10.0)
+    assert a["extra_trips_per_100k_vnd"] == pytest.approx(100_000 * 1.0 / 10.0)        # 1 extra trip per 10 đ
     assert a["share_offered_slack0"] == pytest.approx(2 / 3)                         # cell 1 of slot 2 unknown
-    assert eff.loc["none", "share_offered"] == 0 and math.isnan(eff.loc["none", "extra_trips_per_100usd"])
+    assert eff.loc["none", "share_offered"] == 0 and math.isnan(eff.loc["none", "extra_trips_per_100k_vnd"])
 
 
 def test_compare_pairs_flags_higher_qini_with_lower_value():

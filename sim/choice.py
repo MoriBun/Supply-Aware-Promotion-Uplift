@@ -6,7 +6,7 @@ Contract: ``decide`` reads the rows ``ctx.tick_sessions`` of ``ctx.sessions``,
 writes ``requested`` and the hidden ``p_request_*`` columns, creates one order
 per booking (``ctx.orders``, columns of step "decide"), sets ``order_idx`` on
 the session, and calls ``ctx.ledger.commit`` / ``release_reserved`` for sessions
-with ``voucher_cents > 0``.
+with ``voucher_dong > 0``.
 
 The decision uses only what step 5 wrote on the session (fare, quoted ETA,
 granted voucher) and the rider's own coefficients; the pre-drawn ``u_book``
@@ -17,20 +17,20 @@ from __future__ import annotations
 
 import numpy as np
 
-from sim.budget import CENTS_PER_USD
-from sim.pricing import voucher_cents
+from sim.budget import DONG_PER_VND
+from sim.pricing import voucher_dong
 from sim.state import SimContext
 
 
-def request_probability(alpha, beta_price, beta_eta, delta, fare_usd, voucher_usd, eta_min) -> np.ndarray:
+def request_probability(alpha, beta_price, beta_eta, delta, fare_vnd, voucher_vnd, eta_min) -> np.ndarray:
     """Booking probability of spec §4.4 [report (5)], vectorized, float64.
 
     ``logit = alpha + beta_price * (p - v) + beta_eta * eta_q + delta * 1[v > 0]``,
     ``P = 1 / (1 + exp(-logit))``.
     """
-    v = np.asarray(voucher_usd, dtype=np.float64)
+    v = np.asarray(voucher_vnd, dtype=np.float64)
     logit = (np.asarray(alpha, dtype=np.float64)
-             + np.asarray(beta_price, dtype=np.float64) * (np.asarray(fare_usd, dtype=np.float64) - v)
+             + np.asarray(beta_price, dtype=np.float64) * (np.asarray(fare_vnd, dtype=np.float64) - v)
              + np.asarray(beta_eta, dtype=np.float64) * np.asarray(eta_min, dtype=np.float64)
              + np.asarray(delta, dtype=np.float64) * (v > 0))
     return np.exp(-np.logaddexp(0.0, -logit))   # stable form of 1 / (1 + exp(-logit))
@@ -47,18 +47,18 @@ def decide(ctx: SimContext, t: float) -> None:
     rider = sessions.rider_id[rows]
     alpha, beta_price = riders.alpha[rider], riders.beta_price[rider]
     beta_eta, delta = riders.beta_eta[rider], riders.delta_promo[rider]
-    fare = sessions.quoted_fare_usd[rows].astype(np.float64)
+    fare = sessions.quoted_fare_vnd[rows].astype(np.float64)
     eta = sessions.quoted_eta_min[rows]            # already max_pickup_eta_min when no_supply (spec §4.1)
-    granted_cents = sessions.voucher_cents[rows]
-    granted_usd = granted_cents / CENTS_PER_USD
+    granted_dong = sessions.voucher_dong[rows]
+    granted_vnd = granted_dong / DONG_PER_VND
 
-    p_actual = request_probability(alpha, beta_price, beta_eta, delta, fare, granted_usd, eta)
+    p_actual = request_probability(alpha, beta_price, beta_eta, delta, fare, granted_vnd, eta)
     requested = sessions.u_book[rows] < p_actual
     sessions.requested[rows] = requested
 
     # Hidden ground truth in the same context: with the full voucher and with none.
-    treat_usd = voucher_cents(ctx.cfg, fare) / CENTS_PER_USD
-    p_treat = request_probability(alpha, beta_price, beta_eta, delta, fare, treat_usd, eta)
+    treat_vnd = voucher_dong(ctx.cfg, fare) / DONG_PER_VND
+    p_treat = request_probability(alpha, beta_price, beta_eta, delta, fare, treat_vnd, eta)
     p_control = request_probability(alpha, beta_price, beta_eta, delta, fare, 0.0, eta)
     sessions.p_request_treat[rows] = p_treat
     sessions.p_request_control[rows] = p_control
@@ -67,7 +67,7 @@ def decide(ctx: SimContext, t: float) -> None:
     # Budget: a granted voucher is committed by a booking and released otherwise.
     session_id = sessions.session_id[rows]
     ledger = ctx.ledger
-    for i in np.flatnonzero(granted_cents > 0):
+    for i in np.flatnonzero(granted_dong > 0):
         if requested[i]:
             ledger.commit(int(session_id[i]))
         else:
@@ -88,12 +88,12 @@ def decide(ctx: SimContext, t: float) -> None:
     orders.pu_cell[o_rows] = pu_cell
     orders.do_cell[o_rows] = sessions.do_cell[session_idx]
     orders.request_time_s[o_rows] = t
-    orders.gross_fare_usd[o_rows] = fare[booked]
-    orders.voucher_value_usd[o_rows] = granted_usd[booked]
-    orders.net_fare_usd[o_rows] = fare[booked] - granted_usd[booked]
+    orders.gross_fare_vnd[o_rows] = fare[booked]
+    orders.voucher_value_vnd[o_rows] = granted_vnd[booked]
+    orders.net_fare_vnd[o_rows] = fare[booked] - granted_vnd[booked]
     orders.in_window[o_rows] = ctx.clock.in_window(t)
     orders.session_idx[o_rows] = session_idx
-    orders.voucher_cents[o_rows] = granted_cents[booked]
+    orders.voucher_dong[o_rows] = granted_dong[booked]
     sessions.order_idx[session_idx] = np.arange(o_start, o_stop)
 
     new_per_cell = np.bincount(pu_cell, minlength=ctx.n_cells)

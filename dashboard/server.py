@@ -51,7 +51,7 @@ class RunRequest(BaseModel):
     name: str = Field(default="run", max_length=80)
     overrides: list[str] = Field(default_factory=list)
     layers: list[str] = Field(default_factory=list)
-    budget_usd: float | None = None
+    budget_vnd: float | None = None
     kappa: float | None = None
 
 
@@ -117,7 +117,7 @@ def create_app(root: Path = ROOT, runs_dir: Path | None = None) -> FastAPI:
             if not (root / layer).exists():
                 raise HTTPException(400, f"lớp config không tồn tại: {layer}")
         spec = RunSpec(name=req.name or "run", overrides=tuple(req.overrides), layers=tuple(req.layers),
-                       budget_usd=req.budget_usd, kappa=req.kappa)
+                       budget_vnd=req.budget_vnd, kappa=req.kappa)
         run = manager.submit(spec)
         return run.public()
 
@@ -150,7 +150,7 @@ def create_app(root: Path = ROOT, runs_dir: Path | None = None) -> FastAPI:
             agg = sweep_aggregate(rows, run.sweep["theta_grid"])
         return {"status": run.status, "kind": "sweep", "theta_grid": run.sweep["theta_grid"],
                 "n_seeds": run.sweep["n_seeds"], "n_procs": run.sweep.get("n_procs"), "done": len(rows),
-                "total": run.sweep.get("total"), "budget_usd": run.sweep.get("budget_usd"),
+                "total": run.sweep.get("total"), "budget_vnd": run.sweep.get("budget_vnd"),
                 "kappas": run.sweep.get("kappas"), "rows": rows, "aggregate": agg, "scope": run.scope,
                 "score_fn": run.score_fn, "config_hash": run.config_hash}
 
@@ -201,7 +201,7 @@ def create_app(root: Path = ROOT, runs_dir: Path | None = None) -> FastAPI:
             return {"n_slots": 0, "slots": []}
         out = summ.cell_matrix(run.trace)
         out["theta"] = run.theta
-        out["budget_usd"] = run.budget_usd
+        out["budget_vnd"] = run.budget_vnd
         return out
 
     @app.get("/api/runs/{run_key}/summary")

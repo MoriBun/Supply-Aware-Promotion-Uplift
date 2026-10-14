@@ -66,14 +66,14 @@ def _drop_off(ctx: SimContext, d_idx: np.ndarray) -> None:
     pu_cell, do_cell = orders.pu_cell[o_idx], orders.do_cell[o_idx]
 
     # Payments at completion (spec §4.6).
-    gross = orders.gross_fare_usd[o_idx].astype(np.float64)
+    gross = orders.gross_fare_vnd[o_idx].astype(np.float64)
     driver_pay = (1.0 - ctx.cfg.pricing.commission_rate) * gross
     orders.status[o_idx] = int(OrderStatus.COMPLETED)
     orders.dropoff_time_s[o_idx] = dropoff_at
-    orders.driver_pay_usd[o_idx] = driver_pay
-    orders.platform_profit_usd[o_idx] = orders.net_fare_usd[o_idx].astype(np.float64) - driver_pay
+    orders.driver_pay_vnd[o_idx] = driver_pay
+    orders.platform_profit_vnd[o_idx] = orders.net_fare_vnd[o_idx].astype(np.float64) - driver_pay
 
-    voucher = orders.voucher_cents[o_idx]
+    voucher = orders.voucher_dong[o_idx]
     session_id = orders.session_id[o_idx]
     for i in np.flatnonzero(voucher > 0):
         ctx.ledger.settle(int(session_id[i]))              # committed -> spent
@@ -83,7 +83,7 @@ def _drop_off(ctx: SimContext, d_idx: np.ndarray) -> None:
     drivers.idle_since[d_idx] = dropoff_at
     drivers.busy_until[d_idx] = np.inf
     drivers.order[d_idx] = -1
-    drivers.earnings_usd[d_idx] += driver_pay
+    drivers.earnings_vnd[d_idx] += driver_pay
 
     np.subtract.at(cells.ontrip, pu_cell, 1)
     np.add.at(cells.idle, do_cell, 1)

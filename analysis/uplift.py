@@ -43,7 +43,7 @@ MODEL_DIR = Path(__file__).resolve().parent / "models"
 X_COLS = ["x_freq", "x_tenure", "x_segment"]
 S_COLS = ["slack_lag_slot"]
 # Pre-treatment context for the nuisance models: everything the policy saw before the offer.
-CONTEXT_COLS = ["slack_lag_slot", "slack_lag_day", "hour", "quoted_fare_usd", "quoted_eta_min", "no_supply",
+CONTEXT_COLS = ["slack_lag_slot", "slack_lag_day", "hour", "quoted_fare_vnd", "quoted_eta_min", "no_supply",
                 "promo_on_cell"]
 
 # Analysis settings (not simulator parameters); saved next to every fitted model.
@@ -145,7 +145,7 @@ def fit_dr(f: pd.DataFrame, *, sample: str = "explore", params: dict = DEFAULTS)
     phi = pseudo_outcome(f["Y"], f["T"], nu["mu0"], nu["mu1"], nu["e"], params["e_clip"])
     seed = params["seed"]
     treated = f["T"].to_numpy() == 1
-    paid = f["voucher_value_usd"].to_numpy(np.float64) * f["Y"].to_numpy(np.float64)   # paid only on completion
+    paid = f["voucher_value_vnd"].to_numpy(np.float64) * f["Y"].to_numpy(np.float64)   # paid only on completion
     boosters = {
         "tau_x": _train(params["final"], _matrix(f, X_COLS), phi, seed),
         "tau_xs": _train(params["final"], _matrix(f, X_COLS + S_COLS), phi, seed),
@@ -156,7 +156,7 @@ def fit_dr(f: pd.DataFrame, *, sample: str = "explore", params: dict = DEFAULTS)
         "sample": sample, "n": int(len(f)), "n_treated": int(treated.sum()),
         "ate_dr": float(phi.mean()), "ate_dr_se": float(phi.std(ddof=1) / np.sqrt(len(phi))),
         "ate_naive": float(f.loc[treated, "Y"].mean() - f.loc[~treated, "Y"].mean()),
-        "mean_paid_per_offer_usd": float(paid[treated].mean()),
+        "mean_paid_per_offer_vnd": float(paid[treated].mean()),
         "share_e_clipped": float(np.mean((nu["e"] < params["e_clip"]) | (nu["e"] > 1 - params["e_clip"]))),
     }
     return {"boosters": boosters, "summary": summary, "phi": phi, "nuisances": nu}
@@ -209,7 +209,7 @@ def predict_scores(name: str, feats: dict[str, np.ndarray]) -> dict[str, np.ndar
     """``tau_x``, ``tau_xs`` and their per-dollar versions for the given feature columns."""
     meta, _ = load_model(name)
     tau_x, tau_xs = _predict(name, "tau_x", feats), _predict(name, "tau_xs", feats)
-    floor = meta["params"]["cost_floor_frac"] * meta["mean_paid_per_offer_usd"]
+    floor = meta["params"]["cost_floor_frac"] * meta["mean_paid_per_offer_vnd"]
     cost_x = np.maximum(_predict(name, "cost_x", feats), floor)      # expected dollars paid per offer
     cost_xs = np.maximum(_predict(name, "cost_xs", feats), floor)
     return {"tau_x": tau_x, "tau_xs": tau_xs, "tau_x_per_dollar": tau_x / cost_x, "tau_xs_per_dollar": tau_xs / cost_xs}

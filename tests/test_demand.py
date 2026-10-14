@@ -60,7 +60,8 @@ def test_world_depends_on_world_seed_only(cfg, world):
 
 
 def test_world_parts_are_never_renumbered():
-    assert [(p.name, int(p)) for p in WorldPart] == [("CELL_WEIGHT", 1), ("RIDERS", 2), ("DRIVERS", 3)]
+    # VENUES added by the S7 contract (decisions H-30); existing codes keep their numbers.
+    assert [(p.name, int(p)) for p in WorldPart] == [("CELL_WEIGHT", 1), ("RIDERS", 2), ("DRIVERS", 3), ("VENUES", 4)]
 
 
 def test_cell_weights(cfg, world):
@@ -113,8 +114,9 @@ def test_behaviour_coefficients_follow_spec(cfg, world):
         m = r.x_segment == seg
         resid = r.delta_promo[m] - rc.delta_u * r.u_latent[m]
         assert resid.mean() == pytest.approx(rc.delta0 + shift, abs=0.01)
-        # Median of |beta_price| in a segment is beta_price_per_usd * multiplier (log-normal noise).
-        assert np.median(-r.beta_price[m]) == pytest.approx(rc.beta_price_per_usd * rc.beta_price_seg_mult[seg], rel=0.03)
+        # Median of |beta_price| (per đồng) in a segment is beta_price_per_kvnd / 1000 * multiplier (log-normal noise).
+        assert np.median(-r.beta_price[m]) == pytest.approx(rc.beta_price_per_kvnd / 1000 * rc.beta_price_seg_mult[seg],
+                                                            rel=0.03)
     assert np.median(-r.beta_eta) == pytest.approx(rc.beta_eta_per_min, rel=0.03)
 
 
@@ -306,7 +308,7 @@ def test_session_columns_are_filled(morning):
     assert (s.col("trip_noise") > 0).all() and (s.col("e_cancel") > 0).all()
     assert s.col("e_cancel").mean() == pytest.approx(1.0, abs=0.05)
     # Later steps have not written anything yet.
-    assert np.isnan(s.col("quoted_fare_usd")).all() and not s.col("requested").any()
+    assert np.isnan(s.col("quoted_fare_vnd")).all() and not s.col("requested").any()
     assert (s.col("order_idx") == -1).all()
 
 

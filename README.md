@@ -98,7 +98,7 @@ python -m sim run --mode <mode> --config config/default.yaml [--config overlay.y
 | `evaluate`         | chạy một chính sách với nhiều seed, báo N(π), V(π), chi voucher                             | `results/policy_results`                           |
 | `sweep_theta`      | quét lưới θ cho π<sub>θ</sub>, cùng B và cùng seed, tìm θ\* = argmax N(π<sub>θ</sub>)   | `results/theta_sweep`                              |
 | `gte`              | hiệu ứng toàn hệ GTE = N(all_on) − N(all_off), không ngân sách, ghép cặp theo seed         | `results/policy_results`                           |
-| `calibrate_budget` | tính ngân sách B = tỷ lệ × chi tiêu của pilot`all_on` không ngân sách                   | `meta/run_metadata` (`budget_B_usd`)             |
+| `calibrate_budget` | tính ngân sách B = tỷ lệ × chi tiêu của pilot`all_on` không ngân sách                   | `meta/run_metadata` (`budget_B_vnd`)             |
 | `throughput_curve` | đường throughput theo mức cầu (nghiệm thu A1, gate P2/P3)                                      | `results/throughput_curve`                         |
 
 ### Ví dụ
@@ -133,14 +133,14 @@ Mỗi lượt chạy ghi một thư mục theo `docs/schema.md`:
 
 ```
 runs/<out>/
-  meta/run_metadata.parquet        config_hash, seed, mode, budget_B_usd, phiên bản
+  meta/run_metadata.parquet        config_hash, seed, mode, budget_B_vnd, phiên bản
   observed/riders.parquet          dữ liệu quan sát được: mô hình và chính sách được đọc
   observed/sessions.parquet
   observed/orders.parquet
   market/slot_snapshots.parquet    I, E, O, W, slack, utilization theo (ô, slot)
   hidden/riders_hidden.parquet     ground truth (u_latent, propensity_true, ...): CHỈ để đánh giá
   hidden/sessions_hidden.parquet
-  results/policy_results.parquet   một dòng mỗi (chính sách, seed): N_completed, V_profit_usd, voucher_spent_usd
+  results/policy_results.parquet   một dòng mỗi (chính sách, seed): N_completed, V_profit_vnd, voucher_spent_vnd
   results/theta_sweep.parquet      chỉ sweep_theta
   results/throughput_curve.parquet chỉ throughput_curve
 ```

@@ -5,6 +5,7 @@ Mọi bảng ghi dạng **Parquet** (pyarrow), mỗi lượt chạy một thư m
 ```
 runs/<run_name>/
   meta/run_metadata.parquet
+  meta/shocks.parquet                (luôn ghi; rỗng khi shocks.enabled = false, H-30)
   observed/riders.parquet
   observed/sessions.parquet
   observed/orders.parquet
@@ -45,9 +46,9 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | theta | float64 | NaN nếu không áp dụng |
 | seed | int32 | |
 | world_seed | int64 | |
-| budget_B_usd | float64 | NaN nếu không áp ngân sách |
+| budget_B_vnd | float64 | NaN nếu không áp ngân sách |
 | budget_pilot_seed | int64 | seed của lượt pilot all_on dùng tính B (= `run_seed + budget.pilot_seed_offset`); −1 nếu không có pilot (T-40, Q23) |
-| budget_pilot_spent_usd | float64 | chi tiêu voucher của lượt pilot trên cửa sổ gốc, B = `fraction` × số này / số kỳ; NaN nếu không có pilot (T-40, Q23) |
+| budget_pilot_spent_vnd | float64 | chi tiêu voucher của lượt pilot trên cửa sổ gốc, B = `fraction` × số này / số kỳ; NaN nếu không có pilot (T-40, Q23) |
 | kappa | float64 | NaN nếu không áp dụng |
 | kappa_pilots | int32 | số lượt pilot κ auto đã chạy để ra `kappa`, gồm lượt κ = −∞ (H-21); 0 nếu không dùng κ auto. Thêm ngày 05/10: bộ dữ liệu sinh trước đó không có cột này |
 | window_start_s, window_end_s | float64 | cửa sổ đánh giá |
@@ -55,6 +56,21 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | n_truncated_orders | int32 | order bị cắt khi hết cool-down |
 | runtime_s | float64 | thời gian chạy thực |
 | created_at | string | ISO 8601 |
+
+## meta/shocks (một dòng mỗi biến động; rỗng khi `shocks.enabled = false`, H-30)
+
+Lịch biến động của lượt chạy, rút trước theo ngày (luồng SHOCK, H-30). Chính sách **không** đọc được bảng này; chỉ dùng để phân tích (chọn khung cho animation, tách theo biến động). Ghi ở H7.7.
+
+| Cột | Kiểu | Mô tả |
+|---|---|---|
+| day | int16 | |
+| kind | string | `day_demand` / `event` / `rain` / `attendance` |
+| cell | int16 | ô địa điểm với `event`; −1 = cả thành phố |
+| start_s, end_s | float64 | khoảng hiệu lực, giây từ đầu lượt chạy; cả ngày với `day_demand`, `attendance` |
+| demand_mult | float32 | hệ số nhân cầu (ô địa điểm với `event`); 1 nếu không áp |
+| ring1_mult | float32 | hệ số nhân cầu ở 6 ô kề với `event`; 1 nếu không áp |
+| speed_mult | float32 | hệ số nhân tốc độ; 1 nếu không áp |
+| n_drivers_off | int32 | số tài xế nghỉ (`attendance`: cả ngày; `rain`: suốt cơn mưa); 0 nếu không áp |
 
 ## observed/riders
 
@@ -75,8 +91,8 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | open_time_s | float64 | |
 | day, hour, slot, slot_of_day | int16 | |
 | pu_cell, do_cell | int16 | |
-| quoted_fare_usd | float32 | giá gốc p_s |
-| voucher_value_usd | float32 | 0 nếu không phát |
+| quoted_fare_vnd | float32 | giá gốc p_s |
+| voucher_value_vnd | float32 | 0 nếu không phát |
 | quoted_eta_min | float32 | |
 | no_supply | bool | không có xe trong giới hạn khi báo giá |
 | promo_on_cell | bool | trạng thái khuyến mãi của ô trong slot |
@@ -112,11 +128,11 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | dropoff_time_s | float64 | NaN nếu không hoàn thành |
 | trip_time_min | float32 | |
 | trip_km | float32 | quãng đường theo detour |
-| gross_fare_usd | float32 | |
-| voucher_value_usd | float32 | |
-| net_fare_usd | float32 | gross − voucher |
-| driver_pay_usd | float32 | (1 − commission) × gross |
-| platform_profit_usd | float32 | net − driver_pay; 0 nếu không hoàn thành |
+| gross_fare_vnd | float32 | |
+| voucher_value_vnd | float32 | |
+| net_fare_vnd | float32 | gross − voucher |
+| driver_pay_vnd | float32 | (1 − commission) × gross |
+| platform_profit_vnd | float32 | net − driver_pay; 0 nếu không hoàn thành |
 | status | string | Completed / Abandoned / Cancelled / Truncated |
 | cancel_reason | string | "" / rider_en_route |
 | in_window | bool | request_time trong cửa sổ đánh giá |
@@ -135,7 +151,7 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | utilization | float32 | (E+O)/(I+E+O) |
 | mean_pickup_eta_min | float32 | NaN nếu không có ghép |
 | n_sessions, n_offers, n_requests, n_matched, n_completed, n_abandoned, n_cancelled | int32 | đếm theo thời điểm sự kiện và ô đón (T-15): `n_sessions/n_offers/n_requests` theo open_time; `n_matched` theo matched_time; `n_abandoned/n_cancelled` theo thời điểm hủy; `n_completed` theo dropoff_time |
-| voucher_spent_usd | float32 | voucher của order hoàn thành trong slot, theo ô đón |
+| voucher_spent_vnd | float32 | voucher của order hoàn thành trong slot, theo ô đón |
 | promo_on | bool | trạng thái trong slot này |
 | cell_propensity | float32 | |
 | assign_mechanism_cell | string | |
@@ -173,9 +189,9 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | seed | int32 | |
 | world_seed | int64 | để gộp nhiều thế giới (T-40, Q18) |
 | N_completed | int64 | **N(π)**, đơn tạo trong cửa sổ |
-| V_profit_usd | float64 | **V(π)** |
-| voucher_spent_usd | float64 | |
-| budget_B_usd | float64 | |
+| V_profit_vnd | float64 | **V(π)** |
+| voucher_spent_vnd | float64 | |
+| budget_B_vnd | float64 | |
 | n_sessions, n_requests, n_abandoned, n_cancelled | int64 | trong cửa sổ |
 | mean_pickup_eta_min | float64 | |
 | share_cells_off | float64 | tỷ lệ (ô, slot) bị tắt |

@@ -39,23 +39,23 @@ def is_oracle(spec: str) -> bool:
 
 
 def make_oracle_score(cfg: Config, hidden: OracleHiddenView) -> ScoreFn:
-    """Oracle score (decisions T-40, KN 3.1): extra bookings per expected voucher USD of each session,
+    """Oracle score (decisions T-40, KN 3.1): extra bookings per expected voucher đồng of each session,
     ``(p1 - p0) / (v * p1)``, with ``p1``/``p0`` the booking probabilities of the choice model (spec §4.4) at
-    the quoted fare and ETA with and without the voucher ``v = pricing.voucher_cents(cfg, fare) / 100`` (the
+    the quoted fare and ETA with and without the voucher ``v = pricing.voucher_dong(cfg, fare) / DONG_PER_VND`` (the
     voucher the session would really get, H-06). ``v = 0`` gives NaN, so the session is not offered.
 
     Fixed-market oracle: it knows every rider's coefficients but not the externality on other riders, and it
     uses the booking probability in place of the completion probability. Upper bound of policies that rank
     by individual tau only. Only ``make_policy`` builds it (needs the hidden view); ``load_score_fn`` refuses it.
     """
-    from sim.budget import CENTS_PER_USD        # local imports: sim.choice -> sim.pricing -> sim.policies.base
+    from sim.budget import DONG_PER_VND        # local imports: sim.choice -> sim.pricing -> sim.policies.base
     from sim.choice import request_probability
-    from sim.pricing import voucher_cents
+    from sim.pricing import voucher_dong
 
     def oracle(batch: SessionBatch, s_hat: np.ndarray) -> np.ndarray:
-        fare = batch.quoted_fare_usd.astype(np.float64)
+        fare = batch.quoted_fare_vnd.astype(np.float64)
         eta = batch.quoted_eta_min.astype(np.float64)
-        v = voucher_cents(cfg, fare) / CENTS_PER_USD
+        v = voucher_dong(cfg, fare) / DONG_PER_VND
         alpha, beta_price, beta_eta, delta = hidden.coefficients_of(batch.rider_id)
         p1 = request_probability(alpha, beta_price, beta_eta, delta, fare, v, eta)
         p0 = request_probability(alpha, beta_price, beta_eta, delta, fare, 0.0, eta)

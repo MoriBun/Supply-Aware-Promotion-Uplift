@@ -3,9 +3,12 @@
 One simulated day of every policy must reproduce, number for number, the output of
 the code before Sprint 7 once every key added in S7 is set to its old value.
 
-* Baseline: ``tests/fixtures/regression_s7.json``, written on commit 1c2eb85 (the last
-  commit before any S7 change) by ``python -m tests.test_regression_s7 --write``. It is
-  **never** regenerated during S7; a mismatch is a real behaviour change.
+* Baseline: ``tests/fixtures/regression_s7.json``, first written on commit 1c2eb85 (the last
+  commit before any S7 change) by ``python -m tests.test_regression_s7 --write``, then written
+  **once more** in B9 after money moved from USD to VND (decisions H-33, amending T-39 b): the
+  B9 unit-equivalence check showed identical counts and money columns equal to 100 x the old
+  USD values within 1e-6, but float rounding of the booking logit changes the hashes. It is not
+  regenerated again in S7; a mismatch is a real behaviour change.
 * Pinned config: ``tests/fixtures/regression_s7_pinned.yaml`` = ``config/default.yaml``
   of that commit, overlaid on the current ``default.yaml``. The B9 contract adds the old
   values of the new keys (``matching.ring_tiebreak: lowest_id``, ``cancel.exact_time:
@@ -172,7 +175,7 @@ if __name__ == "__main__":
     b = write_baseline(a.out)
     for n, r in b["runs"].items():
         pr = pd.read_parquet(a.out / n / "results" / "policy_results.parquet")
-        print(f"{n}: N_completed={int(pr['N_completed'].iloc[0])} spent={float(pr['voucher_spent_usd'].iloc[0]):.2f} "
+        print(f"{n}: N_completed={int(pr['N_completed'].iloc[0])} spent={float(pr['voucher_spent_vnd'].iloc[0]):.2f} "
               f"tables={len(r['tables'])}")
     print("wrote", BASELINE.relative_to(ROOT), "from", b["git_sha"])
     sys.exit(0)

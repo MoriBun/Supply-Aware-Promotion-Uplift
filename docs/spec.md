@@ -52,7 +52,7 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
 
 ## 2. Quy ước chung
 
-- **Đơn vị:** thời gian nội bộ tính bằng **giây**, kiểu `float64` (thời điểm) hoặc `int64` (chỉ số tick); tiền tính bằng **USD**; quãng đường tính bằng **km**. ETA công bố cho rider đổi sang phút.
+- **Đơn vị:** thời gian nội bộ tính bằng **giây**, kiểu `float64` (thời điểm) hoặc `int64` (chỉ số tick); tiền tính bằng **VND** (H-33; trước S7 là USD); quãng đường tính bằng **km**. ETA công bố cho rider đổi sang phút.
 - **Chỉ số thời gian:**
   - `tick = t // tick_s`;
   - `slot = t // (slot_min*60)`, tính từ đầu lượt chạy;
@@ -191,7 +191,7 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 - Hệ số hành vi, với `zf` là x_freq chuẩn hóa z-score:
   ```
   alpha_i      = alpha0 + alpha_freq*zf + alpha_u*u_latent + N(0, alpha_noise_sd)
-  beta_price_i = -beta_price_per_usd * beta_price_seg_mult[seg] * exp(N(0, beta_price_noise_sd))
+  beta_price_i = -(beta_price_per_kvnd / 1000) * beta_price_seg_mult[seg] * exp(N(0, beta_price_noise_sd))   # trên mỗi đồng
   beta_eta_i   = -beta_eta_per_min * exp(N(0, beta_eta_noise_sd))
   delta_i      = delta0 + delta_u*u_latent + delta_seg[seg] + N(0, delta_noise_sd)
   max_wait_i   ~ LogNormal(mu, max_wait_sigma), mu = ln(max_wait_mode_min) + max_wait_sigma²   # mode = 5 phút
@@ -199,9 +199,9 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 
 ### 4.3 M3 PricingAndPromotion (`pricing.py`, `policies/`)
 
-**Giá gốc:** `p_s = base_fare_usd + per_min_usd * T[pu, do, h]`.
+**Giá gốc** (H-33): `p_s = open_fare_vnd + per_km_vnd * max(0, km − open_km) + per_min_vnd * T_sau + platform_fee_vnd`, với `T_sau = T[pu, do, h] * max(0, km − open_km) / km` (phần thời gian sau `open_km`; bằng `T` khi `open_km = 0`). Từ B9 đến H7.8 chỉ có `open_fare_vnd + per_min_vnd * T` (các khóa km và phí nền tảng phải bằng 0, engine từ chối giá trị khác). Bảng giá GrabCar Hà Nội và cách chia lợi nhuận có phí nền tảng: `docs/de_xuat_tham_so_ha_noi.md` mục B4.
 
-**Voucher nếu được phát:** `v_s = pct_of_fare * p_s`, chặn trên bởi `max_usd` nếu có. Giá thực trả `net = p_s - v_s`.
+**Voucher nếu được phát:** `v_s = pct_of_fare * p_s`, chặn trên bởi `max_vnd` nếu có. Giá thực trả `net = p_s - v_s`.
 
 **Sổ ngân sách `BudgetLedger`** (khi `budget.enforce` bật):
 - `reserved`: giữ khi phát voucher ở bước 5; nhả ở bước 6 nếu rider không đặt.
@@ -210,7 +210,7 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 - Chỉ phát voucher khi `spent + committed + reserved + v_s ≤ B`. Nếu không đủ thì session ghi `budget_blocked = True`.
 - Bất biến: `spent + committed + reserved ≤ B` tại mọi thời điểm.
 - **Kỳ ngân sách** (T-03): dài `P = min(1440, window_min)` phút, neo theo cửa sổ đánh giá: kỳ d là `[window_start + d*P, window_start + (d+1)*P)`. Mỗi kỳ có bộ đếm `spent/committed/reserved` riêng và cùng mức B. Một reservation thuộc kỳ của `open_time` session và giữ nguyên kỳ đó khi order kết thúc trong cool-down; bất biến giữ theo từng kỳ. Warm-up là kỳ −1 với ngân sách `B * warmup_min / P`, để trạng thái đầu cửa sổ phản ánh chính sách; chi tiêu warm-up không tính vào đánh giá.
-- Ledger khóa theo `session_id`, tiền tính bằng **cent nguyên** để bất biến chính xác.
+- Ledger khóa theo `session_id`, tiền tính bằng **đồng nguyên** (`DONG_PER_VND = 1`, H-33; trước S7 là cent của USD) để bất biến chính xác.
 
 **Tính B khi `mode = fraction_of_all_on`:**
 1. Chạy pilot `all_on` với seed `pilot_seed_offset`, không áp ngân sách.
@@ -339,7 +339,7 @@ Trong mỗi slot, sau bước 9 của **mỗi tick**, cộng dồn cho từng ô
 Cuối slot, lấy trung bình theo số tick để có `I, E, O, W`, rồi tính:
 - `slack = I / E` [Castillo et al. 2025]. Khi E = 0: `+inf` nếu I > 0; **0 nếu I = 0** (ô không có xe rảnh nào thì là ô căng, H-14).
 - `utilization = (E + O) / (I + E + O)`; nếu mẫu số = 0 thì NaN. Xe `repositioning` và `offline` không tính (T-09).
-- Đếm trong slot theo **thời điểm sự kiện** và **ô đón** (T-15): `n_sessions`, `n_offers`, `n_requests` theo `open_time`; `n_matched` và `mean_pickup_eta_min` theo `matched_time`; `n_abandoned`, `n_cancelled` theo thời điểm hủy; `n_completed`, `voucher_spent_usd` theo `dropoff_time`.
+- Đếm trong slot theo **thời điểm sự kiện** và **ô đón** (T-15): `n_sessions`, `n_offers`, `n_requests` theo `open_time`; `n_matched` và `mean_pickup_eta_min` theo `matched_time`; `n_abandoned`, `n_cancelled` theo thời điểm hủy; `n_completed`, `voucher_spent_vnd` theo `dropoff_time`.
 - Giá trị trễ để làm feature: `slack_lag_slot` (slot k-1) và `slack_lag_day` (slot k-96; NaN nếu chưa có).
 
 Snapshot của slot k được **công bố** sau khi slot k kết thúc. Chính sách ở slot k+1 chỉ thấy các snapshot ≤ k. Cài đặt như một hàng đợi, và có assert kiểm tra thứ tự này.

@@ -4,7 +4,7 @@
 # Quy ước:
 #   - Mọi hằng số dùng trong code phải nằm ở file này. Không hard-code.
 #   - Đơn vị ghi trong tên khóa: _s (giây), _min (phút), _h (giờ),
-#     _km, _kmh, _usd. Không có hậu tố = không thứ nguyên.
+#     _km, _kmh, _vnd. Không có hậu tố = không thứ nguyên.
 #   - Mỗi tham số có chú thích nguồn:
 #       [report]  báo cáo thiết kế (Simulation_design_fix.pdf)
 #       [data]    báo cáo dữ liệu NYC / số liệu mentor nêu trong review
@@ -83,7 +83,8 @@ riders:
   alpha_freq: 0.4                 # hệ số với x_freq đã chuẩn hóa [assume]
   alpha_u: 0.4                    # hệ số với u_latent (tạo confounding) [assume]
   alpha_noise_sd: 0.3             # [assume]
-  beta_price_per_usd: 0.10        # |β_p| trung vị, dấu âm trong công thức [assume]
+  beta_price_per_kvnd: 1.0        # |β_p| trung vị trên mỗi 1.000đ, dấu âm trong công thức [assume]
+                                  # B9: giá trị cũ 0,10/USD viết theo đơn vị mới (1 USD = 100 đ); H7.8 đặt 0,022 (ĐX B3)
   beta_price_seg_mult: [1.0, 1.6, 0.6]   # nhân theo x_segment [assume]
   beta_price_noise_sd: 0.25       # log-normal quanh trung vị [assume]
   beta_eta_per_min: 0.10          # |β_η| trung vị [assume]
@@ -100,20 +101,25 @@ riders:
 # M3 Pricing & voucher
 # ---------------------------------------------------------------------
 pricing:
-  base_fare_usd: 3.0              # a_f [assume]
-  per_min_usd: 1.70               # b_f, theo T[pu,do,h] tính bằng phút [hiệu chỉnh P3, H-17: giá TB 19,0 USD; trước 1,4]
-  target_mean_fare_usd: 19.1      # mục tiêu hiệu chỉnh a_f, b_f (±10%) [data]
+  # B9 (decisions H-33): tiền tính bằng VND, sổ ngân sách bằng đồng nguyên. Các giá trị dưới đây là
+  # giá trị cũ viết theo đơn vị mới (1 USD = 100 đ) để kết quả trùng bản cũ; H7.8 đặt bảng giá
+  # GrabCar Hà Nội: 28.473đ cho 2 km đầu + 9.818đ/km + 442đ/phút sau 2 km + phí nền tảng 10.000đ (ĐX B4).
+  open_fare_vnd: 300.0            # giá mở cửa (cho open_km đầu) [B9: 3 USD]
+  open_km: 0.0                    # số km tính trong giá mở cửa [B9: 0]
+  per_km_vnd: 0.0                 # mỗi km sau open_km [B9: 0]
+  per_min_vnd: 170.0             # mỗi phút, theo T[pu,do,h] [B9: 1,70 USD; hiệu chỉnh P3, H-17]
+  platform_fee_vnd: 0.0           # phí nền tảng mỗi chuyến, thuộc nền tảng [B9: 0]
   commission_rate: 0.24           # tài xế nhận 76% giá gốc [data]
 
 voucher:
   pct_of_fare: 0.20               # voucher = 20% giá gốc [data]
-  max_usd: null                   # không trần
+  max_vnd: null                   # không trần
 
 budget:
   enforce: true                   # false cho các lượt GTE / thí nghiệm [report]
   mode: fraction_of_all_on        # B = fraction * chi tiêu voucher khi bật mọi ô, mọi rider
   fraction: 0.30                  # [assume]
-  fixed_usd: null                 # dùng khi mode = fixed
+  fixed_vnd: null                 # dùng khi mode = fixed
   pilot_seed_offset: 9000         # seed của lượt pilot (không dùng để đánh giá)
 
 # ---------------------------------------------------------------------
@@ -154,6 +160,9 @@ policy:
 matching:
   max_pickup_eta_min: 30.0        # rộng để WGC xuất hiện [report] [pending]
   max_ring: null                  # null = mở rộng đến hết lưới hoặc chạm max_pickup_eta
+  ring_tiebreak: lowest_id        # các ô cùng vành hòa về T: lowest_id = ô id nhỏ nhất (spec §4.5 cũ);
+                                  # most_idle = ô nhiều xe rảnh nhất, hòa thì id nhỏ (KN 2.1)
+                                  # [decisions H-29; H7.2 đổi mặc định sang most_idle khi cài xong]
 
 # ---------------------------------------------------------------------
 # M7 Cancellation
@@ -164,6 +173,9 @@ cancel:
   base_per_min: 0.005             # [assume]
   slope_per_min2: 0.004           # [assume]
   eta_free_min: 3.0               # [assume]
+  exact_time: false               # true = hủy ở đúng t_cancel = matched_time + 60·e_cancel/h, kể cả khi
+                                  # t_cancel rơi vào tick xe tới (KN 2.2); false = chỉ xét ở bước 8 (cũ)
+                                  # [decisions H-29; H7.3 đổi mặc định sang true khi cài xong]
 
 # ---------------------------------------------------------------------
 # M8 SupplyModel
@@ -182,7 +194,7 @@ supply:
   shift_len_sd_h: 1.5
   shift_len_clip_h: [4.0, 11.0]
   early_exit_enabled: false       # rời sớm theo thu nhập — MẶC ĐỊNH TẮT [report]
-  reservation_wage_usd_h: 20.0    # chỉ dùng khi bật [assume]
+  reservation_wage_vnd_h: 2000.0  # chỉ dùng khi bật [assume; B9: 20 USD/giờ theo đơn vị mới]
 
 # ---------------------------------------------------------------------
 # M9 Repositioning (quy tắc cố định, không nhìn cầu hiện tại)
@@ -202,6 +214,34 @@ experiment:
   burnin_min: 15                  # bỏ đầu mỗi block khi ước lượng [paper: Hu & Wager 2022]
   p_on: 0.5
   budget_enforce: false           # thí nghiệm không áp ngân sách [report]
+
+# ---------------------------------------------------------------------
+# Biến động tự nhiên (thế giới W1) [decisions H-30; cài ở H7.4; giá trị và nguồn: docs/de_xuat_tham_so_ha_noi.md B5]
+#   Tắt (W0) thì simulator chạy đúng như cũ. Bật bằng overlay config/world_w1.yaml.
+#   Lịch biến động rút trước theo ngày qua luồng SHOCK (seed theo run_seed, khóa không chứa
+#   gì về chính sách): mọi chính sách gặp cùng một biến động. Chính sách không đọc được lịch này.
+# ---------------------------------------------------------------------
+shocks:
+  enabled: false
+  day_demand:                     # tổng cầu mỗi ngày nhân hệ số ~ LogNormal, chuẩn hóa trung bình 1
+    sigma: 0.12                   # [data: NYC TLC 03/2024, hệ số biến thiên số chuyến theo ngày 12,8%]
+  events:                         # sự kiện ở địa điểm cố định; vị trí rút 1 lần theo world_seed (WorldPart.VENUES)
+    # mỗi dòng một loại: [số địa điểm, xác suất mỗi ngày, giờ tan từ, giờ tan đến,
+    #                     số phút cầu tăng, nhân cầu ô, nhân cầu vành kề]
+    venues:
+      - [2, 0.05, 21.5, 23.0, 60.0, 20.0, 3.0]   # sân vận động (Mỹ Đình ~40.000, Hàng Đẫy ~22.000 chỗ) [data; tần suất, hệ số: assume]
+      - [1, 0.43, 21.0, 24.0, 60.0, 2.0, 1.3]    # phố đi bộ Hồ Gươm, tối thứ Sáu–Chủ nhật (3/7) [data; hệ số: assume]
+  rain:                           # mưa chiều tối, cả thành phố
+    p_per_day: 0.31               # [data: Hà Nội ~114 ngày mưa/năm]
+    start_hour_range: [14.0, 19.0]  # [data: mưa giông chiều tối]
+    duration_h_range: [1.0, 3.0]  # [assume]
+    demand_mult: 1.25             # [paper: Brodeur & Nield 2018, +25% chuyến mỗi giờ mưa]
+    speed_mult: 0.85              # [paper: mưa lớn giảm tốc độ 7–18%]
+    driver_off_share: 0.10        # tài xế trong ca nghỉ suốt cơn mưa (đang chở thì nghỉ sau chuyến) [assume]
+  attendance:
+    p_work: 0.90                  # mỗi tài xế mỗi ngày đi làm với xác suất này, độc lập [assume]
+  shift_jitter:
+    sd_min: 20.0                  # giờ vào ca mỗi ngày lệch ~ N(0, sd) phút [assume]
 
 # ---------------------------------------------------------------------
 # M11 MarketMonitor
@@ -234,9 +274,18 @@ runner:
 calibration_targets:
   p_request_no_voucher: [0.13, 0.17]          # [data: 15%]
   request_uplift_surplus: [0.35, 0.70]        # +50% khi dư cung [data: bảng đề bài]
-  mean_gross_fare_usd: [17.2, 21.0]           # 19,1 ± 10% [data]
   share_cellslots_slack_below_0_35: [0.10, 0.35]  # có vùng căng thật
   share_cellslots_slack_above_1: [0.30, 0.80]     # có vùng dư thật
+  # [decisions H-31; đính chính một phần H-20; giá trị và nguồn: docs/de_xuat_tham_so_ha_noi.md mục C]
+  # giờ-xe chở khách của chuyến đặt trong giờ h / giờ cao nhất, trên all_off (định nghĩa như
+  # analysis/tlc_hourly.py, cột busy_real); NYC TLC 03/2024: 0,46 / 0,70 / 0,78, dải ± 0,15 [data]
+  busy_rel_h6: [0.31, 0.61]
+  busy_rel_h7: [0.55, 0.85]
+  busy_rel_h8: [0.63, 0.93]
+  mean_trip_km: [5.0, 8.0]                    # quãng đường TB chuyến hoàn thành [suy: chi tiêu Q&Me + bảng giá Grab]
+  trips_per_driver_day: [8.0, 18.0]           # chuyến hoàn thành / (fleet_size × số ngày cửa sổ), W0
+                                              # [suy: doanh thu GrabCar 20–35 triệu/tháng]
 
 performance:
-  max_seconds_per_sim_day: 30     # [report]
+  max_seconds_per_sim_day: 60     # A5-HN: ≤ 60 giây/ngày mô phỏng/một tiến trình trên quy mô Hà Nội
+                                  # [decisions H-34; trước là 30 giây cho thành phố 54 km², report]

@@ -16,7 +16,7 @@ def switchback_frame(tau_by_hour, *, units_per_hour=200, per_unit=40, base=0.3, 
         for u in range(units_per_hour):
             y = g.random(per_unit) < base + arm[u] * tau
             rows.append(pd.DataFrame({"hour": h, "unit": h * 10_000 + u, "arm": arm[u], "completed": y.astype(np.int8),
-                                      "in_burnin": False, "voucher_value_usd": voucher * arm[u]}))
+                                      "in_burnin": False, "voucher_value_vnd": voucher * arm[u]}))
     return pd.concat(rows, ignore_index=True)
 
 

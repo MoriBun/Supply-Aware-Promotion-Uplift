@@ -11,7 +11,7 @@ import math
 
 import numpy as np
 
-from sim.budget import BudgetLedger, usd_to_cents
+from sim.budget import BudgetLedger, vnd_to_dong
 from sim.engine import RunResult
 from sim.policies.base import SNAPSHOT_FIELDS, SessionBatch, SnapshotStore
 from sim.policies.fixed import FixedPolicy
@@ -36,14 +36,14 @@ class ForbiddenAccess:
         raise AssertionError(f"ctx.{self._name} must not be used here (accessed .{item})")
 
 
-def make_context(cfg, *, on: bool = False, budget_usd: float | None = None,
+def make_context(cfg, *, on: bool = False, budget_vnd: float | None = None,
                  enforce_budget: bool | None = False) -> SimContext:
     """A fresh ``SimContext`` on the stub world with a FixedPolicy; use it to call one step in a test."""
     from sim.engine import build_context  # local import: engine imports every module
 
     world = stub_world(cfg)
     return build_context(cfg, world, FixedPolicy(on, world.n_cells), Rng.from_config(cfg),
-                         budget_usd=budget_usd, enforce_budget=enforce_budget)
+                         budget_vnd=budget_vnd, enforce_budget=enforce_budget)
 
 
 def with_forbidden(ctx: SimContext, *fields: str) -> SimContext:
@@ -51,7 +51,7 @@ def with_forbidden(ctx: SimContext, *fields: str) -> SimContext:
     return dataclasses.replace(ctx, **{f: ForbiddenAccess(f) for f in fields})
 
 
-def make_batch(n: int, n_cells: int, *, fare_usd: float = 20.0, open_time_s: float = 3600.0,
+def make_batch(n: int, n_cells: int, *, fare_vnd: float = 2000.0, open_time_s: float = 3600.0,
                slot: int = 4, session_ids=None, pu_cell=None, x_freq=None) -> SessionBatch:
     """A batch of ``n`` quoted sessions with simple deterministic values."""
     ids = np.arange(n, dtype=np.int64) if session_ids is None else np.asarray(session_ids, dtype=np.int64)
@@ -71,7 +71,7 @@ def make_batch(n: int, n_cells: int, *, fare_usd: float = 20.0, open_time_s: flo
         x_freq=freq,
         x_tenure=np.full(n, 12.0, dtype=np.float32),
         x_segment=np.zeros(n, dtype=np.int8),
-        quoted_fare_usd=np.full(n, fare_usd, dtype=np.float32),
+        quoted_fare_vnd=np.full(n, fare_vnd, dtype=np.float32),
         quoted_eta_min=np.full(n, 3.0, dtype=np.float32),
         no_supply=np.zeros(n, dtype=bool),
         u_target=u.copy(), u_explore=u.copy(), u_explore_arm=u.copy(), u_score=u.copy(),
@@ -82,11 +82,11 @@ def stub_world(cfg) -> World:
     return build_world(cfg, Rng.from_config(cfg))
 
 
-def make_ledger(*, enforce: bool = True, budget_usd: float | None = 100.0, window_start_s: float = 3600.0,
+def make_ledger(*, enforce: bool = True, budget_vnd: float | None = 10000.0, window_start_s: float = 3600.0,
                 period_s: float = 86400.0, n_periods: int = 1, warmup_s: float = 3600.0) -> BudgetLedger:
     return BudgetLedger(
         enforce=enforce,
-        budget_cents=None if budget_usd is None else usd_to_cents(budget_usd),
+        budget_dong=None if budget_vnd is None else vnd_to_dong(budget_vnd),
         window_start_s=window_start_s, period_s=period_s, n_periods=n_periods, warmup_s=warmup_s,
     )
 
@@ -134,7 +134,7 @@ def fake_score(batch: SessionBatch, s_hat: np.ndarray) -> np.ndarray:
 def make_run_result(**overrides) -> RunResult:
     """A ``RunResult`` with every field defaulted to an empty all_off run."""
     base = dict(
-        policy="all_off", N_completed=0, V_profit_usd=0.0, voucher_spent_usd=0.0, budget_B_usd=NAN,
+        policy="all_off", N_completed=0, V_profit_vnd=0.0, voucher_spent_vnd=0.0, budget_B_vnd=NAN,
         n_sessions=0, n_requests=0, n_abandoned=0, n_cancelled=0, mean_pickup_eta_min=NAN,
         share_cells_off=1.0, n_switches_per_cell_day=0.0, mean_slack=float("inf"),
         completed_per_h=0.0, requests_per_h=0.0, abandon_rate=NAN, cancel_rate=NAN,
@@ -144,7 +144,7 @@ def make_run_result(**overrides) -> RunResult:
     return RunResult(**base)
 
 
-FAKE_VOUCHER_USD = 3.5   # voucher value of every offered session in the fake engine
+FAKE_VOUCHER_VND = 3.5   # voucher value of every offered session in the fake engine
 
 
 def fake_offered_share(cfg, policy) -> tuple[float, float]:
@@ -172,7 +172,7 @@ def fake_offered_share(cfg, policy) -> tuple[float, float]:
 
 
 def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bool = False,
-             budget_usd: float | None = None, enforce_budget: bool | None = None) -> RunResult:
+             budget_vnd: float | None = None, enforce_budget: bool | None = None) -> RunResult:
     """Deterministic stand-in for ``engine.run`` with a WGC-like throughput hump (docs/phan_cong.md T1.4, B4).
 
     Completed trips per hour rise with demand, peak when requests match the fleet's
@@ -206,10 +206,10 @@ def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bo
     n_requests = int(round(requests_per_h * window_h))
     n_completed = min(n_requests, int(round(completed_per_h * window_h)))
     n_abandoned = n_requests - n_completed
-    voucher = FAKE_VOUCHER_USD * n_completed * offered
+    voucher = FAKE_VOUCHER_VND * n_completed * offered
     enforce = cfg.budget.enforce if enforce_budget is None else bool(enforce_budget)
-    if enforce and budget_usd is not None:
-        voucher = min(voucher, float(budget_usd) * clock.n_periods)
+    if enforce and budget_vnd is not None:
+        voucher = min(voucher, float(budget_vnd) * clock.n_periods)
 
     n_offered = int(round(n_sessions * offered))
     lo = max(kappa, 0.0) if math.isfinite(kappa) else 0.0
@@ -224,8 +224,8 @@ def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bo
         "theta": theta, "kappa": kappa, "offered": offered,
     }
     return make_run_result(
-        policy=policy.name, N_completed=n_completed, V_profit_usd=5.0 * n_completed - voucher,
-        voucher_spent_usd=voucher, budget_B_usd=NAN if budget_usd is None else float(budget_usd),
+        policy=policy.name, N_completed=n_completed, V_profit_vnd=5.0 * n_completed - voucher,
+        voucher_spent_vnd=voucher, budget_B_vnd=NAN if budget_vnd is None else float(budget_vnd),
         n_sessions=n_sessions, n_requests=n_requests, n_abandoned=n_abandoned, n_cancelled=0,
         mean_pickup_eta_min=2.0 + 6.0 * x, share_cells_off=share_off,
         mean_slack=(1.0 / x) if x > 0 else float("inf"),
@@ -233,8 +233,8 @@ def fake_run(cfg, world, policy, rng, *, log_level: str = "minimal", profile: bo
         abandon_rate=(n_abandoned / n_requests) if n_requests else NAN, cancel_rate=0.0 if n_requests else NAN,
         window_start_s=float(clock.window_start_s), window_end_s=float(clock.window_end_s),
         sim_end_s=float(clock.window_end_s), runtime_s=0.001,
-        spent_by_period_usd=np.full(clock.n_periods, voucher / clock.n_periods), profile=markers,
-        offer_score=offer_score, offer_voucher_usd=np.full(n_offered, FAKE_VOUCHER_USD, dtype=np.float32),
+        spent_by_period_vnd=np.full(clock.n_periods, voucher / clock.n_periods), profile=markers,
+        offer_score=offer_score, offer_voucher_vnd=np.full(n_offered, FAKE_VOUCHER_VND, dtype=np.float32),
         offer_completed=(np.arange(n_offered) % 2 == 0),
     )
 

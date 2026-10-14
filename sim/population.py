@@ -28,6 +28,7 @@ class WorldPart(enum.IntEnum):
     CELL_WEIGHT = 1
     RIDERS = 2
     DRIVERS = 3
+    VENUES = 4         # event venues of shocks.events (decisions H-30): fixed by world_seed
 
 
 @dataclass
@@ -181,7 +182,8 @@ def _riders(cfg: Config, rng: Rng, cell_weight: np.ndarray) -> Riders:
 
     alpha = rc.alpha0 + rc.alpha_freq * zf + rc.alpha_u * u_latent + next(gens).normal(0.0, rc.alpha_noise_sd, n)
     seg_mult = np.asarray(rc.beta_price_seg_mult)[x_segment]
-    beta_price = -rc.beta_price_per_usd * seg_mult * np.exp(next(gens).normal(0.0, rc.beta_price_noise_sd, n))
+    # beta_price_per_kvnd is per 1.000đ; the logit takes the fare in đồng (decisions H-33).
+    beta_price = -(rc.beta_price_per_kvnd / 1000.0) * seg_mult * np.exp(next(gens).normal(0.0, rc.beta_price_noise_sd, n))
     beta_eta = -rc.beta_eta_per_min * np.exp(next(gens).normal(0.0, rc.beta_eta_noise_sd, n))
     delta = (rc.delta0 + rc.delta_u * u_latent + np.asarray(rc.delta_seg)[x_segment]
              + next(gens).normal(0.0, rc.delta_noise_sd, n))

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from sim import cancel, choice, demand, matching, reposition, supply, trips
-from sim.budget import BudgetLedger, LedgerState, usd_to_cents
+from sim.budget import DONG_PER_VND, BudgetLedger, LedgerState, vnd_to_dong
 from sim.config import Config
 from sim.monitor import MarketMonitor
 from sim.policies.base import Policy
@@ -38,9 +38,9 @@ class RunResult:
 
     policy: str
     N_completed: int
-    V_profit_usd: float
-    voucher_spent_usd: float
-    budget_B_usd: float
+    V_profit_vnd: float
+    voucher_spent_vnd: float
+    budget_B_vnd: float
     n_sessions: int
     n_requests: int
     n_abandoned: int
@@ -60,9 +60,9 @@ class RunResult:
     runtime_s: float
     kappa: float = NAN
     promo_on: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), dtype=bool))  # [n_slots, N]
-    spent_by_period_usd: np.ndarray = field(default_factory=lambda: np.zeros(0))
+    spent_by_period_vnd: np.ndarray = field(default_factory=lambda: np.zeros(0))
     offer_score: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float32))
-    offer_voucher_usd: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float32))
+    offer_voucher_vnd: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=np.float32))
     offer_completed: np.ndarray = field(default_factory=lambda: np.zeros(0, dtype=bool))
     profile: dict[str, float] = field(default_factory=dict)
     sessions: SessionBuffer | None = None      # log_level = "full" only
@@ -70,15 +70,33 @@ class RunResult:
     snapshots: list | None = None              # log_level = "full" only
 
 
-def build_context(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_usd: float | None = None,
+# S7 contract keys (decisions H-29, H-30) whose behaviour is not implemented yet: refuse rather than
+# silently run the old model. Each task removes its line when it implements the key.
+_NOT_YET = (
+    (lambda cfg: cfg.matching.ring_tiebreak != "lowest_id", "matching.ring_tiebreak = most_idle (task H7.2)"),
+    (lambda cfg: cfg.cancel.exact_time, "cancel.exact_time = true (task H7.3)"),
+    (lambda cfg: cfg.shocks.enabled, "shocks.enabled = true (task H7.4)"),
+    (lambda cfg: cfg.pricing.open_km != 0 or cfg.pricing.per_km_vnd != 0 or cfg.pricing.platform_fee_vnd != 0,
+     "pricing.open_km / per_km_vnd / platform_fee_vnd != 0 (task H7.8)"),
+)
+
+
+def _check_contract_keys(cfg: Config) -> None:
+    for pending, what in _NOT_YET:
+        if pending(cfg):
+            raise NotImplementedError(f"{what} is part of the S7 contract but not implemented yet")
+
+
+def build_context(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget_vnd: float | None = None,
                   enforce_budget: bool | None = None) -> SimContext:
     """Fresh state for a run (also used by unit tests to call a single step)."""
+    _check_contract_keys(cfg)
     clock = Clock.from_config(cfg)
     n_cells = world.n_cells
     enforce = cfg.budget.enforce if enforce_budget is None else bool(enforce_budget)
     ledger = BudgetLedger(
         enforce=enforce,
-        budget_cents=None if budget_usd is None else usd_to_cents(budget_usd),
+        budget_dong=None if budget_vnd is None else vnd_to_dong(budget_vnd),
         window_start_s=clock.window_start_s, period_s=clock.period_s,
         n_periods=clock.n_periods, warmup_s=clock.warmup_s,
     )
@@ -92,12 +110,12 @@ def build_context(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget
 
 
 def run(cfg: Config, world: World, policy: Policy, rng: Rng, *, log_level: str = "minimal",
-        profile: bool = False, budget_usd: float | None = None, enforce_budget: bool | None = None) -> RunResult:
+        profile: bool = False, budget_vnd: float | None = None, enforce_budget: bool | None = None) -> RunResult:
     """Simulate one run: warm-up, evaluation window, cool-down; return the aggregates."""
     if log_level not in ("minimal", "full"):
         raise ValueError("log_level must be 'minimal' or 'full'")
     t_wall = time.perf_counter()
-    ctx = build_context(cfg, world, policy, rng, budget_usd=budget_usd, enforce_budget=enforce_budget)
+    ctx = build_context(cfg, world, policy, rng, budget_vnd=budget_vnd, enforce_budget=enforce_budget)
     clock, ledger, layer, monitor = ctx.clock, ctx.ledger, ctx.layer, ctx.monitor
     supply.init_drivers(ctx)
 
@@ -153,7 +171,7 @@ def run(cfg: Config, world: World, policy: Policy, rng: Rng, *, log_level: str =
 
     n_truncated = _truncate_open_orders(ctx)
     ledger.check_invariant()
-    result = _aggregate(ctx, policy, sim_end_s, n_truncated, budget_usd, sum_idle_ticks, sum_enroute_ticks)
+    result = _aggregate(ctx, policy, sim_end_s, n_truncated, budget_vnd, sum_idle_ticks, sum_enroute_ticks)
     result.runtime_s = time.perf_counter() - t_wall
     result.profile = dict(ctx.profile) if profile else {}
     if log_level == "full":
@@ -178,7 +196,7 @@ def _truncate_open_orders(ctx: SimContext) -> int:
     return int(len(idx))
 
 
-def _aggregate(ctx: SimContext, policy: Policy, sim_end_s: float, n_truncated: int, budget_usd: float | None,
+def _aggregate(ctx: SimContext, policy: Policy, sim_end_s: float, n_truncated: int, budget_vnd: float | None,
                sum_idle_ticks: float, sum_enroute_ticks: float) -> RunResult:
     clock = ctx.clock
     sessions, orders = ctx.sessions, ctx.orders
@@ -216,9 +234,9 @@ def _aggregate(ctx: SimContext, policy: Policy, sim_end_s: float, n_truncated: i
     return RunResult(
         policy=policy.name,
         N_completed=n_completed,
-        V_profit_usd=float(orders.col("platform_profit_usd")[completed].sum()),
-        voucher_spent_usd=float(orders.col("voucher_value_usd")[completed].sum()),
-        budget_B_usd=NAN if budget_usd is None else float(budget_usd),
+        V_profit_vnd=float(orders.col("platform_profit_vnd")[completed].sum()),
+        voucher_spent_vnd=float(orders.col("voucher_value_vnd")[completed].sum()),
+        budget_B_vnd=NAN if budget_vnd is None else float(budget_vnd),
         n_sessions=int(s_in.sum()),
         n_requests=n_requests,
         n_abandoned=int((o_in & (o_status == int(OrderStatus.ABANDONED))).sum()),
@@ -237,9 +255,9 @@ def _aggregate(ctx: SimContext, policy: Policy, sim_end_s: float, n_truncated: i
         n_truncated_orders=n_truncated,
         runtime_s=NAN,
         promo_on=promo,
-        spent_by_period_usd=ctx.ledger.spent_by_period_usd(),
+        spent_by_period_vnd=ctx.ledger.spent_by_period_vnd(),
         offer_score=sessions.col("score")[offered].astype(np.float32),
-        offer_voucher_usd=(sessions.col("voucher_cents")[offered] / 100.0).astype(np.float32),
+        offer_voucher_vnd=(sessions.col("voucher_dong")[offered] / DONG_PER_VND).astype(np.float32),
         offer_completed=offer_completed,
     )
 

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import numpy as np
 
+from sim.budget import DONG_PER_VND
 from sim.config import Config
 from sim.policies.base import CellDecision, LookAheadError, SnapshotStore, SnapshotView
 from sim.state import CellCounters, Clock, SlotCounters
@@ -72,10 +73,10 @@ class MarketMonitor:
         np.add.at(acc.n_cancelled, pu_cell, 1)
 
     @staticmethod
-    def on_completed(acc: SlotCounters, pu_cell, voucher_cents) -> None:
+    def on_completed(acc: SlotCounters, pu_cell, voucher_dong) -> None:
         """Step 1: orders completed this tick with the voucher they carried (by ``dropoff_time``)."""
         np.add.at(acc.n_completed, pu_cell, 1)
-        np.add.at(acc.voucher_spent_cents, pu_cell, voucher_cents)
+        np.add.at(acc.voucher_spent_dong, pu_cell, voucher_dong)
 
     # --- per slot --------------------------------------------------------------
 
@@ -132,7 +133,7 @@ class MarketMonitor:
             "n_requests": acc.n_requests.copy(), "n_matched": acc.n_matched.copy(),
             "n_completed": acc.n_completed.copy(), "n_abandoned": acc.n_abandoned.copy(),
             "n_cancelled": acc.n_cancelled.copy(),
-            "voucher_spent_usd": (acc.voucher_spent_cents / 100.0).astype(np.float32),
+            "voucher_spent_vnd": (acc.voucher_spent_dong / DONG_PER_VND).astype(np.float32),
             "promo_on": promo_on, "cell_propensity": cell_prop, "assign_mechanism_cell": mech,
             "cluster_id": cluster, "block": full(block, np.int32), "in_burnin": full(burnin, bool),
             "slack_lag_slot": lag_slot, "slack_lag_day": lag_day,

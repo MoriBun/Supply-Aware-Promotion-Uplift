@@ -199,7 +199,7 @@ def explore_data(n=60_000, seed=2):
     tau_true = np.array([0.02, 0.06, 0.12])[seg]                       # effect depends on the segment only
     y = (gen.random(n) < 0.10 + arm * tau_true).astype(np.int8)
     sessions = pd.DataFrame({"rider_id": rid, "arm": arm, "assign_mechanism": "explore", "budget_blocked": False,
-                             "voucher_value_usd": np.where(arm == 1, 4.0, 0.0).astype(np.float32)})
+                             "voucher_value_vnd": np.where(arm == 1, 4.0, 0.0).astype(np.float32)})
     return sessions, riders, y
 
 
@@ -210,7 +210,7 @@ def test_fit_recovers_the_effect_by_segment():
     assert tau.shape == (3, 3) and table["n_treated"] + table["n_control"] == len(sessions)
     np.testing.assert_allclose(tau.mean(axis=1), [0.02, 0.06, 0.12], atol=0.012)
     assert table["overall_effect"] == pytest.approx(np.mean([0.02, 0.06, 0.12]), abs=0.01)
-    cost = np.asarray(table["cost_per_offer_usd"])
+    cost = np.asarray(table["cost_per_offer_vnd"])
     np.testing.assert_allclose(cost.mean(axis=1), 4.0 * (0.10 + np.array([0.02, 0.06, 0.12])), atol=0.06)
 
 
@@ -227,7 +227,7 @@ def test_fit_uses_only_the_explore_slice():
 
 def test_saved_baseline_table_is_well_formed():
     table = json.loads(scores.BASELINE_PATH.read_text(encoding="utf-8"))
-    tau, cost = np.asarray(table["tau"]), np.asarray(table["cost_per_offer_usd"])
+    tau, cost = np.asarray(table["tau"]), np.asarray(table["cost_per_offer_vnd"])
     assert tau.shape == cost.shape == (3, 3) and len(table["x_freq_edges"]) == 2
     assert np.isfinite(tau).all() and (cost > 0).all()
     assert table["outcome"] == "completed" and table["run_id"].startswith("generate-")
@@ -242,7 +242,7 @@ def test_score_functions_load_by_spec_and_read_only_rider_features(spec):
     out = score_batch(fn, batch, np.full(9, np.nan))
     assert out.shape == (9,) and out.dtype == np.float32 and np.isfinite(out).all()
     np.testing.assert_array_equal(out, score_batch(fn, batch, np.arange(9, dtype=float)))     # ignores s_hat
-    other = dataclasses.replace(batch, quoted_fare_usd=batch.quoted_fare_usd * 3, pu_cell=batch.pu_cell[::-1].copy(),
+    other = dataclasses.replace(batch, quoted_fare_vnd=batch.quoted_fare_vnd * 3, pu_cell=batch.pu_cell[::-1].copy(),
                                 u_score=np.zeros(9))
     np.testing.assert_array_equal(out, score_batch(fn, other, np.full(9, np.nan)))            # only x_freq, x_segment
     edges, tau, cost = scores.load_table()

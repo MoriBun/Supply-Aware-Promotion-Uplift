@@ -109,7 +109,7 @@ def test_code_columns_are_strings(generated):
     assert "Completed" in set(orders["status"].unique())
     assert set(orders["cancel_reason"].unique()) <= set(CANCEL_REASON_NAMES.values())
     assert set(snaps["assign_mechanism_cell"].unique()) <= set(MECHANISM_NAMES.values()) | {""}
-    assert (sessions.loc[sessions["arm"] == 1, "voucher_value_usd"] > 0).all()
+    assert (sessions.loc[sessions["arm"] == 1, "voucher_value_vnd"] > 0).all()
 
 
 def test_values_round_trip_from_the_buffers(generated):
