@@ -1,6 +1,6 @@
 # Đề xuất tham số theo thị trường Hà Nội (bản cuối)
 
-Ngày: 14/10/2026 · Người soạn: Hoàng · Trạng thái: **bản cuối, chờ Tình duyệt**. File này là đầu vào để sửa `docs/ke_hoach_sua_v3.md` và `docs/phan_cong_v3.md`.
+Ngày: 14/10/2026 · Người soạn: Hoàng; Tình rà soát và bổ sung chiều 14/10 (mục B2 đội xe, B3 `n_riders`, B4 lợi nhuận, B5 sân vận động, B7, B8, C thứ tự ưu tiên, E thời gian chạy và dự đoán ghi trước) · Trạng thái: **bản cuối, hai người duyệt trong PR B9**. File này là đầu vào để sửa `docs/ke_hoach_sua_v3.md` và `docs/phan_cong_v3.md`.
 
 **Bối cảnh:** mentor nhận xét thành phố và ô hiện tại hơi nhỏ, gợi ý ô cỡ một phường trung tâm. Nhóm chọn ô H3 độ phân giải 7 và quy mô nội thành Hà Nội. Đây là bản cuối của đề tài, nên mọi tham số đổi **một lần**, trước khi hiệu chỉnh (S8) và sinh dữ liệu.
 
@@ -57,7 +57,7 @@ Hệ quả, tính ra từ các dòng trên:
 | `supply.shift_len_mean_h` | 8,0 | **11,2** | [data] khảo sát: tài xế ô tô công nghệ làm 11,2 giờ/ngày (xe máy 9,2) |
 | `supply.shift_len_sd_h` | 1,5 | **2,0** | [assume] |
 | `supply.shift_len_clip_h` | [4, 11] | **[4, 14]** | [assume] |
-| `supply.fleet_size` | 240 | **1.000** | [hiệu chỉnh]. Điểm xuất phát giữ số giờ-xe trên mỗi km² của mô hình cũ: 240 × 8 giờ × 315/54 ÷ 11,2 giờ ≈ 1.000. Tham chiếu: năm 2018 cả Hà Nội có ~15.000 ô tô công nghệ được cấp phép [data] |
+| `supply.fleet_size` | 240 | **1.300** | [hiệu chỉnh]. Giữ số giờ-xe trên mỗi km² của mô hình cũ cho 1.000: 240 × 8 giờ × 315/54 ÷ 11,2 giờ ≈ 1.000. Nhưng 1.000 **vi phạm ngay** chỉ tiêu chuyến/tài xế/ngày (mục C): mô hình cũ hoàn thành ~3.944 chuyến/ngày với 240 xe ca 8 giờ (16,4 chuyến/xe); cầu mới ×5,8 cho ~23.000 chuyến/ngày, chia 1.000 xe là 23 chuyến/xe, trên dải [8; 18]. Xuất phát 1.300 cho ~17,7 chuyến/xe, nằm trong dải; S8 chỉnh tiếp cùng độ căng. Tham chiếu: năm 2018 cả Hà Nội có ~15.000 ô tô công nghệ được cấp phép [data], nội thành 315 km² chiếm cỡ 1/3 đến 1/2 số đó, nên 1.300–1.500 xe hoạt động đồng thời là cùng bậc |
 | `supply.shift_start_mixture` | | giữ, rồi hiệu chỉnh | [hiệu chỉnh] theo tỷ lệ xe bận lúc 6–8h (mục C) |
 
 ### B3. Cầu và khách
@@ -66,6 +66,7 @@ Hệ quả, tính ra từ các dòng trên:
 |---|---|---|---|
 | `demand.base_sessions_per_cell_h` | 35 | **124** | [hiệu chỉnh] giữ mật độ khách: 35 × 5,161/1,461 |
 | `demand.demand_scale` | 0,85 | **0,85** | [hiệu chỉnh] |
+| `demand.n_riders` | 20.000 | **120.000** | [suy] Giữ tỷ lệ session trên mỗi khách của mô hình cũ: hiện 25.650 session/ngày ÷ 20.000 khách = 1,28/khách/ngày; cầu mới 149.800 session/ngày ÷ 1,28 ≈ 117.000. Nếu giữ 20.000 thì mỗi khách mở 7,5 session/ngày, không còn nghĩa "khách". Kiểm tra: 120.000 ÷ 61 ô ≈ 2.000 khách/ô ≈ 380 khách/km², tức 1–2% dân nội thành (20.000–40.000 người/km²) là người dùng ô tô công nghệ thường xuyên; với P(đặt) 15%, mỗi khách đặt ~5,8 chuyến/tháng, cùng bậc với Q&Me (77% dùng ≥ 3 lần/tháng) [data] |
 | `demand.hour_profile` | đỉnh 8h (1,70), 18h (1,85) | **giữ** | [assume]. Đỉnh trùng giờ cao điểm Hà Nội theo quy định (6–9h, 16–19h30) [data] và giờ tắc nhất của TomTom (17h) [data]; Grab nêu nhu cầu buổi trưa 10–13h [data]. Độ nhạy: hình theo giờ của NYC TLC (mục D) |
 | `demand.dest_decay_rings` | 3,0 | **1,2** | [hiệu chỉnh] cho quãng đường TB ≈ 6,0 km trên lưới mới (mục C: 5–8 km). Đã tính: 1,0 → 5,3 km; 1,2 → 6,0 km; 1,5 → 6,7 km |
 | `riders.beta_price_per_usd` → **`beta_price_per_kvnd`** | 0,10 / USD | **0,022 / 1.000đ** | [suy] giữ độ nhạy giá tương đối như mô hình cũ: β × giá TB = 0,10 × 19,0 USD ≈ 1,9 = 0,022 × 84 nghìn đồng. Không đổi theo tỷ giá, vì độ nhạy giá đi theo mức giá địa phương. `alpha0` và `delta0` hiệu chỉnh lại theo P(đặt) và mức tăng (mục C) |
@@ -98,6 +99,18 @@ Kiểm tra:
 - chuyến 5 km ≈ 65.000–80.000đ, khớp mức Grab công bố (50.000–80.000đ) [data];
 - người dùng ở Hà Nội và TP.HCM chi trung bình 252.000đ/tháng, 77% dùng ≥3 lần/tháng [data, Q&Me], tức mỗi chuyến cỡ ≤84.000đ. Cùng bậc với chuyến 6 km.
 
+**Lợi nhuận nền tảng V(π)** (thay spec §4.6, cài ở H7.8): với mỗi chuyến hoàn thành
+
+```
+cước_dịch_vụ  = giá − platform_fee_vnd
+driver_pay    = (1 − commission_rate) × cước_dịch_vụ
+platform_profit = platform_fee_vnd + commission_rate × cước_dịch_vụ − voucher
+```
+
+Phí nền tảng thuộc nền tảng toàn bộ [data]; hoa hồng chỉ tính trên phần cước dịch vụ. Chuyến 6 km: 10.000 + 0,25 × 73.638 = 28.410đ trước voucher, 8.410đ sau voucher 20.000đ. Thuế VAT và thuế thu nhập tài xế không mô phỏng.
+
+**Hệ quả của trần voucher, ghi trước khi chạy:** 25% giá chạm trần 20.000đ khi giá ≥ 80.000đ, tức chuyến dài hơn ~5,6 km, cỡ **một nửa** số chuyến với quãng đường TB 6 km. Voucher mỗi session chỉ còn dao động từ ~9.600đ (chuyến 2 km) tới 20.000đ, khoảng 2 lần, so với dải rộng hơn của mô hình cũ (20% giá, không trần). Vì vậy **lợi ích của xếp hạng theo mỗi đồng** (phát hiện +303 chuyến của bản 2) nhiều khả năng **co lại**; đây là đặc điểm thật của thị trường, báo cáo nói trước và đo, không chỉnh trần để giữ kết quả cũ (dự đoán P2, mục E).
+
 ### B5. Biến động tự nhiên (thế giới W1)
 
 `shocks.enabled = false` ở W0 và `true` ở W1 (overlay `config/world_w1.yaml`).
@@ -111,7 +124,7 @@ Kiểm tra:
 | `shocks.rain.demand_mult` | **1,25** | [paper] Brodeur & Nield (2018): giờ có mưa, số chuyến Uber mỗi giờ ở NYC cao hơn 25% |
 | `shocks.rain.speed_mult` | **0,85** | [paper] mưa lớn giảm tốc độ 7–18% |
 | `shocks.rain.driver_off_share` | **0,10** | [assume]; báo chí ghi nhiều tài xế nghỉ khi mưa lớn, giá có lúc tăng 200–300% |
-| `shocks.events.venues` — sân vận động | **[1, 0,03, 21,5, 23,0, 60, 20,0, 3,0]** | [data] sức chứa ~40.000 chỗ (Mỹ Đình). [assume] ~1 lần/tháng; [suy] 5% khán giả gọi ô tô trong 60 phút ≈ 2.000 lượt, trong khi cầu thường của một ô lúc 22h khoảng 90–100 lượt/giờ, nên ×20 là mức thận trọng |
+| `shocks.events.venues` — sân vận động | **[2, 0,05, 21,5, 23,0, 60, 20,0, 3,0]** | [data] hai sân lớn trong nội thành: Mỹ Đình ~40.000 chỗ, Hàng Đẫy ~22.000 chỗ (V-League cách tuần, concert, sự kiện). [suy] mỗi sân ~1,5 sự kiện/tháng ≈ 0,05/ngày; hai sân cho ≈ 2,8 sự kiện trong 28 ngày dữ liệu, đủ để switchback W1 chứa vài sự kiện (với [1, 0,03] chỉ còn 0,8 sự kiện/28 ngày, gần như không có trong dữ liệu). [suy] 5% khán giả gọi ô tô trong 60 phút ≈ 2.000 lượt, trong khi cầu thường của một ô lúc 22h khoảng 90–100 lượt/giờ, nên ×20 là mức thận trọng. Lượt chạy cho animation cần khung có sự kiện thì ép bằng `--set shocks.events.venues=...` với xác suất 1 cho đúng ngày, ghi lệnh trong `datasets.md` |
 | `shocks.events.venues` — phố đi bộ | **[1, 0,43, 21,0, 24,0, 60, 2,0, 1,3]** | [data] phố đi bộ Hồ Gươm mở 19h thứ Sáu–24h Chủ nhật (3/7 ngày ≈ 0,43), hàng chục nghìn lượt khách mỗi cuối tuần. Hệ số [assume] |
 | vị trí địa điểm | rút một lần theo `world_seed` | [assume] |
 | `shocks.attendance.p_work` | **0,90** | [assume]; tài xế ít ngày nghỉ |
@@ -128,6 +141,24 @@ Cột của `events.venues`: [số địa điểm, xác suất mỗi ngày, gi�
 | `cancel.eta_free_min` | **3,0** | [assume] giữ |
 
 Tỷ lệ hủy là **kết quả** của mô hình, không phải tham số. Kiểm ở mục C và chạy độ nhạy ở mục D.
+
+**Hệ quả của ô lớn, ghi trước khi chạy:** xe từ ô kề mất ~11 phút giờ thường (B1), nên hazard trung bình trên đường đi là 0,005 + 0,004 × (11 − 3) ≈ 0,037/phút và P(hủy) ≈ 1 − e^(−0,037 × 11) ≈ **33%** cho xe đón từ vành 1; từ vành 2 (~22 phút) gần chắc chắn hủy. Kênh hủy sẽ **chi phối** tác hại của voucher, và việc "ô căng mượn xe ô kề" (cơ chế mentor dùng để giải thích tác hại cấp hệ ở bản 2) sẽ yếu đi, tức độ căng trở nên **cục bộ hơn**. Kết quả RQ1 và việc chọn chỉ số độ căng (ring1 / system / hour) có thể đảo so với bản 2. Vì vậy độ nhạy hazard ×0,5 / ×2 ở mục D3 là **bắt buộc**, và H1, H2 được viết với ý thức này (dự đoán P1, mục E).
+
+### B7. Điều xe
+
+| Khóa YAML | Giá trị | Nguồn |
+|---|---|---|
+| `reposition.mode` | `static_weights` | giữ (quy tắc cứng 5) |
+| `reposition.max_idle_min` | **10,0** | [assume] giữ. Với ô 1,41 km, xe đi điều chuyển mất ~11 phút (B1) thay cho ~5 phút trước; trong lúc đó xe không tính vào slack hay utilization (H-11). S8 **báo** tỷ lệ thời gian xe ở trạng thái điều chuyển; nếu vượt 15% tổng giờ-xe thì ghi hạn chế và chạy thêm một điểm độ nhạy `max_idle_min = 20` ở T10.8, không chỉnh ở S8 |
+
+### B8. Quy mô dữ liệu và bộ nhớ
+
+| Đại lượng | Cũ | Mới (ước) |
+|---|---|---|
+| Session/ngày | 25.650 | ~150.000 |
+| Request/ngày (P(đặt) 15%) | ~3.900 | ~22.500 |
+| Dòng `observed/sessions` cho 28 ngày | 0,72 triệu | ~4,2 triệu (~0,5 GB parquet mỗi bộ, chấp nhận) |
+| Dòng `slot_snapshots` cho 28 ngày | 99.000 | 164.000 |
 
 ---
 
@@ -146,6 +177,15 @@ Chỉ chỉnh các núm: `fleet_size`, `demand_scale`, `shift_start_mixture`, `d
 | **`mean_trip_km`** (mới) | **[5,0; 8,0]** | [suy] chi tiêu Q&Me + bảng giá Grab |
 | **`trips_per_driver_day`** (mới) | **[8; 18]** | [suy] doanh thu GrabCar 20–35 triệu/tháng [data] ÷ 26–30 ngày ÷ 70.000–90.000đ/chuyến |
 
+**Thứ tự ưu tiên khi không thỏa hết** (6 núm, 9 chỉ tiêu, có cặp kéo ngược nhau: thêm xe làm giảm chuyến/tài xế nhưng cũng giảm phần (ô, slot) căng):
+1. `p_request_no_voucher` và `request_uplift_surplus` (núm `alpha0`, `delta0`): quyết định ý nghĩa của voucher, phải đạt.
+2. `share_cellslots_slack_below_0_35` và `share_cellslots_slack_above_1` (núm `fleet_size`, `demand_scale`): quyết định có hiện tượng cần đo, phải đạt.
+3. `busy_rel_h6/h7/h8` (núm `shift_start_mixture`): sửa lỗi lịch ca của bản 2 (Q20), phải đạt ít nhất h7.
+4. `mean_trip_km` (núm `dest_decay_rings`): gần độc lập với các núm khác, chỉnh sau cùng.
+5. `trips_per_driver_day`: nếu sau 1–4 vẫn lệch thì **ghi hạn chế**, không phá 1–3 để đạt nó; dải [8; 18] là suy từ doanh thu nên kém chắc nhất.
+
+Mỗi vòng hiệu chỉnh ghi vào bảng ở `decisions.md`: giá trị 6 núm, 9 chỉ tiêu, đạt/không. Dự kiến 3 ngày công cho S8 (T8.1–T8.3), không phải 1–2.
+
 Chỉ tiêu kiểm tra (không hiệu chỉnh theo, chỉ báo cáo; lệch xa thì ghi hạn chế):
 
 | Đại lượng | Khoảng hợp lý | Nguồn |
@@ -153,6 +193,7 @@ Chỉ tiêu kiểm tra (không hiệu chỉnh theo, chỉ báo cáo; lệch xa t
 | Thời gian chờ đón trung bình | 3–8 phút | [data] NYC TLC 2,8–4,8 phút theo giờ (`runs/tlc/hourly_comparison.csv`); Hà Nội tắc hơn nên cho phép cao hơn |
 | Thời gian chuyến trung bình | 15–25 phút | [suy] TomTom: 15 phút đi được 4,5 km |
 | Tỷ lệ hủy, tỷ lệ bỏ chờ | báo cáo | không có số liệu |
+| Tỷ lệ giờ-xe ở trạng thái điều chuyển | báo cáo, ngưỡng chú ý 15% | xem B7 |
 
 ---
 
@@ -205,9 +246,26 @@ Báo θ\* và chênh lệch giữa các chính sách có đổi không. Nếu kh
 - dashboard và notebook: đổi nhãn tiền;
 - báo cáo: Bảng 4.1 và Phụ lục A ghi nguồn từng tham số theo file này.
 
-**Thời gian chạy:** tăng khoảng 6 lần (diện tích, số khách, số xe đều tăng cỡ đó). Ước lượng, cần đo thật trước khi chốt:
-- ra ngưỡng θ: 12–18 phút (hiện 2–3 phút);
-- sinh dữ liệu hai thế giới: khoảng 3–4 giờ (hiện 30–40 phút).
+**Thời gian chạy và tiêu chí A5 (nhóm tự quyết, ghi `decisions.md` ở B9, sửa quy tắc 7 của `CLAUDE.md` cùng PR):**
+- Session/ngày ×5,8, xe ×5,4, ô ×1,65. Hiện 7 giây/ngày mô phỏng (A5 bản 2). Ước **40–60 giây/ngày/tiến trình**. H7.1 đo thật ngay sau khi đổi giá trị, trước mọi task khác.
+- **A5-HN:** ≤ **60 giây/ngày mô phỏng trên một tiến trình**, đo bằng `evaluate` `all_on` 1 ngày, 3 lần lấy trung vị (cách đo cũ). Lý do đổi từ 30: tiêu chí cũ đặt cho thành phố 54 km²; quy mô mới gấp 5,8 lần số session mà chỉ cho gấp 2 thời gian, tức đã đòi code nhanh hơn 2,9 lần trên mỗi session. Nếu đo vượt 60 giây: Hoàng `--profile`, tối ưu **đúng bước nặng nhất**, tối đa 1 ngày công, được dùng `numba` kèm fallback (quy tắc 7). Vẫn vượt thì ghi số thật và không nới thêm.
+- Mọi lệnh sinh dữ liệu và quét dùng `runner.n_procs = số lõi` (máy hiện có 8 lõi); thời gian chạy thật ghi vào `datasets.md`.
+
+Ngân sách tính toán (giả định 50 giây/ngày/tiến trình, 8 lõi, tức ~6 giây/ngày hiệu dụng; cập nhật sau H7.1):
+
+| Việc | Ngày mô phỏng | Giờ máy |
+|---|---|---|
+| S8 dữ liệu W0 + W1 (luật cũ 28 + 4 mức u × 28 + 3 switchback × 28 + A/B 28 + GTE 20 + GTE đội xe lớn 20 + bật/tắt 10, mỗi thế giới ~302) | ~615 | ~1,1 |
+| S10 bảng chính sách (12 chính sách × 30 seed × 2 thế giới + pilot κ) | ~800 | ~1,4 |
+| S10 quét θ (16 × 30 × 2 + pilot κ mỗi θ) | ~1.300 | ~2,3 |
+| S10 độ vững (9 tổ hợp × 30 seed × 2 chính sách + 3 `world_seed` × 12 × 30) | ~1.600 | ~2,8 |
+| S10 độ nhạy (7 cấu hình × 5 chính sách × 10 seed + quét θ rút gọn) | ~560 | ~1,0 |
+| **Tổng** | **~4.900** | **~8,5 giờ**, tức một đêm máy cho S10 |
+
+**Dự đoán ghi trước khi chạy** (cùng H1, H2 vào `decisions.md` ở B9; đúng hay sai đều báo ở Chương 4):
+- **P1 (từ B6):** trên lưới mới, tác hại của voucher đi chủ yếu qua kênh **hủy** khi xe đón từ ô kề; phần tác hại cấp hệ do "mượn xe ô kề" nhỏ hơn bản 2, nên chỉ số cục bộ (`cell`, `ring1`) không thua `system` rõ như Hình PL.3 cũ.
+- **P2 (từ B4):** vì trần 20.000đ làm voucher gần bằng nhau giữa các session, chênh lệch giữa xếp theo mỗi đồng và xếp theo lượt phát **nhỏ hơn** +237 chuyến (303 − 66) của bản 2, tính theo phần trăm N.
+- **P3 (từ B5):** trên W1, phần (ô, slot) căng ngoài 5–8h tăng rõ so với W0, và đó là nơi chính sách theo độ căng hơn luật tắt theo giờ (H2 chỉ được coi là xác nhận nếu chênh lệch có khoảng tin cậy 95% không chứa 0 **và** tập trung vào các slot có biến động theo `meta/shocks`).
 
 ---
 

@@ -19,7 +19,7 @@ Nguyên tắc sắp xếp: mọi thay đổi simulator làm đổi số liệu, 
 |---|---|---|
 | 0 | Chốt hướng, sửa những gì không phụ thuộc số liệu | ~1 ngày |
 | 1 | Sửa simulator (một đợt), gồm đổi quy mô Hà Nội và tiền VND | ~5–6 ngày |
-| 2 | Sinh dữ liệu cho hai thế giới | ~1 ngày (máy chạy ~3–4 giờ) |
+| 2 | Hiệu chỉnh và sinh dữ liệu cho hai thế giới | ~3 ngày công (máy ~1 giờ với 8 lõi; ĐX mục C, E) |
 | 3 | Phương pháp | ~2 ngày |
 | 4 | Thí nghiệm đánh giá | ~2–3 ngày |
 | 5 | Viết lại báo cáo, sản phẩm trình bày | ~3 ngày |
@@ -106,12 +106,13 @@ Thay đổi mô hình (1.1, 1.2, 1.4) đặt sau **khóa config**: tắt khóa t
   - **tốc độ theo TomTom 2025, Hà Nội:** trung bình 18 km/h; `speed_factor_by_hour` mới (đêm ×1,45, cao điểm sáng ×0,85, cao điểm tối ×0,76);
   - **ca tài xế 11,2 giờ** (khảo sát), sd 2,0, chặn [4, 14];
   - **điểm xuất phát cho hiệu chỉnh 1.7:**
-    - `fleet_size = 1000` (giữ mật độ giờ-xe của mô hình cũ);
+    - `fleet_size = 1300` (1.000 giữ mật độ giờ-xe cũ nhưng cho 23 chuyến/xe/ngày, vượt dải [8; 18]; xem ĐX B2);
+    - `n_riders = 120000` (giữ 1,3 session/khách/ngày của mô hình cũ; ĐX B3);
     - `base_sessions_per_cell_h = 124` (giữ mật độ khách);
     - `dest_decay_rings = 1.2` (quãng đường TB ≈ 6 km);
   - giữ `max_pickup_eta_min = 30` (quy tắc cứng 6). Đi giữa hai ô kề mất ~11 phút, ~14 phút giờ cao điểm;
   - sửa test đang giả định 37 ô và kích thước cụm;
-  - **đo A5 ngay** trên cấu hình mới, vì số khách và số xe tăng khoảng 4–6 lần. Nếu vượt 30 giây/ngày thì báo trước khi làm tiếp.
+  - **đo A5 ngay** trên cấu hình mới, vì số session tăng ~5,8 lần và số xe ~5,4 lần. Tiêu chí mới do nhóm quyết: **A5-HN ≤ 60 giây/ngày mô phỏng/một tiến trình** (ĐX mục E); vượt thì profile và tối ưu đúng bước nặng nhất, tối đa 1 ngày công, `numba` kèm fallback được phép; vẫn vượt thì ghi số thật, không nới thêm.
 
 ### 1.0b. Đổi tiền sang VND và giá cước theo GrabCar Hà Nội (ĐX mục A2, B4)
 
@@ -166,7 +167,7 @@ Thay đổi mô hình (1.1, 1.2, 1.4) đặt sau **khóa config**: tắt khóa t
 - **Làm gì** (giá trị và nguồn ở ĐX mục B5): làm đủ cả 5 loại.
   - **Cầu dao động giữa các ngày:** hệ số ngày ~ LogNormal, σ = 0,12 (NYC TLC).
   - **Sự kiện ở địa điểm cố định**, hai loại (`shocks.events.venues`); vị trí rút một lần theo `world_seed`:
-    - sân vận động: p = 0,03/ngày, tan 21h30–23h, cầu ô ×20, vành kề ×3, trong 60 phút;
+    - sân vận động: 2 địa điểm (Mỹ Đình, Hàng Đẫy), mỗi địa điểm p = 0,05/ngày (≈ 2,8 sự kiện/28 ngày; với p = 0,03 một địa điểm chỉ còn 0,8, gần như không có trong dữ liệu), tan 21h30–23h, cầu ô ×20, vành kề ×3, trong 60 phút;
     - phố đi bộ: p = 0,43/ngày, tan 21–24h, cầu ô ×2, vành kề ×1,3, trong 60 phút.
   - **Mưa:** p = 0,31/ngày (trung bình năm ở Hà Nội), bắt đầu 14–19h, dài 1–3 giờ; cầu ×1,25, tốc độ ×0,85, 10% tài xế nghỉ suốt cơn mưa.
   - **Tài xế đi làm** 90% số ngày, độc lập với nhau.
@@ -191,7 +192,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 - Cùng ngày thì cùng cú sốc dưới mọi chính sách.
 - Không rò biến ẩn, không nhìn trước.
 - Bất biến ngân sách.
-- Nghiệm thu A1–A5 đạt.
+- Nghiệm thu A1–A5 đạt (A5 theo tiêu chí A5-HN 60 giây/ngày/tiến trình, ĐX mục E).
 - Oracle chỉ dùng được với chính sách ngưỡng.
 
 ### 1.7. Hiệu chỉnh lại
@@ -226,7 +227,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
   - GTE với đội xe rất lớn (để tách phần "công suất" ở 4.4);
   - bật/tắt toàn bộ 5 seed, ghi đầy đủ (cho 4.5).
 
-  Ghi lệnh vào `docs/datasets.md`. Thời gian máy chạy ước khoảng 3–4 giờ cho cả hai thế giới (gấp ~6 lần bản cũ).
+  Ghi lệnh vào `docs/datasets.md`. Khoảng 615 ngày mô phỏng cho cả hai thế giới, ước ~1,1 giờ máy với `runner.n_procs = 8` ở 50 giây/ngày/tiến trình (bảng ngân sách ở ĐX mục E; cập nhật sau khi H7.1 đo A5-HN).
 
 ---
 
@@ -415,7 +416,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 - **Ghép xe tối ưu theo lô (Hungarian):** nó chữa đúng hiện tượng cần đo.
 - **Cho tài xế phản ứng theo voucher hoặc thu nhập:** ngoài phạm vi; giữ cung độc lập với chính sách.
-- **Tối ưu hiệu năng:** đã đủ nhanh; chỉ xem lại nếu A5 đo ở 1.0 vượt 30 giây/ngày.
+- **Tối ưu hiệu năng rộng:** chỉ tối ưu đúng bước nặng nhất, tối đa 1 ngày công, khi A5-HN đo ở 1.0 vượt 60 giây/ngày/tiến trình (ĐX mục E). Không viết lại engine.
 - **Học mô hình uplift trong `sim/`.**
 - **Bản đồ thành phố thật (Hà Nội, TP.HCM, NYC):** để hướng phát triển. Lưới vẫn là thành phố giả, nhưng kích thước ô theo H3, còn quy mô, tốc độ và giá theo Hà Nội (việc 1.0, 1.0b).
 - **Mô phỏng xe máy:** chỉ mô phỏng ô tô 4 chỗ (ĐX mục A1).
