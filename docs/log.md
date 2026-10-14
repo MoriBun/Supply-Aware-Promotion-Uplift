@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S7 theo `phan_cong_v3.md` bản Hà Nội (3efb025). Đã gộp `develop`: PR #23 (T7.1, mốc G7), PR #24 (scope `city`, oracle, cột runner, T-40). Đang căn lại theo phân công mới (T-41: `hidden_view`, bỏ `slack_lag_cell`). B9 giờ do Hoàng soạn trên `develop2`, Tình duyệt. Sau B9: T7.3 đổi đơn vị oracle sang 1.000đ, T7.4, T7.5 (`budget_pilot_spent_vnd`, `meta/shocks`), T7.6 giá cước Hà Nội. Gate P6 (T-31) vẫn chờ mentor.
+**Đang làm:** S8 xong (gate G8 đạt; T-43 chờ xác nhận). **S9 xong (T-44: Tình làm; H9.1–H9.7, gate G9 đạt, B12 giao, chờ Hoàng review)**. Chưa commit trên `develop1`: S8 (T8.1–T8.6, T-43), T10.6 lịch ca, T-44, toàn bộ S9 (`analysis/uplift.py`, `tension.py`, `tension_curve.py`, `hour_rule.py`, `interference.py`, `policy_table.py`, `b12_check.py`, mô hình và JSON trong `analysis/models`, test, T-45, T-46). Tiếp: commit, PR S8+S9 → `develop`, rồi S10 (T10.1 bảng chính sách W0/W1 với `specs_for_world`, 30 seed; T10.2 quét θ; T10.5 độ vững; T10.8 độ nhạy; chạy đêm). B10: Hoàng chưa ghi gate G7/giao chính thức. Gate P6 (T-31) vẫn chờ mentor.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -408,6 +408,159 @@ Mẫu:
 - Lệch spec / quyết định mới: T-41 (đính chính T-40 c, d).
 - Bàn giao: không. Lưu ý cho Hoàng khi soạn B9 trên `develop2`: kéo `develop` trước, vì `city`, `oracle`, `lag_slot_same_block`, `budget_pilot_*`, `world_seed`, `hidden_view` đã có; B9 chỉ còn đổi `_usd` → `_vnd` (gồm `budget_pilot_spent_usd`) và thêm phần lõi.
 - Còn lại / bước tiếp: duyệt B9 của Hoàng; T7.4 có thể làm ngay (không phụ thuộc B9); T7.3 đơn vị 1.000đ, T7.5, T7.6 sau B9.
+
+### 2026-10-14 · T10.10 (làm sớm, việc chuẩn bị S7) · code animation `analysis/animation.py` · xong phần code (chưa commit)
+- Nhánh/PR: `develop1`; chưa commit, PR riêng sau khi PR T-41 và PR kế hoạch gộp; review: Hoàng.
+- Đã làm: `analysis/animation.py` theo mục 4–6 của hướng dẫn mentor: `completed_by_request_slot` (đếm theo slot đặt xe, không dùng `n_completed`), `requests_by_slot`, `field_by_slot`, `load_pairs` (ghép theo seed, kiểm cùng B và cùng lưới), `check_totals` (Σ Δ trên cả cửa sổ = N mới − N cũ từng seed, raise nếu lệch), `frame_slots`, `cumulative_delta` (dải 95% qua seed), `default_caption` (một câu theo dấu của Σ Δ request và Σ Δ chuyến, số ô tắt), `animate` (ba bản đồ `RegularPolygon` từ `dashboard.geometry.axial_to_xy`, thang phân kỳ cam–trung tính–lam cố định cả clip, slack cắt ở 3 với gạch chéo ô tắt, hai thanh màu, đường ΔN cộng dồn có con trỏ, giữ khung cuối `hold_s`, GIF qua `PillowWriter`), CLI `python -m analysis.animation --old … --new … --out …`. Không sửa `sim/`.
+- Test: `tests/test_animation.py` → 4 passed (10,50 s): lưới 61 ô (`hex_centres`, pivot đúng `[n_slot, 61]`, tổng khớp, đếm đúng slot đặt xe), cặp all_off/all_on thật trên `tiny.yaml` (tổng Δ khớp `policy_results`, GIF 8 khung + giữ 0,5 s, chú thích riêng theo khung). Đã xem một khung PNG: bố cục đúng mục 4.
+- Lệch spec / quyết định mới: không (chỉ `analysis/`). Lưu ý: Pillow gộp khung trùng nhau nên "giữ 2 giây" là một khung có thời lượng dài, test kiểm tổng thời lượng.
+- Bàn giao: không. Còn thiếu cho T11.1: dữ liệu thật 10 seed (sau S8), chọn khung có sự kiện theo `meta/shocks`, notebook 06, 8 mục kiểm ở mục 8.
+- Còn lại / bước tiếp: `analysis/calibrate.py` (chuẩn bị T8.1), mẫu `datasets.md`.
+
+### 2026-10-14 · kiểm S7 sau PR #28 (phần "Người nhận kiểm tra" của B10) · xong, chờ Hoàng giao B10
+- Nhánh/PR: kéo `develop` (`0c46469`, PR #28: B9, H7.1–H7.8) vào `develop1`; chưa commit.
+- Đã làm: sửa `analysis/animation.py` đọc `budget_B_vnd` (file chưa commit lúc B9 nên script đổi tên của Hoàng không chạm tới). Kiểm có test cho từng mục B10: giá 83.638đ (`test_pricing`), oracle chỉ với chính sách ngưỡng (`test_policies`), cùng biến động và cùng session dưới mọi chính sách (`test_shocks`); nhãn tiền dashboard đã là `fmtVND`.
+- Test: `pytest -q` → 608 passed, 12 deselected (274 s; `.venv`); hồi quy G7 `pytest -q -m slow tests/test_regression_s7.py` → 4 passed (73 s). Test chậm khác: không chạy lại; 3 test chậm không đạt trong log G7 của Hoàng (CAL, A1 tiêu chí 4, A4 đọc `runs/` cũ theo USD) là việc của S8, không nới.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: chưa nhận B10 (Hoàng chưa ghi gate G7 và chưa giao). Lưu ý cho S8: giá TB 67.223đ thấp hơn 84.000đ của ĐX vì quãng đường TB 4,4 km, chỉnh qua `dest_decay_rings` ở T8.1.
+- Còn lại / bước tiếp: commit T10.10 kèm sửa trên; xác nhận G7 cho Hoàng; T8.1 hiệu chỉnh.
+
+### 2026-10-14 · T8.1 · hiệu chỉnh W0 quy mô Hà Nội · xong
+- Nhánh/PR: `develop1`; chưa commit, PR S8 sau T8.2–T8.6 (hoặc PR sớm nếu Hoàng cần config mới); review: Hoàng theo ĐX mục C.
+- Đã làm: `analysis/calibrate.py` (một vòng: `all_off` N seed trong bộ nhớ, in 9 chỉ tiêu CAL cùng công thức test chậm, biên min–max theo seed, chỉ báo ĐX mục C, dòng cho bảng `decisions.md`, JSON); `tests/test_calibrate.py` (+4: trùng từng số với `test_acceptance_core.calibration_metrics`, chỉ báo hữu hạn, CLI/JSON). 11 vòng (bảng cuối `decisions.md`); `default.yaml`: `dest_decay_rings` 1,2 → 2,4; `alpha0` 0,35 → 0,15; `shift_start_mixture` → 5–7,5h (0,45), 9–13h (0,20), 14–18h (0,25), 19–23h (0,10); `fleet_size` 1.300 → 1.150. `docs/tests.md` §4 cập nhật.
+- Test: gate CAL `pytest -q -m slow tests/test_acceptance_core.py::test_cal_every_target_is_in_range` → 1 passed (27 s): P(đặt) 0,145; tăng request +50,7%; căng 11,9%; dư 73,3%; busy 6/7/8h 0,435 / 0,762 / 0,767; 5,56 km; 16,8 chuyến/xe/ngày; từng seed đều trong dải. Chỉ báo: chờ đón 3,6 phút; chuyến 19,4 phút; hủy 6,4%; bỏ chờ 0,0%; điều chuyển 11,8% giờ-xe. `pytest -q` → 611 passed, 1 failed (`test_smoke_day[all_on]`; output chỉ giữ dòng tóm tắt, nhưng lượt chạy tất định theo (config, seed) và test này chạy riêng → 2 passed (49 s), nên dòng vỡ là chặn `runtime_s < 60`, do chạy lúc A1 chiếm 8 lõi), 12 deselected (733 s có tải).
+- Lệch spec / quyết định mới: T-42 (chỉnh `dest_decay_rings` trước `alpha0` vì quãng đường → giá → P(đặt); ước tính ĐX B3 "1,2 cho 6 km" sai). Không ghi hạn chế cho `trips_per_driver_day`.
+- Bàn giao: không (thuộc B11).
+- Còn lại / bước tiếp: T8.2 A1/A5 trên cấu hình mới.
+
+### 2026-10-14 · T8.3 · `config/world_w1.yaml` và số đo W1 · xong phần overlay, số đo chờ dữ liệu 28 ngày
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S8).
+- Đã làm: `config/world_w1.yaml` (`shocks.enabled: true`, `fleet_size` 1.278 = 1.150 / 0,90; `config_hash = e1730a6d2fe0`); `analysis/calibrate.py` thêm chỉ báo `share_tight_outside_5_8h` cho kiểm G8 "biến động có tác dụng".
+- Test/số đo (W1, `all_off`, không hiệu chỉnh lại): 10 seed × 1 ngày: căng 13,2% (theo ngày 8,6–26,8%), dư 72,5%, căng ngoài 5–8h **0,120 so với W0 0,107** (10 seed; W0 theo ngày chỉ 11,2–12,5%); 3 seed: P(đặt) 0,146; tăng request +50,6%; busy 6/7/8h 0,413 / 0,750 / 0,779; 5,56 km; 14,2 chuyến/`fleet_size`/ngày (≈ 15,8 trên xe đi làm); chờ đón 3,7 phút; chuyến 19,7 phút; hủy 6,6%. Giờ-xe điều chuyển 0,20–0,22 là chặn trên (script tính giờ trong ca theo lịch danh nghĩa, chưa trừ nghỉ/mưa).
+- Lệch spec / quyết định mới: không. Lưu ý G8: mức tăng trung bình của căng ngoài 5–8h còn nhỏ (+12% tương đối) vì W0 sau T-42 không còn dồn căng vào 5–8h; biến động thể hiện rõ ở biên độ theo ngày. Kết luận G8 lấy trên dữ liệu 28 ngày (T8.4); không nới tiêu chí.
+- Bàn giao: không (thuộc B11).
+- Còn lại / bước tiếp: T8.4 `calibrate_budget` + sinh dữ liệu W0/W1.
+
+### 2026-10-14 · T8.2 · A1, A5 trên cấu hình đã hiệu chỉnh · dở (chờ Q30)
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S8).
+- Đã làm: chạy `pytest -q -m slow tests/test_acceptance_core.py` từng phần; `python -m sim run --mode throughput_curve` → `runs/cal_s8/a1_w0` (bảng đầy đủ); `docs/tests.md` §4 cập nhật (T8.1); Q30 trong `decisions.md`.
+- Test: **A5-HN đạt**: `all_on` 17,9 / 18,2 / 18,6 s (trung vị 18,2 s), `threshold` 16,3 / 16,6 / 16,2 s (trung vị 16,3 s), 1 tiến trình, máy rảnh; test `test_a5_*` 2 passed (219 s). **A1 không đạt tiêu chí 4** (`test_a1_throughput_curve` 1 failed, 787 s có tải): tiêu chí 1–3 đạt (đỉnh 2.020 chuyến/giờ ở `demand_scale` 1,5; mức 4,0 = 0,803 × đỉnh; slack vùng giảm ≤ 0,118); bước ETA lớn nhất 2,79 phút (< 3) nhưng ETA phẳng ≈ 15,0 phút từ mức 2,25 trở đi với ba bước âm −0,012 / −0,011 / −0,073 phút (nhiễu seed ±4 giây), nên vế "tăng đơn điệu" sai. Số đầy đủ trong Q30.
+- Lệch spec / quyết định mới: Q30 (câu hỏi mở): lưới A1 0,25…4,0 đặt cho thành phố cũ, 10/16 mức nằm trên đoạn bão hòa; ba cách sửa ở `tests.md` A1 đều phá T-42 và không chữa nhiễu đoạn phẳng. Đề xuất đổi lưới A1 thành 0,25…2,5 (với số đã đo thì đạt cả 4 tiêu chí), giữ nguyên tiêu chí; không tự nới, chờ Hoàng và mentor.
+- Bàn giao: không.
+- Còn lại / bước tiếp: T8.4 chạy trước vì các phương án của Q30 không đổi tham số simulator (chỉ đổi lưới A1 hoặc cách chấm); nếu chốt theo hướng đổi `grid_radius`/tốc độ/`max_wait` thì phải hiệu chỉnh lại và sinh lại.
+
+### 2026-10-14 · T8.4 · `calibrate_budget` và sinh dữ liệu W0, W1 · xong
+- Nhánh/PR: `develop1`; dữ liệu trong `runs/s8` (không commit); lệnh ở `docs/datasets.md` mục S8.
+- Đã làm: 13 bộ mỗi thế giới (luật cũ 28 ngày; `target_g_u` 0 / 0,5 / 2; switchback cụm 1 / 7 / all; `rider_ab`; GTE 10 seed; GTE đội xe rất lớn 6.000 / 6.667; `all_on` / `all_off` 5 seed log đầy đủ; `calibrate_budget`). Hai quy ước chốt và ghi ở `datasets.md`: 4 mức `u` = {0; 0,5; 1,0; 2} theo S5; đội xe rất lớn = 6.000 (W1 6.667).
+- Số liệu: B = 113.760.488 đ/kỳ (W0), 116.125.778 đ (W1). GTE W0 +3.864,7 (SE 40,9; +20,0%), đội xe rất lớn +12.184,9 → phần công suất giữ lại 32%; W1 +3.695,8 (SE 294,6), rất lớn +12.345,7. 26 lượt `rc = 0`; 46,8 phút máy (ĐX E ước 1,1 giờ); 4,9 GB.
+- Lệch spec / quyết định mới: không (hai quy ước trên là cách đọc kế hoạch §2.1 chưa nêu số; Hoàng xem khi nhận B11).
+- Bàn giao: thuộc B11 (sau T8.5, T8.6).
+- Còn lại / bước tiếp: T8.5 kiểm bộ dữ liệu.
+
+### 2026-10-14 · T8.5 · `datasets.md` S8 + `check_dataset` · xong
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S8).
+- Đã làm: `docs/datasets.md` mục "Dữ liệu Sprint 8" (điều kiện, quy ước, lệnh sinh lại, bảng 2 × 13 bộ, GTE, kiểm G8, thời gian).
+- Test: `analysis.check_dataset` 26/26 **OK** (schema, kiểu, không cột ẩn ở `observed/`, `market/`, `config_hash` khớp; bảng `meta/shocks` qua `RUN_TABLES`); `analysis.check_budget` `legacy_28d`: W0 và W1 mọi kỳ ≤ B, session bị chặn đều `arm = 0`.
+- Kiểm G8 "biến động có tác dụng" (snapshot `legacy_28d`): căng ngoài 5–8h W0 14,7% → W1 15,8%; theo ngày W1 2,5–28,0% so với W0 16,5–17,6%; ngày W1 không biến động 11,6%, có sự kiện 17,8%, mưa + sự kiện 21,3%. Căng tăng rõ ở ngày có biến động; trung bình 28 ngày chỉ +1,1 điểm vì W0 đã hết "lỗ cung" 5–8h sau T-42. Mức "tăng rõ" của G8 để Hoàng và mentor chấm khi nhận B11; không nới.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: thuộc B11.
+- Còn lại / bước tiếp: T8.6 A2 (đang chạy).
+
+### 2026-10-14 · T8.6 · A2 trên code mới; `validation.py` khớp test chậm · xong
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S8).
+- Đã làm: chạy A2 trên cấu hình T-42; kiểm `analysis/validation.py` cho ra CAL khớp test chậm (test nhanh `tests/test_validation.py`, nằm trong 611 passed của T8.1); `tests/test_calibrate.py` kiểm `analysis/calibrate.py` trùng từng số với `test_acceptance_core.calibration_metrics`.
+- Test: `pytest -q -m slow tests/test_acceptance.py -k "a2 or crn"` → `test_a2b_common_random_numbers_halve_the_variance_of_the_policy_difference` 1 passed (414 s; ngưỡng 0,5, test không in tỷ lệ); a2a, a2c là test nhanh, đã pass trong `pytest -q`.
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không.
+- Còn lại / bước tiếp: gate G8.
+
+### 2026-10-14 · G8 · kiểm tra cuối S8 · gate G8 không đạt (A1 tiêu chí 4, Q30); các mục khác đạt
+- Nhánh/PR: `develop1`; chưa commit, chưa PR.
+- Đạt: CAL 9/9 (5 seed, từng seed trong dải); A2 (b) pass; A5-HN 18,2 / 16,3 s; chờ đón TB 3,6 phút, chuyến TB 19,4 phút trong khoảng kiểm ĐX mục C; 26/26 bộ qua `check_dataset`, `config_hash` khớp `datasets.md`; `check_budget` hai thế giới OK; W1 có số đo đầy đủ.
+- Không đạt: A1 tiêu chí 4 (ETA phẳng ≈ 15 phút từ `demand_scale` 2,25, ba bước âm ≤ 0,073 phút; tiêu chí 1–3 đạt) — Q30, không nới. "Biến động có tác dụng": căng ngoài 5–8h W0 14,7% → W1 15,8%, rõ theo ngày có biến động (11,6% → 17,8–21,3%); mức "tăng rõ" để Hoàng/mentor chấm.
+- Bàn giao: **B11 chưa giao**, chờ chốt Q30 (nếu chốt phương án 1 hoặc 2 thì dữ liệu `runs/s8` dùng được ngay; phương án đổi `grid_radius`/tốc độ/`max_wait` thì hiệu chỉnh lại và sinh lại ~47 phút).
+- Còn lại / bước tiếp: commit S8 trên `develop1`; hỏi Hoàng và mentor Q30; PR S8 → `develop` sau khi chốt.
+
+### 2026-10-14 · T8.2 (đính chính) + G8 · chốt Q30 theo T-43, A1 đạt · gate G8 đạt (chờ Hoàng, mentor xác nhận T-43)
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S8).
+- Đã làm: `default.yaml` `throughput.demand_scale_grid` → 10 mức 0,25…2,5 (T-43, Q30 chốt theo phương án 1, quyết định của Tình như tiền lệ T-31); `docs/tests.md` A1; `docs/datasets.md` ghi hash mới `514d0b41c378` (khác `ae9b7b9a1b94` đúng khóa lưới A1, kiểm bằng so sánh toàn bộ cấu hình); `analysis/policy_table.py` nhận `scope=city` và `score_fn=oracle` (chuẩn bị T10.1), `tests/test_policy_eval.py` +2 assert.
+- Test: `pytest -q -m slow tests/test_acceptance_core.py::test_a1_throughput_curve` → **1 passed** (276 s): đỉnh 2.020 ở 1,5; mức 2,5 = 0,803 × đỉnh; slack vùng giảm ≤ 0,118; ETA tăng đơn điệu 2,53 → 14,99 phút, bước lớn nhất 2,79. `tests/test_policy_eval.py -k "parse_spec or default_specs"` → 2 passed.
+- Lệch spec / quyết định mới: T-43.
+- Bàn giao: **B11 sẵn sàng giao** sau khi commit + PR S8: `default.yaml` (hash `514d0b41c378`), `world_w1.yaml`, `runs/s8`, `datasets.md`. Người nhận kiểm tra: A1, A2, A5, CAL đạt (số ở log T8.1, T8.2, T8.6 và mục này); `check_dataset` 26/26; `config_hash` khớp `datasets.md`.
+- Còn lại / bước tiếp: commit, PR S8, nhắn Hoàng nhận B11 và bắt đầu S9.
+
+### 2026-10-14 · chuẩn bị S10 (mục 5 phân công) · T10.6 phần "tác hại 7–8h trước/sau khi sửa lịch ca"; `policy_table` `city`/oracle · xong phần đo
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S8). Hai test của Hoàng sửa tối thiểu vì ghim lưới A1 16 mức: `tests/test_config.py` (10 mức, T-43), `tests/test_runner.py` (test đường ống với đồ giả tự ghim lưới 16 mức vì đồ giả đạt đỉnh ở `demand_scale` ≈ 3,8) — Hoàng duyệt trong PR S8.
+- Đã làm: `runs/s8/w0/all_on_oldshift_5seeds_full`, `all_off_oldshift_5seeds_full` (cấu hình T-42, chỉ đổi `shift_start_mixture` về lịch cũ; lệnh trong `datasets.md`); `analysis.theta.on_off_by_hour_runs` cho hai cặp.
+- Số đo (W0, 5 seed, không ngân sách, chuyến hoàn thành/giờ khi phát voucher cho mọi người trừ không phát): **lịch cũ** có hại 7h −132,2 ± 6,1; 8h −148,6 ± 7,4; 9h −158,0 ± 8,5 (mất yêu cầu khi không voucher 25–27%); 17h −17,0; 18h −74,6. **Lịch T-42**: 7h +37,2 ± 17,7; **8h −190,4 ± 9,4**; 9h +106,0; 17h −31,2 ± 14,9; **18h −168,8 ± 8,8**; 19h −85,2 ± 16,1. Sửa lịch ca xóa tác hại 7h và 9h, dồn tác hại sáng vào 8h; tác hại 17–19h tăng vì xe được dời từ chiều sang sáng. Giờ có hại hiện hành: 8h, 17h, 18h, 19h (đầu vào cho H9.4 và T10.1).
+- Lệch spec / quyết định mới: không.
+- Bàn giao: không (số đưa vào B13 sau).
+- Còn lại / bước tiếp: phần còn lại của T10.6 (điều chỉnh theo đặc trưng trên đúng mốc; tỷ lệ bỏ chờ) và T10.1–T10.9 sau B12.
+
+### 2026-10-14 · T-44 · đổi phân công: Tình làm S9, S10; Hoàng làm S11 · ghi nhận
+- Nhánh/PR: `develop1`; `phan_cong_v3.md` (file chung) sửa theo T-44, chờ Hoàng duyệt trong PR S8. Mã task H9.x, T11.x giữ nguyên.
+- Đã làm: khảo sát `analysis/` cho S9: code đã đọc cột `_vnd`; mô hình DR trong `analysis/models` còn giá trị USD và fit trên lưới cũ → phải fit lại; `estimate.experiment_frame` đã có độ căng trước khối (`system_pre`, `ring_pre`, `cell_pre`); `tension.py` có sẵn `system`, `hour`.
+- Còn lại / bước tiếp: H9.1–H9.7.
+
+### 2026-10-14 · H9.2 · chọn chỉ số độ căng trên W0 và W1 (`tension.py`, H-22) · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S9). `tension.py` CLI nhận nhiều lớp config (để chạy W1).
+- Đã làm: `python -m analysis.tension runs/s8/<w>/all_off_5seeds_full [...]` (5 seed × 1 ngày, 749.334 session W0; 779.635 W1); kết quả `runs/s9/tension_w0_w1.txt`, `tension_w1.txt`.
+- Số đo (R² ETA báo / bắt ca phục vụ tệ): **W0**: `hour` 0,213 / 0,308; `cell_idle` 0,194 / 0,340; `system` 0,188 / 0,316; `ring1` 0,187 / 0,308; `cluster7` 0,181 / 0,308; `cell_persistence` 0,131 / 0,300. **W1**: `system` 0,269 / 0,488; `cluster7` 0,255 / 0,479; `ring1` 0,255 / 0,478; `cell_idle` 0,231 / 0,470; `hour` 0,248 / 0,394; `cell_persistence` 0,182 / 0,438.
+- Đọc: trên W0 (không biến động) giờ trong ngày dự báo ETA tốt ngang các chỉ số độ căng; trên W1 các chỉ số độ căng vượt `hour` rõ ở bắt ca tệ (0,48–0,49 so với 0,39): khi căng không chỉ theo giờ, chỉ số độ căng mới có giá trị. `system` (= `scope: city`) nhỉnh nhất về dự báo nhưng bật/tắt cả thành phố; `ring1` ngang `cluster7` và giữ quyết định theo vùng như H-25. Chọn: giữ `ring1` cho tầng vùng (H-25), thêm `city` làm dòng so sánh ở T10.1 (Q6).
+- Lệch spec / quyết định mới: không (áp H-22, H-25).
+- Còn lại / bước tiếp: H9.3.
+
+### 2026-10-14 · H9.1 · DR-learner theo 1.000đ, fit lại trên W0 và W1 · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S9).
+- Đã làm: `analysis/uplift.py`: khóa `*_per_kvnd` (= 1000 × τ / đồng kỳ vọng chi mỗi lượt phát), họ hàm điểm sinh bằng factory `tau_{x,xs}_dr[_all][_w1][_per_dollar|_per_kvnd]` (24 hàm, 8 tên cũ giữ nguyên), CLI `fit <run> [config ...] [--suffix w1]`; fit lại `dr_explore`, `dr_all` (W0) và `dr_explore_w1`, `dr_all_w1` (W1) trên `legacy_28d` của S8 (mô hình cũ trước B9 còn giá trị USD, lưới cũ). `tests/test_uplift.py` kiểm cả 4 mô hình (`mean_paid_per_offer_vnd` > 1.000đ).
+- Số đo: W0 `dr_explore` n 205.624 (100.704 phát), ATE DR 0,0584 ± 0,0015 (thô 0,0556); `dr_all` n 4.145.947 (933.304 phát), ATE 0,0930 ± 0,0003 (thô 0,0877), 34,8% e bị cắt; W1 `dr_explore_w1` 0,0593 ± 0,0015 (thô 0,0580), chi/lượt phát 2.989đ; `dr_all_w1` 0,0907 ± 0,0003 (thô 0,0903), 3.413đ. Như S5: DR trên toàn bộ dữ liệu không gỡ được nhiễu `u_latent` (0,093 so với 0,058 trên lát explore). Thời gian fit 786 s (W0), 1.239 s (W1, có tải).
+- Test: `pytest -q tests/test_uplift.py` → 35 passed.
+- Lệch spec / quyết định mới: không.
+- Còn lại / bước tiếp: H9.3.
+
+### 2026-10-14 · H9.3 · tác dụng theo độ căng trước khối, ngưỡng theo độ căng so với theo giờ, phân bố độ căng · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S9).
+- Đã làm: `analysis/tension_curve.py` (+ `tests/test_tension_curve.py`, 6 test): đường tác dụng theo `system_pre` / `ring_pre` / `cell_pre` (bin cố định, bootstrap theo khối), θ̂_tension (zero crossing isotonic, `estimate.theta_hat`), phương pháp theo giờ A/B của S5 tính trên bảng đếm (giờ × mức) nên chạy được trên 4,2 triệu session (trùng từng số `theta.theta_hat`, có test), giờ có hại, phân bố độ căng theo slot `all_off` / `all_on` / `legacy`. Kết quả `runs/s9/<w>/summary.md|json`, parquet.
+- Số đo W0 (`switchback_call_28d`, 672 khối): `system_pre` < 1,5 tác dụng +0,009…+0,012 (CI chứa 0; bin [0,75; 1) −0,015 [−0,032; +0,009]), ≥ 1,5: +0,035…+0,059; θ̂_tension `system` 0,07 [0; 0,22], `ring1` 0,00 [0; 0,32]; θ̂_A theo giờ 0,00; **θ̂_B theo giờ có B: `system` 1,6; `ring1` 2,3; `cell` 2,4**. W1: `system_pre` < 1 tác dụng +0,001…+0,014 (CI chứa 0), ≥ 1: +0,020…+0,046; θ̂_tension 0,14 / 0,00 / 0,00; θ̂_B 2,10 / 2,15 / 2,10.
+- Phân bố độ căng toàn thành phố (share slot < 0,35; trung vị): W0 `all_off` 0,4% / 3,65; `legacy` 4,2% / 2,60; **`all_on` 32,1% / 1,20**; W1: 5,4% / 3,51; 6,5% / 2,48; 34,0% / 1,12. Voucher kéo độ căng xuống gấp ~3 lần, nên ngưỡng phải đọc trên độ căng đo **dưới chính sách**; đây là lý do (B) "cắt quá tay" ở H-26.
+- Lệch spec / quyết định mới: T-45 (cách đọc ngưỡng: trên W0/W1 voucher không âm theo bin độ căng, tác hại nằm ở giờ; θ̂_tension ≈ 0, giá trị dùng ở T10.1 là θ̂_B).
+- Còn lại / bước tiếp: H9.4.
+
+### 2026-10-14 · H9.4 · luật tắt cố định ở giờ voucher có hại (`analysis/hour_rule.py`) · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S9).
+- Đã làm: `analysis/hour_rule.py` (+ `tests/test_hour_rule.py`, 5 test): hàm điểm `off_hours_{random,dr}_{w0,w1}` trả NaN (không phát) ở giờ có hại, ngoài ra xếp theo `u_score` (như `random`) hoặc DR theo 1.000đ; giờ có hại từ H9.3 (τ̂(h) cận trên CI < 0) lưu `analysis/models/hour_rule_<w>.json` (commit) qua CLI `set <w> --from runs/s9/<w>/summary.json`.
+- Số đo: **W0 giờ có hại [8, 17, 18, 19]** — trùng hoàn toàn với "sự thật" on/off 5 seed của T10.6 (8h −190; 17h −31; 18h −169; 19h −85 chuyến/giờ); **W1 [18]** (18h −0,019 [−0,031; −0,006]; 7h, 8h, 17h, 19h âm hoặc ≈ 0 nhưng CI chứa 0 do biến động theo ngày). W1 hour rule vì thế gần như không tắt gì — đúng điểm cần so ở T10.1: luật giờ cố định mất tác dụng khi căng không theo giờ.
+- Test: `pytest -q tests/test_hour_rule.py` → 4 passed, 1 skipped trước khi có JSON, nay chạy đủ.
+- Lệch spec / quyết định mới: T-45.
+- Còn lại / bước tiếp: H9.5, H9.6 (đang chạy W1).
+
+### 2026-10-14 · H9.5 · bảng thác nước ba nguồn sai số (`interference.py waterfall`) · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S9). `tests/test_interference_s9.py` (+4, chung với H9.6).
+- Đã làm: `analysis/interference.py`: `naive_legacy_effect`, `waterfall`, `waterfall_markdown`, lệnh con `waterfall`; bốn mức cùng thang chuyến/ngày và ba phần, hai phép cộng kiểm (T-46). Kết quả `runs/s9/<w>/results/waterfall_completed.parquet` (+ `_attrs.json`), log `runs/s9/<w>_waterfall.log`.
+- Số đo (chuyến/ngày, CI 95%): **W0** so thô +13.453 [13.264; 13.624]; mức mỗi khách +9.217 [8.962; 9.486]; GTE +3.865 [3.785; 3.942]; GTE đội xe rất lớn +12.185; gây nhiễu **+4.237** [3.885; 4.557]; tranh chấp xe **+5.352** [5.087; 5.642]; công suất −8.320 (đội xe giữ 32%). **W1** so thô +14.106 [13.920; 14.305]; mức mỗi khách +9.120 [8.820; 9.383]; GTE +3.696 [3.124; 4.253]; rất lớn +12.346 [11.438; 13.244]; gây nhiễu **+4.986** [4.665; 5.340]; tranh chấp **+5.424** [4.812; 6.052]; công suất −8.650 (giữ 30%). Cộng kiểm: gây nhiễu + tranh chấp = so thô − GTE đúng từng số ở cả hai thế giới. Người phân tích ngây thơ trên dữ liệu lịch sử báo gấp 3,5–3,8 lần sự thật; gần một nửa sai số là gây nhiễu, hơn một nửa là tranh chấp xe. Thời gian: 499 s (W0), 427 s (W1).
+- Lệch spec / quyết định mới: T-46 (định nghĩa, dấu của phần công suất, cách kết hợp CI).
+- Bàn giao: thuộc B12.
+- Còn lại / bước tiếp: H9.6.
+
+### 2026-10-14 · H9.6 · tách burn-in bias khỏi ảnh hưởng kéo dài (`interference.py burnin`) · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S9).
+- Đã làm: `burnin_decomposition`, `burnin_markdown`, lệnh con `burnin`: switchback toàn thành phố trên mọi session, bỏ `in_burnin` (15 phút đầu khối, T-15), GTE; hai phần có CI (bootstrap theo khối, SE seed). Kết quả `runs/s9/<w>/results/burnin_completed.parquet`.
+- Số đo (chuyến/ngày): **W0** mọi session +4.579 [3.611; 5.676]; bỏ burn-in +3.985 [2.981; 5.131]; GTE +3.865; **burn-in bias +594 [483; 700]**; **kéo dài +121 [−896; +1.266]**. **W1** +4.514 [3.389; 5.689]; +3.924 [2.756; 5.132]; GTE +3.696; **burn-in +590 [466; 714]**; **kéo dài +228 [−1.044; +1.645]**. Switchback toàn thành phố ước cao hơn GTE 18–22%; phần có ý nghĩa thống kê là burn-in (~590 chuyến/ngày, +13–16%), phần kéo dài có CI chứa 0 ở cả hai thế giới. Thời gian 466 s / 482 s.
+- Lệch spec / quyết định mới: T-46 (b): dùng cờ `in_burnin` của switchback thay vì "phút 15–60 của lượt bật/tắt" (lượt bật/tắt không có chuyển trạng thái).
+- Bàn giao: thuộc B12.
+- Còn lại / bước tiếp: H9.7.
+
+### 2026-10-14 · H9.7 · gói B12 và kiểm nạp trong tiến trình con (`analysis/b12_check.py`) · xong · giao B12
+- Nhánh/PR: `develop1`; chưa commit (PR S9).
+- Đã làm: `analysis/b12_check.py` (nạp 12 hàm điểm S9 bằng chuỗi spec trong tiến trình con `spawn` hai lần, kiểm tất định và hữu hạn; kiểm `hour_rule_<w>.json`, `summary.json` đủ 3 moderator, thác nước cộng khớp; ghi `runs/s9/b12_manifest.json`); `analysis/policy_table.py`: `specs_for_world(w)`, `S9_THRESHOLDS`, `--world` (18 dòng cho T10.1: tầng rider S5 theo 1.000đ, θ̂_tension `ring1`, θ̂_B `ring1`/`city`, luật giờ random/DR, oracle); `tests/test_policy_eval.py` kiểm cả hai danh sách.
+- Test: `python -m analysis.b12_check --runs runs/s9` → **B12: OK** (12/12 hàm điểm tất định; W0 luật giờ hữu hạn 20/24 giờ, W1 23/24; 8/8 file). `pytest -q` toàn bộ: xem mục G9.
+- Nội dung B12 (cả W0, W1): hàm điểm DR theo 1.000đ (`analysis.uplift:tau_{x,xs}_dr[_all][_w1]_per_kvnd`), luật giờ (`analysis.hour_rule:off_hours_{random,dr}_{w0,w1}` + JSON), chỉ số độ căng chọn (`ring1`, `city` để so, T-45 b), ngưỡng mới và cũ (`S9_THRESHOLDS`; T-45 c), giờ có hại (W0 [8, 17, 18, 19], W1 [18]), bảng thác nước và burn-in (`runs/s9/<w>/results`, T-46). Lệnh sinh lại ở `datasets.md` mục S9.
+- Bàn giao: **giao B12 (Tình → Hoàng, review; theo T-44 Hoàng nhận để viết S11)**; người nhận kiểm tra: `python -m analysis.b12_check`, chạy hai lần cho cùng manifest; `pytest -q tests/test_uplift.py tests/test_hour_rule.py tests/test_tension_curve.py tests/test_interference_s9.py tests/test_policy_eval.py`.
+- Còn lại / bước tiếp: G9, commit, PR S9.
+
+### 2026-10-14 · G9 · kiểm tra cuối S9 · gate G9 đạt (chờ Hoàng review PR S9)
+- Có đường tác dụng theo độ căng với CI (`runs/s9/<w>/curve_by_tension.parquet`, `summary.md`) và ngưỡng có CI (θ̂_tension, θ̂_A, θ̂_B): đạt. Thác nước cộng khớp ở hai thế giới; bảng burn-in có CI: đạt. Test code phân tích mới: `test_uplift` 35, `test_tension_curve` 6, `test_hour_rule` 5, `test_interference_s9` 4, `test_policy_eval` (spec) 2 — pass; toàn bộ `pytest -q` ở mục dưới. B12 giao.
+- Lưu ý cho S10/S11: trên hai thế giới này voucher không âm theo bin độ căng mà âm theo giờ (T-45 c); W1 làm CI rộng gấp 5–10 lần W0 (cần 30 seed ở T10.1/T10.2); luật giờ W1 chỉ tắt 18h.
 
 ## 2. Hoàng
 

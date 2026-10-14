@@ -58,28 +58,59 @@ class PolicySpec:
 # with the cell scope, the slack its model was trained on. pi_theta_hat rows: theta_hat (A) and (B) of H5.3 on
 # the ring1 scope (decisions H-25) with tau_hat(x) per dollar, which does not read s.
 DR = "analysis.uplift:"
-DEFAULT_SPECS = (
-    PolicySpec("all_off", "all_off", budget=False),
-    PolicySpec("all_on_B", "all_on"),
-    PolicySpec("random", "threshold", 0.0, "random"),
-    PolicySpec("heuristic", "threshold", 0.0, "heuristic_low_freq"),
-    PolicySpec("tau_x", "threshold", 0.0, "analysis.score_ties:tau_x_baseline"),
-    PolicySpec("tau_per_vnd", "threshold", 0.0, "analysis.score_ties:tau_per_dollar_baseline"),
-    PolicySpec("tau_x_dr_all", "threshold", 0.0, DR + "tau_x_dr_all"),
-    PolicySpec("tau_xs_dr_all", "threshold", 0.0, DR + "tau_xs_dr_all"),
-    PolicySpec("tau_x_dr_all_vnd", "threshold", 0.0, DR + "tau_x_dr_all_per_dollar"),
-    PolicySpec("tau_xs_dr_all_vnd", "threshold", 0.0, DR + "tau_xs_dr_all_per_dollar"),
-    PolicySpec("tau_x_dr_vnd", "threshold", 0.0, DR + "tau_x_dr_per_dollar"),
-    PolicySpec("tau_xs_dr_vnd", "threshold", 0.0, DR + "tau_xs_dr_per_dollar"),
-    PolicySpec("pi_theta_0.5_heuristic", "threshold", 0.5, "heuristic_low_freq"),
-    PolicySpec("pi_thetahatA_ring1_dr_vnd", "threshold", 0.25, DR + "tau_x_dr_all_per_dollar", scope="ring1"),
-    PolicySpec("pi_thetahatB_ring1_dr_vnd", "threshold", 5.0, DR + "tau_x_dr_all_per_dollar", scope="ring1"),
-)
+HOUR = "analysis.hour_rule:"
+# Thresholds of S9 (task H9.3, decisions T-45; runs/s9/<world>/summary.json): the tension method's zero crossing
+# (theta_hat_tension, ring1) and the S5 hour method with the budget (theta_hat_B) on the ring1 and city scopes.
+# Hard-coded like the 0.25 / 5.0 of H5.3 so the table is reproducible from the committed code alone.
+S9_THRESHOLDS = {
+    "w0": {"tension_ring1": 0.0, "hourB_ring1": 2.3, "hourB_city": 1.6},
+    "w1": {"tension_ring1": 0.0, "hourB_ring1": 2.15, "hourB_city": 2.1},
+}
+
+
+def specs_for_world(world: str) -> tuple[PolicySpec, ...]:
+    """The policy table of T10.1 (plan v3 §4.1, Q4–6, Q21) for world ``w0`` or ``w1``.
+
+    Rows: no voucher; voucher for everyone under B; the rider tiers of S5 (random, heuristic, baseline tables, DR
+    scores now per 1.000đ, task H9.1); the threshold-by-tension policy of H9.3 (``ring1``, theta_hat_tension);
+    the S5 threshold-by-hour policy with the budget (theta_hat_B) on ``ring1`` and on the ``city`` scope (Q6);
+    the fixed hour-off rule of H9.4 (random tier and DR tier); the oracle (T-40, upper bound of per-rider
+    policies, KN 3.1). Every threshold row uses the DR per-1.000đ score of its world.
+    """
+    if world not in S9_THRESHOLDS:
+        raise ValueError(f"world must be one of {sorted(S9_THRESHOLDS)}, got {world!r}")
+    th = S9_THRESHOLDS[world]
+    w = "" if world == "w0" else "_w1"
+    dr_kvnd = DR + f"tau_x_dr_all{w}_per_kvnd"
+    return (
+        PolicySpec("all_off", "all_off", budget=False),
+        PolicySpec("all_on_B", "all_on"),
+        PolicySpec("random", "threshold", 0.0, "random"),
+        PolicySpec("heuristic", "threshold", 0.0, "heuristic_low_freq"),
+        PolicySpec("tau_x", "threshold", 0.0, "analysis.score_ties:tau_x_baseline"),
+        PolicySpec("tau_per_vnd", "threshold", 0.0, "analysis.score_ties:tau_per_dollar_baseline"),
+        PolicySpec("tau_x_dr_all", "threshold", 0.0, DR + f"tau_x_dr_all{w}"),
+        PolicySpec("tau_xs_dr_all", "threshold", 0.0, DR + f"tau_xs_dr_all{w}"),
+        PolicySpec("tau_x_dr_all_kvnd", "threshold", 0.0, dr_kvnd),
+        PolicySpec("tau_xs_dr_all_kvnd", "threshold", 0.0, DR + f"tau_xs_dr_all{w}_per_kvnd"),
+        PolicySpec("tau_x_dr_kvnd", "threshold", 0.0, DR + f"tau_x_dr{w}_per_kvnd"),
+        PolicySpec("tau_xs_dr_kvnd", "threshold", 0.0, DR + f"tau_xs_dr{w}_per_kvnd"),
+        PolicySpec("pi_tension_ring1_dr_kvnd", "threshold", th["tension_ring1"], dr_kvnd, scope="ring1"),
+        PolicySpec("pi_hourB_ring1_dr_kvnd", "threshold", th["hourB_ring1"], dr_kvnd, scope="ring1"),
+        PolicySpec("pi_hourB_city_dr_kvnd", "threshold", th["hourB_city"], dr_kvnd, scope="city"),
+        PolicySpec("hour_off_random", "threshold", 0.0, HOUR + f"off_hours_random_{world}"),
+        PolicySpec("hour_off_dr_kvnd", "threshold", 0.0, HOUR + f"off_hours_dr_{world}"),
+        PolicySpec("oracle", "threshold", 0.0, "oracle"),
+    )
+
+
+DEFAULT_SPECS = specs_for_world("w0")
 REFERENCE = "all_on_B"
 
 
 def parse_spec(text: str) -> PolicySpec:
-    """``label=...,policy=...[,theta=...][,score_fn=...][,scope=cell|ring1][,budget=true|false]`` (score_fn may contain ':')."""
+    """``label=...,policy=...[,theta=...][,score_fn=...][,scope=cell|ring1|city][,budget=true|false]`` (score_fn may contain ':';
+    ``score_fn=oracle`` is the fixed-market oracle of decisions T-40/H-42, built by ``make_policy`` with the hidden view)."""
     fields: dict[str, str] = {}
     for part in text.split(","):
         key, sep, value = part.partition("=")
@@ -106,8 +137,8 @@ def configure(cfg: Config, spec: PolicySpec) -> Config:
         if spec.score_fn:
             th = dataclasses.replace(th, score_fn=spec.score_fn)
         if spec.scope:
-            if spec.scope not in ("cell", "ring1"):
-                raise ValueError(f"spec {spec.label!r}: scope must be cell or ring1, got {spec.scope!r}")
+            if spec.scope not in ("cell", "ring1", "city"):   # city: one slack for the whole city (T-40, S10 T10.1)
+                raise ValueError(f"spec {spec.label!r}: scope must be cell, ring1 or city, got {spec.scope!r}")
             th = dataclasses.replace(th, scope=spec.scope)
         out = dataclasses.replace(out, policy=dataclasses.replace(out.policy, threshold=th))
     return out
@@ -238,10 +269,12 @@ def main(argv=None) -> int:
     parser.add_argument("--spec", action="append", default=[], metavar="SPEC", help="see parse_spec; repeatable")
     parser.add_argument("--reference", default=REFERENCE)
     parser.add_argument("--n-seeds", type=int, default=None, help="default: sweep.n_seeds (decisions T-22)")
+    parser.add_argument("--world", choices=sorted(S9_THRESHOLDS), default="w0",
+                        help="default spec list of this world (score models, S9 thresholds, hour rule); ignored with --spec")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     cfg = load_config(args.config, args.overrides)
-    specs = [parse_spec(s) for s in args.spec] if args.spec else list(DEFAULT_SPECS)
+    specs = [parse_spec(s) for s in args.spec] if args.spec else list(specs_for_world(args.world))
     summary = run_policy_table(cfg, specs, args.out, n_seeds=args.n_seeds, reference=args.reference)
     print(f"B = {summary['budget_B_vnd'].dropna().max():,.0f} VND per period; {int(summary['n_seeds'].iloc[0])} seeds")
     print(markdown(summary))

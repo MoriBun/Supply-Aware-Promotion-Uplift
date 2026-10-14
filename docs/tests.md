@@ -122,7 +122,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 ## 3. Nghiệm thu bắt buộc (5 kiểm thử của [report])
 
 ### A1. Đường throughput (quan trọng nhất) — `@slow`
-- **Cách chạy:** `mode throughput_curve`, policy all_off, fleet cố định (`fleet_size`, `supply.shift_mode = always_on`), quét `throughput.demand_scale_grid` (16 mức 0,25…4,0), `throughput.n_seeds = 3`, **một giờ cao điểm ổn định** (`hour_profile` và `speed_factor_by_hour` hằng số tại `throughput.reference_hour`). `mean_slack` = tổng (xe rảnh × tick) / tổng (xe đi đón × tick) trên cửa sổ (T-08, T-15). Số liệu báo cáo chạy cửa sổ đủ 1 ngày; khi debug có thể rút ngắn bằng `time.window_min`.
+- **Cách chạy:** `mode throughput_curve`, policy all_off, fleet cố định (`fleet_size`, `supply.shift_mode = always_on`), quét `throughput.demand_scale_grid` (lưới đặt theo quy mô thành phố: **10 mức 0,25…2,5** trên Hà Nội, T-43; 16 mức 0,25…4,0 cho thành phố cũ, T-08), `throughput.n_seeds = 3`, **một giờ cao điểm ổn định** (`hour_profile` và `speed_factor_by_hour` hằng số tại `throughput.reference_hour`). `mean_slack` = tổng (xe rảnh × tick) / tổng (xe đi đón × tick) trên cửa sổ (T-08, T-15). Số liệu báo cáo chạy cửa sổ đủ 1 ngày; khi debug có thể rút ngắn bằng `time.window_min`.
 - **Đạt khi:**
   1. `completed_per_h` tăng rồi đạt đỉnh ở mức cầu nào đó.
   2. Tại mức cầu lớn nhất, `completed_per_h ≤ 0,95 × đỉnh`, tức **có đoạn giảm**.
@@ -163,6 +163,6 @@ Chạy all_off, 5 seed, `default.yaml` (`tests/test_acceptance_core.py`, đánh 
 | Quãng đường TB (H-31) | mean `trip_km` của order hoàn thành trong cửa sổ | 5–8 km |
 | Chuyến / tài xế / ngày (H-31) | order hoàn thành trong cửa sổ / (`fleet_size` × số ngày cửa sổ), W0 | 8–18 |
 
-Hai dải tỷ lệ (ô, slot) căng và dư là **thiết kế kịch bản** ("có vùng căng thật"), không phải số đo từ dữ liệu thực tế; số tuyệt đối về tiền và số xe là quy ước (H-23). Bỏ chỉ tiêu giá gốc trung bình ở B9 vì giá do bảng giá quyết định (H-31). Từ B9 tới khi hiệu chỉnh xong (S8), test CAL chậm không đạt vì các chỉ tiêu mới chưa hiệu chỉnh: ghi log, không nới dải. Không dùng N(π_θ), θ\*, GTE làm mục tiêu hiệu chỉnh.
+Hai dải tỷ lệ (ô, slot) căng và dư là **thiết kế kịch bản** ("có vùng căng thật"), không phải số đo từ dữ liệu thực tế; số tuyệt đối về tiền và số xe là quy ước (H-23). Bỏ chỉ tiêu giá gốc trung bình ở B9 vì giá do bảng giá quyết định (H-31). Từ B9 tới T8.1, test CAL chậm không đạt vì các chỉ tiêu mới chưa hiệu chỉnh (ghi log, không nới dải); **từ T-42 (14/10) đạt 9/9 trên 5 seed** (`config_hash = ae9b7b9a1b94`). Không dùng N(π_θ), θ\*, GTE làm mục tiêu hiệu chỉnh.
 
-Núm chỉnh (S8, thứ tự ưu tiên ở `docs/de_xuat_tham_so_ha_noi.md` mục C): `alpha0`, `delta0` (P(đặt), uplift); `fleet_size`, `demand_scale` (phân bố slack); `shift_start_mixture` (xe bận theo giờ); `dest_decay_rings` (quãng đường). Ghi giá trị cuối vào `default.yaml` và lý do vào `docs/decisions.md`.
+Núm chỉnh (S8, thứ tự ưu tiên ở `docs/de_xuat_tham_so_ha_noi.md` mục C): `alpha0`, `delta0` (P(đặt), uplift); `fleet_size`, `demand_scale` (phân bố slack); `shift_start_mixture` (xe bận theo giờ); `dest_decay_rings` (quãng đường). Ghi giá trị cuối vào `default.yaml` và lý do vào `docs/decisions.md`. Công cụ một vòng: `python -m analysis.calibrate --config config/default.yaml [--set núm=giá trị] --seeds 3` in 9 chỉ tiêu (cùng công thức với test CAL, kiểm bằng `tests/test_calibrate.py`), biên min–max theo seed, và các chỉ báo của ĐX mục C (chờ đón, thời gian chuyến, hủy, bỏ chờ, giờ-xe điều chuyển, tỷ lệ (ô, slot) căng ngoài 5–8h cho G8).

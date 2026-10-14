@@ -33,6 +33,9 @@ def test_parse_spec_and_configure():
     ring = parse_spec("label=r,policy=threshold,theta=0.25,scope=ring1")
     assert ring.scope == "ring1" and configure(cfg, ring).policy.threshold.scope == "ring1"
     assert configure(cfg, spec).policy.threshold.scope == cfg.policy.threshold.scope == "cell"
+    city = parse_spec("label=c,policy=threshold,theta=0.25,scope=city,score_fn=oracle")   # S10 T10.1: city tier, oracle
+    assert configure(cfg, city).policy.threshold.scope == "city"
+    assert configure(cfg, city).policy.threshold.score_fn == "oracle"
     with pytest.raises(ValueError):
         configure(cfg, PolicySpec("bad", "threshold", 0.0, scope="ring2"))
 
@@ -106,11 +109,22 @@ def test_paired_steps_are_paired_by_seed():
 
 
 def test_default_specs_are_valid():
-    labels = [s.label for s in DEFAULT_SPECS]
-    assert len(set(labels)) == len(labels) and "all_on_B" in labels
+    from analysis.policy_table import S9_THRESHOLDS, specs_for_world
+
     cfg = load_config(TINY)
-    for spec in DEFAULT_SPECS:
-        configure(cfg, spec)
+    for world in sorted(S9_THRESHOLDS):
+        specs = specs_for_world(world)
+        labels = [s.label for s in specs]
+        assert len(set(labels)) == len(labels) and "all_on_B" in labels and "oracle" in labels
+        for spec in specs:
+            configure(cfg, spec)
+        tiers = {s.label: s for s in specs}
+        assert tiers["pi_hourB_city_dr_kvnd"].scope == "city" and tiers["pi_tension_ring1_dr_kvnd"].scope == "ring1"
+        assert tiers["hour_off_random"].score_fn.endswith(f"off_hours_random_{world}")
+        assert all("_w1" in s.score_fn for s in specs if s.score_fn and s.score_fn.startswith("analysis.uplift")) == (world == "w1")
+    assert tuple(DEFAULT_SPECS) == specs_for_world("w0")
+    with pytest.raises(ValueError):
+        specs_for_world("w9")
 
 
 # --- shared tiny data sets (one simulated day each, real engine) ----------------------------------

@@ -38,7 +38,7 @@ def test_new_keys_load(default_yaml):
     cfg = load_config(default_yaml)
     assert cfg.time.window_min is None
     assert cfg.supply.shift_mode == "schedule"
-    assert len(cfg.throughput.demand_scale_grid) == 16
+    assert len(cfg.throughput.demand_scale_grid) == 10     # 0,25…2,5 on the Hanoi scale (decisions T-43; was 16)
     assert cfg.throughput.reference_hour == 18
     assert cfg.runner.n_procs is None
 

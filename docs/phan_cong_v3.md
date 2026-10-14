@@ -12,11 +12,11 @@ Giá trị và nguồn của mọi tham số: **`docs/de_xuat_tham_so_ha_noi.md`
 |---|---|---|---|---|
 | S7 | 1. Sửa simulator, quy mô Hà Nội, VND | **Hoàng** | Tình | 5–6 ngày |
 | S8 | 2. Hiệu chỉnh và sinh dữ liệu W0, W1 | **Tình** | Hoàng | 3 ngày (máy ~1 giờ, 8 lõi) |
-| S9 | 3. Phương pháp (uplift, độ căng, ngưỡng, thác nước, burn-in) | **Hoàng** | Tình | 2–3 ngày |
+| S9 | 3. Phương pháp (uplift, độ căng, ngưỡng, thác nước, burn-in) | **Tình** (đổi 14/10 tối, T-44; trước: Hoàng) | Hoàng | 2–3 ngày |
 | S10 | 4. Thí nghiệm đánh giá + code animation | **Tình** | Hoàng | 3 ngày + một đêm máy (~8,5 giờ) |
-| S11 | 5. Báo cáo, animation bản cuối, trả lời mentor | **Tình** | Hoàng (review chéo toàn bộ) | 3 ngày |
+| S11 | 5. Báo cáo, animation bản cuối, trả lời mentor | **Hoàng** (đổi 14/10 tối, T-44; trước: Tình) | Tình (review chéo toàn bộ) | 3 ngày |
 
-Khối lượng: Hoàng S7 + S9 ≈ 7–9 ngày; Tình S8 + S10 + S11 ≈ 9 ngày. Người đang chờ review làm việc chuẩn bị ở mục 5, không ngồi không.
+Khối lượng (sau T-44): Hoàng S7 + S11 ≈ 8–9 ngày; Tình S8 + S9 + S10 ≈ 8–9 ngày. Người đang chờ review làm việc chuẩn bị ở mục 5, không ngồi không. **T-44 là quyết định của Tình ngày 14/10, chờ Hoàng duyệt trong PR S8**; mã task H9.x và T11.x giữ nguyên để không vỡ tham chiếu trong log, chỉ đổi người làm.
 
 Quyết định đã chốt (giữ nguyên):
 - **Quy mô Hà Nội:** ô H3 độ phân giải 7 (5,16 km²), thành phố bán kính 4 (61 ô, 315 km²), tốc độ theo TomTom Hà Nội (ĐX mục B1).
@@ -70,9 +70,9 @@ Quy ước ký hiệu:
 |---|---|---|
 | `sim/` (mọi module), `config/`, `rng.py`, `schema.md`, `tests/` của S7 | Hoàng (S7) | Tình |
 | Hiệu chỉnh `default.yaml`, `world_w1.yaml`, sinh dữ liệu, `datasets.md`, `check_dataset`, `validation.py` | Tình (S8) | Hoàng |
-| `analysis/uplift.py`, `tension.py`, `theta.py`, `estimate.py`, `confounding.py`, `interference.py` (thác nước, burn-in), hàm điểm mới | Hoàng (S9) | Tình |
+| `analysis/uplift.py`, `tension.py`, `theta.py`, `estimate.py`, `confounding.py`, `interference.py` (thác nước, burn-in), hàm điểm mới | Tình (S9, T-44) | Hoàng |
 | `policy_table.py`, `qini_vs_value.py`, `metrics.py`, `figures.py`, notebook 01–05, `analysis/animation.py`, độ nhạy, độ vững | Tình (S10) | Hoàng |
-| Báo cáo LaTeX toàn bộ, `notebooks/06_animation.ipynb`, file trả lời Q1–Q27, slide | Tình (S11) | Hoàng (review chéo từng chương) |
+| Báo cáo LaTeX toàn bộ, `notebooks/06_animation.ipynb`, file trả lời Q1–Q27, slide | Hoàng (S11, T-44) | Tình (review chéo từng chương) |
 
 **Chung (PR cả hai duyệt):** `docs/de_xuat_tham_so_ha_noi.md`; `tests/fixtures/regression_s7*` (chỉ sinh lại một lần ở B9); `CLAUDE.md`; file này.
 
@@ -157,7 +157,7 @@ Trong S8 **chỉ Tình sửa giá trị** `default.yaml` và `world_w1.yaml`; Ho
 - **Biến động có tác dụng:** trên W1, tỷ lệ (ô, slot) căng **ngoài 5–8h** tăng rõ so với W0.
 - Giao **B11** (Tình → Hoàng): cấu hình W0 đã hiệu chỉnh, overlay W1, toàn bộ dữ liệu, `datasets.md`.
 
-### Sprint 9 (Hoàng): Phương pháp (Giai đoạn 3)
+### Sprint 9 (Tình, đổi theo T-44; mã task H9.x giữ nguyên): Phương pháp (Giai đoạn 3)
 
 | Mã | Việc |
 |---|---|
@@ -199,7 +199,7 @@ Ngân sách máy ~8,5 giờ với 8 lõi (ĐX mục E): chạy T10.1, T10.2, T10
 - Kết luận giả thuyết H1/H2 và ba dự đoán P1–P3 (đúng/sai, kèm số và khoảng tin cậy), cùng kết quả độ nhạy T10.8, được ghi vào `decisions.md`.
 - Hoàng review PR S10 (**B13**: bảng kết quả cho báo cáo); S11 cùng người làm nên không có bàn giao.
 
-### Sprint 11 (Tình): Báo cáo, animation bản cuối, trả lời mentor (Giai đoạn 5)
+### Sprint 11 (Hoàng, đổi theo T-44; mã task T11.x giữ nguyên): Báo cáo, animation bản cuối, trả lời mentor (Giai đoạn 5)
 
 | Mã | Việc |
 |---|---|
@@ -209,7 +209,7 @@ Ngân sách máy ~8,5 giờ với 8 lõi (ĐX mục E): chạy T10.1, T10.2, T10
 | **T11.4** (cũ T11.3 + H11.3) | File trả lời mentor Q1–Q27 (việc 5.4b): mỗi câu 1–3 câu, có số, trỏ mục báo cáo; câu không làm (Q22 nếu bỏ 4.9) ghi rõ lý do |
 | **T11.5** (cũ T11.4/H11.4) | Tóm tắt, mở đầu (đóng góp), trả lời RQ, Chương 5, hạn chế, theo nguyên tắc viết số (việc 5.2–5.4) |
 
-**Hoàng trong S11 (H11.R):** review chéo từng chương ngay khi Tình đẩy lên, kiểm mọi con số truy về `runs/` qua `datasets.md`, kiểm Phụ lục A khớp ĐX, biên dịch LaTeX. Không viết phần mới; sửa nhỏ thì sửa thẳng và ghi trong PR.
+**Tình trong S11 (sau T-44, vai cũ của Hoàng H11.R):** review chéo từng chương ngay khi Hoàng đẩy lên, kiểm mọi con số truy về `runs/` qua `datasets.md`, kiểm Phụ lục A khớp ĐX, biên dịch LaTeX. Không viết phần mới; sửa nhỏ thì sửa thẳng và ghi trong PR. Hoàng nhận B12 và B13 (do Tình làm S9, S10) để có đủ số liệu viết báo cáo.
 
 **Kiểm tra cuối S11 (G11, hoàn thành toàn bộ):** xem mục 7.
 
@@ -233,9 +233,9 @@ Ngân sách máy ~8,5 giờ với 8 lõi (ĐX mục E): chạy T10.1, T10.2, T10
 ```
 S7  (Hoàng): B9 → H7.1 (đo A5 sớm) → H7.2, H7.3, H7.4 → H7.5 → H7.6, H7.7, H7.8 → G7 → B10
 S8  (Tình):  T8.1 → T8.2, T8.3 → T8.4 → T8.5, T8.6 → G8 → B11
-S9  (Hoàng): H9.1 → H9.2 → H9.3 → H9.4; H9.5, H9.6 song song → H9.7 → G9 → B12
-S10 (Tình):  T10.1 → T10.2, T10.3, T10.5; T10.4, T10.6–T10.8 song song; T10.10 bất kỳ lúc nào → T10.9 → G10 → B13
-S11 (Tình):  T11.1 ∥ T11.2 → T11.3 → T11.4 → T11.5 → G11 → B14
+S9  (Tình, T-44):  H9.1 → H9.2 → H9.3 → H9.4; H9.5, H9.6 song song → H9.7 → G9 → B12 (Hoàng review)
+S10 (Tình):        T10.1 → T10.2, T10.3, T10.5; T10.4, T10.6–T10.8 song song; T10.10 bất kỳ lúc nào → T10.9 → G10 → B13 (Hoàng nhận)
+S11 (Hoàng, T-44): T11.1 ∥ T11.2 → T11.3 → T11.4 → T11.5 → G11 → B14 (Tình review)
 ```
 
 **Việc chuẩn bị của người đang chờ** (không đụng file của sprint đang mở; commit trên nhánh mình, PR sau khi sprint kia gộp):

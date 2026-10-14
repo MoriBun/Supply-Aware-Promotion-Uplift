@@ -276,3 +276,154 @@ Số chính (chi tiết trong notebook 01):
 - A3: trung vị 25,6 lần/ô/ngày (h = 0), 25,0 (h = 0,1); N không đổi (3.884,6 và 3.883,0).
 - A4: 0 lần đổi dấu (trùng H4.2).
 - A5: trung vị 5,75 giây / ngày mô phỏng (ngưỡng 30).
+
+---
+
+## Dữ liệu Sprint 8 (T8.4, sinh ngày 14/10/2026, `runs/s8`): W0 và W1 trên quy mô Hà Nội
+
+**Điều kiện chung**
+- Code: `develop` sau PR #28 (S7 của Hoàng) + T-42 trên `develop1`. W0: `config/default.yaml` đã hiệu chỉnh, `config_hash = ae9b7b9a1b94` (T-42). Sau T-43 (cùng ngày, chỉ đổi lưới A1 `throughput.demand_scale_grid`) hash của `default.yaml` là `514d0b41c378`; hai cấu hình khác đúng khóa đó, mà không mode sinh dữ liệu nào đọc, nên các bộ dưới đây vẫn là dữ liệu của cấu hình hiện hành. W1: thêm lớp phủ `config/world_w1.yaml` (bật `shocks`, `fleet_size` 1.278 = 1.150 / 0,90), `config_hash = e1730a6d2fe0`.
+- Tiền tính bằng **đồng** (B9, H-33); cột `*_vnd`. `world_seed = 20260930`, `run_seed = 0` cho mọi bộ `generate` (cùng session, CRN); GTE và bật/tắt ghép cặp theo seed.
+- Cửa sổ `generate`: 28 ngày, warm-up 60 phút, mỗi ngày một kỳ ngân sách; B = 0,3 × chi tiêu pilot `all_on` không ngân sách (`budget.fraction`). Chính sách cũ chịu B; thí nghiệm và GTE không áp ngân sách (D10).
+- Hai quy ước chốt khi sinh (ghi ở đây vì kế hoạch v3 §2.1 không nêu số): (1) "4 mức nhắm theo `u`" = `policy.legacy.target_g_u` ∈ {0; 0,5; 1,0 (bộ `legacy_28d`); 2}, theo tiền lệ S5 (`runs/s5/legacy_gu_*`); (2) "GTE với đội xe rất lớn" = `supply.fleet_size` 6.000 (W0, ≈ 5,2 × đội xe chuẩn) và 6.667 (W1, cùng quy ước /0,90), đủ để không còn (ô, slot) căng, tách phần "công suất" ở kế hoạch §4.4.
+- Thư mục: `runs/s8/w0/…` và `runs/s8/w1/…` cùng tên bộ; thời gian chạy thật ở `runs/s8/times.txt` và bảng dưới.
+
+### Lệnh sinh lại (bash, từ thư mục gốc repo; mỗi `generate` một tiến trình, 8 lượt song song)
+
+```bash
+PY=.venv/Scripts/python.exe
+W0="--config config/default.yaml"
+W1="--config config/default.yaml --config config/world_w1.yaml"
+for w in w0 w1; do
+  if [ "$w" = w0 ]; then C="$W0"; else C="$W1"; fi
+  $PY -m sim run --mode generate $C --set policy.name=legacy --out runs/s8/$w/legacy_28d
+  for gu in 0 0.5 2; do   # thư mục: legacy_gu_0 / legacy_gu_0p5 / legacy_gu_2
+    $PY -m sim run --mode generate $C --set policy.name=legacy --set policy.legacy.target_g_u=$gu --out runs/s8/$w/legacy_gu_$(echo $gu | tr . p)_28d
+  done
+  for lvl in 1 7 all; do
+    $PY -m sim run --mode generate $C --set policy.name=experiment --set experiment.cluster_level=$lvl --out runs/s8/$w/switchback_c${lvl}_28d
+  done
+  $PY -m sim run --mode generate $C --set policy.name=experiment --set experiment.design=rider_ab --out runs/s8/$w/rider_ab_28d
+  $PY -m sim run --mode calibrate_budget $C --out runs/s8/$w/calibrate_budget
+  $PY -m sim run --mode gte $C --out runs/s8/$w/gte
+  for pol in all_on all_off; do
+    $PY -m sim run --mode evaluate $C --set policy.name=$pol --set budget.enforce=false --set sweep.n_seeds=5 --log-level full --out runs/s8/$w/${pol}_5seeds_full
+  done
+done
+$PY -m sim run --mode gte $W0 --set supply.fleet_size=6000 --out runs/s8/w0/gte_bigfleet
+$PY -m sim run --mode gte $W1 --set supply.fleet_size=6667 --out runs/s8/w1/gte_bigfleet
+```
+
+### Kiểm tra trước khi dùng (điều kiện nhận B11)
+
+```bash
+$PY -m analysis.check_dataset runs/s8/w0/* runs/s8/w1/* --markdown
+$PY -m analysis.check_budget runs/s8/w0/legacy_28d
+$PY -m analysis.check_budget runs/s8/w1/legacy_28d
+```
+
+### Kết quả (14/10/2026; bảng từ `analysis.check_dataset --markdown`, cả 26 thư mục **OK**)
+
+**W0** (`runs/s8/w0`, B = 113.760.488 đ/kỳ = 0,3 × chi tiêu pilot `all_on` không ngân sách seed 9000, 1 ngày: 379.201.628 đ)
+
+| Thư mục | Mode | Chính sách | Ngày | Seed | Session | Order | N hoàn thành | Tỷ lệ phát | Tỷ lệ chặn | MB | `config_hash` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `legacy_28d` | generate | legacy (`target_g_u` 1,0), chịu B | 28 | 0 | 4.195.499 | 637.948 | 588.644 | 22,3% | 1,1% | 304,9 | `62605caf8130` |
+| `legacy_gu_0_28d` | generate | legacy, `target_g_u` 0 | 28 | 0 | 4.195.499 | 629.288 | 582.590 | 22,3% | 0,0% | 304,8 | `872fac608c3b` |
+| `legacy_gu_0p5_28d` | generate | legacy, `target_g_u` 0,5 | 28 | 0 | 4.195.499 | 635.190 | 587.123 | 22,5% | 0,0% | 304,9 | `a31b6e59532e` |
+| `legacy_gu_2_28d` | generate | legacy, `target_g_u` 2 | 28 | 0 | 4.195.499 | 638.024 | 588.299 | 20,7% | 5,1% | 304,7 | `70bc6ba2f9bf` |
+| `switchback_c1_28d` | generate | experiment, cụm 1, `p_on` 0,5, block 60 phút | 28 | 0 | 4.195.499 | 682.837 | 608.525 | 50,0% | 0,0% | 298,1 | `eef351b8d1e4` |
+| `switchback_c7_28d` | generate | experiment, cụm 7 | 28 | 0 | 4.195.499 | 681.828 | 605.994 | 49,7% | 0,0% | 296,5 | `1fa408c7ff88` |
+| `switchback_call_28d` | generate | experiment, cụm all | 28 | 0 | 4.195.499 | 680.419 | 598.212 | 50,2% | 0,0% | 293,4 | `be14a9d1a228` |
+| `rider_ab_28d` | generate | experiment, `rider_ab`, `p_on` 0,5 | 28 | 0 | 4.195.499 | 685.239 | 612.331 | 49,9% | 0,0% | 295,4 | `f7947c059f8e` |
+| `gte` | gte | all_on / all_off, không B | 1 | 0–9 | – | – | 23.235,7 / 19.371,0 | – | – | 0,04 | `ad3c146cbfa1` |
+| `gte_bigfleet` | gte | như trên, `fleet_size` 6.000 | 1 | 0–9 | – | – | 37.459,0 / 25.274,1 | – | – | 0,04 | `ad4d4627d39c` |
+| `all_on_5seeds_full` | evaluate | all_on, không B, log đầy đủ | 1 | 0–4 | – | – | 23.164,6 | – | – | 105,3 | `ff89b939e9db` |
+| `all_off_5seeds_full` | evaluate | all_off, log đầy đủ | 1 | 0–4 | – | – | 19.336,0 | – | – | 103,6 | `79572b38077c` |
+| `calibrate_budget` | calibrate_budget | all_on | 1 | 9000 | – | – | – | – | – | 0,0 | `ad3c146cbfa1` |
+
+**W1** (`runs/s8/w1`, B = 116.125.778 đ/kỳ; pilot 387.085.927 đ)
+
+| Thư mục | Mode | Chính sách | Ngày | Seed | Session | Order | N hoàn thành | Tỷ lệ phát | Tỷ lệ chặn | MB | `config_hash` |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `legacy_28d` | generate | legacy (`target_g_u` 1,0), chịu B | 28 | 0 | 4.237.888 | 638.473 | 585.126 | 22,3% | 0,4% | 308,3 | `0fa5835e3571` |
+| `legacy_gu_0_28d` | generate | legacy, `target_g_u` 0 | 28 | 0 | 4.237.888 | 627.678 | 577.078 | 21,7% | 0,0% | 308,0 | `980547d490e4` |
+| `legacy_gu_0p5_28d` | generate | legacy, `target_g_u` 0,5 | 28 | 0 | 4.237.888 | 633.525 | 581.671 | 22,0% | 0,0% | 308,2 | `07987c600105` |
+| `legacy_gu_2_28d` | generate | legacy, `target_g_u` 2 | 28 | 0 | 4.237.888 | 638.623 | 584.200 | 21,1% | 3,7% | 308,0 | `16f08f2f7c71` |
+| `switchback_c1_28d` | generate | experiment, cụm 1 | 28 | 0 | 4.237.888 | 682.686 | 601.126 | 49,9% | 0,0% | 301,5 | `e82de1bdebb6` |
+| `switchback_c7_28d` | generate | experiment, cụm 7 | 28 | 0 | 4.237.888 | 681.136 | 599.328 | 49,5% | 0,0% | 299,9 | `14a920d6b421` |
+| `switchback_call_28d` | generate | experiment, cụm all | 28 | 0 | 4.237.888 | 681.205 | 592.311 | 50,2% | 0,0% | 296,8 | `b22e7faa46b1` |
+| `rider_ab_28d` | generate | experiment, `rider_ab` | 28 | 0 | 4.237.888 | 685.252 | 605.306 | 49,9% | 0,0% | 298,8 | `014daa142964` |
+| `gte` | gte | all_on / all_off, không B | 1 | 0–9 | – | – | 22.944,5 / 19.248,7 | – | – | 0,04 | `00c1624c58df` |
+| `gte_bigfleet` | gte | như trên, `fleet_size` 6.667 | 1 | 0–9 | – | – | 38.014,4 / 25.668,7 | – | – | 0,04 | `82f33ec317be` |
+| `all_on_5seeds_full` | evaluate | all_on, không B, log đầy đủ | 1 | 0–4 | – | – | 22.817,8 | – | – | 107,7 | `cac62bb0df8d` |
+| `all_off_5seeds_full` | evaluate | all_off, log đầy đủ | 1 | 0–4 | – | – | 19.306,2 | – | – | 106,0 | `ec258b2699a8` |
+| `calibrate_budget` | calibrate_budget | all_on | 1 | 9000 | – | – | – | – | – | 0,0 | `00c1624c58df` |
+
+Session và order gồm cả warm-up; N chỉ tính order đặt trong cửa sổ. Mọi bộ `generate` của một thế giới gặp cùng tập session (CRN); W1 nhiều hơn W0 1,0% session vì hệ số cầu theo ngày của 28 ngày đó trung bình > 1. Dung lượng: 2,5 GB mỗi thế giới, 4,9 GB cả hai.
+
+**GTE** (ghép cặp theo seed 0–9, 1 ngày, không ngân sách):
+
+| | N(all_on) | N(all_off) | GTE | SE | ETA đón on / off (phút) |
+|---|---|---|---|---|---|
+| W0, đội xe chuẩn (1.150) | 23.235,7 | 19.371,0 | **+3.864,7** (+20,0%) | 40,9 | 6,78 / 4,00 |
+| W0, đội xe rất lớn (6.000) | 37.459,0 | 25.274,1 | **+12.184,9** (+48,2%) | 22,2 | 1,22 / 1,20 |
+| W1, đội xe chuẩn (1.278) | 22.944,5 | 19.248,7 | **+3.695,8** (+19,2%) | 294,6 | 6,93 / 4,20 |
+| W1, đội xe rất lớn (6.667) | 38.014,4 | 25.668,7 | **+12.345,7** (+48,1%) | 493,2 | 1,25 / 1,22 |
+
+Phần "công suất" (kế hoạch §4.4): ở đội xe chuẩn chỉ 32% mức tăng cầu thành chuyến thêm (3.865 / 12.185); SE của W1 lớn gấp 7–20 lần W0 vì biến động theo ngày.
+
+**Kiểm G8 "biến động có tác dụng"** (trên `market/slot_snapshots` của `legacy_28d`, 163.968 (ô, slot) trong cửa sổ mỗi thế giới): tỷ lệ (ô, slot) căng (slack < 0,35) W0 16,6% → W1 17,7%; **ngoài 5–8h W0 14,7% → W1 15,8%**; theo ngày W0 chỉ dao động 16,5–17,6% (trừ ngày đầu 1,6%), W1 2,5–28,0%; trên W1 theo loại ngày: không mưa, không sự kiện 11,6% (7 ngày), chỉ sự kiện 17,8% (14), chỉ mưa 18,4% (1), mưa + sự kiện 21,3% (7). Biến động tạo căng rõ ở ngày có mưa/sự kiện; mức tăng trung bình 28 ngày là +1,1 điểm vì W0 đã hiệu chỉnh không còn dồn căng vào 5–8h (T-42). Lịch biến động 28 ngày của W1: 8 ngày mưa, 22 sự kiện.
+
+**Thêm cho T10.6 (14/10, W0):** `all_on_oldshift_5seeds_full`, `all_off_oldshift_5seeds_full` = hai lệnh `evaluate` ở trên với `--set "supply.shift_start_mixture=[[6.0,8.5,0.30],[10.0,14.0,0.20],[15.0,19.0,0.35],[19.0,23.0,0.15]]"` (lịch ca trước T-42, mọi thứ khác giữ nguyên); N `all_on` 21.413,2, `all_off` 18.348,2. Dùng với `analysis.theta.on_off_by_hour_runs` để so tác hại theo giờ trước/sau khi sửa lịch ca (số trong log T10.6).
+
+**`check_budget`** trên `legacy_28d`: W0 mọi kỳ chi ≤ B, 47.285 session bị chặn (1,7% session ở ô bật), đều `arm = 0`, `voucher = 0`; W1 mọi kỳ ≤ B, 17.853 bị chặn (0,7%). Bảng đầy đủ: `runs/s8/check_budget.txt`, `runs/s8/check_dataset.md`.
+
+**Thời gian chạy** (8 lõi, `runs/s8/times.txt`): mỗi `generate` 28 ngày 935–1.183 s khi chạy 8 lượt song song (33–42 s/ngày/tiến trình); `gte` 85–88 s; `gte_bigfleet` 128–134 s; `evaluate` 5 seed log đầy đủ 32–37 s; `calibrate_budget` 19 s. Tổng từ lệnh đầu tới lệnh cuối: **46,8 phút** (ĐX mục E ước 1,1 giờ).
+
+---
+
+## Dữ liệu Sprint 9 (T-44: Tình làm S9; 14–15/10/2026, `runs/s9`): phương pháp trên W0 và W1
+
+Mọi bước đọc `runs/s8` (B11) và chỉ `observed/`, `market/`, `results/`; không sinh dữ liệu mới. Mô hình và luật được commit trong `analysis/models/` (để chính sách nạp trong tiến trình con); bảng kết quả trong `runs/s9/<world>/` (không commit). W1 dùng `config/default.yaml` + `config/world_w1.yaml`.
+
+### Lệnh sinh lại (bash, từ thư mục gốc repo)
+
+```bash
+PY=.venv/Scripts/python.exe
+# H9.1 — DR-learner theo 1.000đ, fit lại trên luật cũ 28 ngày của từng thế giới (mô hình cũ trước B9 là USD)
+$PY -m analysis.uplift fit runs/s8/w0/legacy_28d                                                    # dr_explore, dr_all
+$PY -m analysis.uplift fit runs/s8/w1/legacy_28d config/default.yaml config/world_w1.yaml --suffix w1   # dr_explore_w1, dr_all_w1
+# H9.2 — chấm 7 chỉ số độ căng (H-22) trên all_off 5 seed log đầy đủ
+$PY -m analysis.tension runs/s8/w0/all_off_5seeds_full                                 > runs/s9/tension_w0.txt
+$PY -m analysis.tension runs/s8/w1/all_off_5seeds_full config/default.yaml config/world_w1.yaml > runs/s9/tension_w1.txt
+# H9.3 — đường tác dụng theo độ căng trước khối, ngưỡng theo độ căng so với theo giờ (A/B), giờ có hại, phân bố độ căng
+for w in w0 w1; do
+  $PY -m analysis.tension_curve --world $w --switchback runs/s8/$w/switchback_call_28d --budget runs/s8/$w/calibrate_budget \
+      --all-off runs/s8/$w/all_off_5seeds_full --all-on runs/s8/$w/all_on_5seeds_full --legacy runs/s8/$w/legacy_28d --out runs/s9/$w
+  # H9.4 — luật tắt theo giờ: giờ có hại của H9.3 vào analysis/models/hour_rule_<w>.json (commit)
+  $PY -m analysis.hour_rule set $w --from runs/s9/$w/summary.json
+  # H9.5 — thác nước ba nguồn sai số; H9.6 — burn-in so với ảnh hưởng kéo dài
+  $PY -m analysis.interference waterfall --legacy runs/s8/$w/legacy_28d --rider-ab runs/s8/$w/rider_ab_28d \
+      --gte runs/s8/$w/gte --gte-big runs/s8/$w/gte_bigfleet --out runs/s9/$w
+  $PY -m analysis.interference burnin --switchback-all runs/s8/$w/switchback_call_28d --gte runs/s8/$w/gte --out runs/s9/$w
+done
+# H9.7 — kiểm gói B12 (nạp hàm điểm trong tiến trình con hai lần, file giờ có hại, thác nước cộng khớp)
+$PY -m analysis.b12_check --runs runs/s9
+```
+
+### Kết quả (14/10/2026 tối; chi tiết ở log H9.1–H9.7, decisions T-45, T-46)
+
+| Bước | W0 | W1 | Thời gian |
+|---|---|---|---|
+| H9.1 DR-learner (ATE DR lên hoàn thành, lát explore / toàn bộ; chi/lượt phát) | 0,0584 ± 0,0015 / 0,0930 ± 0,0003 | 0,0593 ± 0,0015 / 0,0907 ± 0,0003; 2.989đ / 3.413đ | 786 s / 1.239 s |
+| H9.2 chỉ số độ căng tốt nhất (R² ETA / bắt ca tệ) | `hour` 0,213 / 0,308; `system` 0,188 / 0,316; `ring1` 0,187 / 0,308 | `system` 0,269 / 0,488; `ring1` 0,255 / 0,478; `hour` 0,248 / 0,394 | < 1 phút |
+| H9.3 θ̂_tension `ring1` [CI]; θ̂_B `ring1`; θ̂_B `city` | 0,00 [0; 0,32]; 2,3; 1,6 | 0,00 [0; 0,18]; 2,15; 2,1 | 44 s / 39 s |
+| H9.3 slot toàn thành phố căng (< 0,35): `all_off` / `legacy` / `all_on` | 0,4% / 4,2% / 32,1% | 5,4% / 6,5% / 34,0% | |
+| H9.4 giờ có hại (τ̂(h) cận trên CI < 0) | [8, 17, 18, 19] | [18] | |
+| H9.5 thác nước: so thô → mức mỗi khách → GTE → GTE đội xe rất lớn (chuyến/ngày) | +13.453 → +9.217 → +3.865 → +12.185 | +14.106 → +9.120 → +3.696 → +12.346 | 499 s / 427 s |
+| H9.5 gây nhiễu; tranh chấp xe; đội xe giữ lại | +4.237 [3.885; 4.557]; +5.352 [5.087; 5.642]; 32% | +4.986 [4.665; 5.340]; +5.424 [4.812; 6.052]; 30% | |
+| H9.6 burn-in bias; ảnh hưởng kéo dài (chuyến/ngày) | +594 [483; 700]; +121 [−896; +1.266] | +590 [466; 714]; +228 [−1.044; +1.645] | 466 s / 482 s |
+| H9.7 `b12_check` | OK (12 hàm điểm tất định, 8 file) | | |
+
+Thư mục: `runs/s9/<w>/summary.{md,json}`, `curve_by_tension.parquet`, `thresholds.parquet`, `hour_effects.parquet`, `tension_distribution.parquet`, `results/waterfall_completed.parquet` (+ `_attrs.json`), `results/burnin_completed.parquet`; `runs/s9/tension_w0_w1.txt`, `tension_w1.txt`; `runs/s9/b12_manifest.json`. Commit: `analysis/models/dr_*`, `dr_*_w1`, `hour_rule_w0.json`, `hour_rule_w1.json`.

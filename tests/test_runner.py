@@ -129,7 +129,10 @@ def test_fake_engine_receives_the_throughput_config(default_yaml):
 
 
 def test_throughput_curve_end_to_end(default_yaml, tmp_path):
-    cfg = load_config(default_yaml, ["throughput.n_seeds=2"])
+    # The fake engine peaks at requests = capacity (demand_scale ~ 3.8 on the Hanoi fleet), so this plumbing test
+    # keeps the 16-level grid of T-08 regardless of the city grid in default.yaml (0.25..2.5 since T-43).
+    grid = "[0.25,0.5,0.75,1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0]"
+    cfg = load_config(default_yaml, ["throughput.n_seeds=2", f"throughput.demand_scale_grid={grid}"])
     table = run_throughput_curve(cfg, tmp_path, engine=FAKE, n_procs=1)
     path = tmp_path / "results" / "throughput_curve.parquet"
     assert path.exists()
@@ -138,7 +141,8 @@ def test_throughput_curve_end_to_end(default_yaml, tmp_path):
     assert len(disk) == len(cfg.throughput.demand_scale_grid) * 2 and set(disk["seed"]) == {0, 1}
     assert str(disk["seed"].dtype) == "int32" and str(disk["fleet_size"].dtype) == "int32"
     assert str(disk["run_id"].dtype) == "string" and disk["run_id"].is_unique
-    assert disk["run_id"].str.startswith("throughput_curve-").all() and disk["run_id"].str.endswith("-all_off-nan-0").sum() == 16
+    assert disk["run_id"].str.startswith("throughput_curve-").all()
+    assert disk["run_id"].str.endswith("-all_off-nan-0").sum() == len(cfg.throughput.demand_scale_grid)   # seed 0 once per level
     assert (disk["fleet_size"] == cfg.supply.fleet_size).all()
 
     s = summarize_throughput(table)
