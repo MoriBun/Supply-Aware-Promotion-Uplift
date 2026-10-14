@@ -3,10 +3,12 @@
 Spec: docs/spec.md §6 [report M3]; decisions D3, D4, T-21, T-23. Milestone: P4 (task T2.3).
 
 Cell layer: forecast ``s_hat`` of each cell's slack from the published snapshots
-(``persistence`` = last slot; ``ar`` = weighted lag slot and lag day with inf
-capped at ``monitor.slack_cap``), then ``promo_on = not (s_hat < theta)``, so an
-unknown (NaN) or infinite forecast leaves the cell on and ``theta = 0`` cuts
-nothing. With ``hysteresis_h > 0`` a cell that is off turns on only when
+(``persistence`` = last slot; ``ar`` = weighted lag slot and lag day), with inf
+capped at ``monitor.slack_cap`` in **every** branch (T7.1, decisions T-39, KN 2.3:
+a score function fitted on the capped feature must never see inf; the ``slack``
+column of ``market/`` keeps inf). Then ``promo_on = not (s_hat < theta)``, so an
+unknown (NaN) forecast leaves the cell on, ``theta = 0`` cuts nothing and a cell
+with idle drivers and nobody en route counts as slack ``slack_cap``. With ``hysteresis_h > 0`` a cell that is off turns on only when
 ``s_hat > theta + h``. Rider layer: ``score = score_fn(batch, s_hat)`` and a
 session is offered when its cell is on and ``score >= kappa``; the budget is
 applied afterwards by the voucher layer (L12). ``kappa = -inf`` is the pilot
@@ -77,12 +79,10 @@ class ThresholdPolicy:
 
     def forecast_slack(self, snapshots: SnapshotView) -> np.ndarray:
         """``s_hat`` per cell (float64); NaN where nothing is published yet."""
-        lag_slot = self._slack(lambda f: snapshots.lag(f, 1))
+        a = np.minimum(self._slack(lambda f: snapshots.lag(f, 1)), self.slack_cap)   # inf -> cap, NaN stays (T-39)
         if self.forecast == "persistence":
-            return lag_slot
-        lag_day = self._slack(snapshots.lag_day)
-        a = np.minimum(lag_slot, self.slack_cap)
-        b = np.minimum(lag_day, self.slack_cap)
+            return a
+        b = np.minimum(self._slack(snapshots.lag_day), self.slack_cap)
         w_slot, w_day = self.ar_weights
         ar = w_slot * a + w_day * b
         return np.where(np.isnan(b), a, ar)             # first day: lag day unknown -> persistence (T-23)

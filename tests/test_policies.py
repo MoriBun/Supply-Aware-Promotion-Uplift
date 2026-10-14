@@ -218,19 +218,46 @@ def threshold(default_yaml, *overrides, **kw) -> ThresholdPolicy:
     return ThresholdPolicy(load_config(default_yaml, list(overrides)), 7, **kw)
 
 
-def test_threshold_theta_zero_cuts_nothing_and_huge_theta_cuts_every_finite_cell(default_yaml):
+def test_threshold_theta_zero_cuts_nothing_and_huge_theta_cuts_every_cell(default_yaml):
     store = store_with_slack(7, [[0.1, 0.5, math.inf, 2.0, 0.34, 0.36, 10.0]])
     view = SnapshotView(store, 1)
     zero = threshold(default_yaml, theta=0.0).cell_state(1, view)
     assert zero.promo_on.all() and (zero.cell_propensity == 1.0).all()
     assert (zero.mechanism == int(Mechanism.THRESHOLD)).all() and (zero.cluster_id == -1).all() and zero.block == -1
-    np.testing.assert_array_equal(zero.s_hat, np.array([0.1, 0.5, math.inf, 2.0, 0.34, 0.36, 10.0], dtype=np.float32))
+    # T7.1 (T-39, KN 2.3): the published inf is capped at monitor.slack_cap = 10 before it reaches theta or the score
+    np.testing.assert_array_equal(zero.s_hat, np.array([0.1, 0.5, 10.0, 2.0, 0.34, 0.36, 10.0], dtype=np.float32))
     huge = threshold(default_yaml, theta=1e9).cell_state(1, view)
-    assert huge.promo_on.tolist() == [False, False, True, False, False, False, False]   # inf never counts as tight
+    assert not huge.promo_on.any()                                                     # every published cell is tight
     mid = threshold(default_yaml, theta=0.35).cell_state(1, view)
     assert mid.promo_on.tolist() == [False, True, True, True, False, True, True]
     first = threshold(default_yaml, theta=0.35).cell_state(0, SnapshotView(SnapshotStore(7, 96), 0))
     assert first.promo_on.all() and np.isnan(first.s_hat).all()                      # nothing published: on
+
+
+def test_threshold_persistence_caps_inf_at_slack_cap_in_every_scope(default_yaml, tiny_cfg):
+    # T7.1 (decisions T-39, KN 2.3): scope=cell + forecast=persistence used to pass the published inf straight
+    # to score_fn and slack_hat while ar and ring1 capped it; now every branch caps, NaN (not published) stays NaN.
+    cap = float(load_config(default_yaml).monitor.slack_cap)
+    store = store_with_slack(7, [[math.inf, 0.0, 0.5, 20.0, 1.0, 1.0, 1.0]])
+    view = SnapshotView(store, 1)
+    pol = threshold(default_yaml, theta=0.35)
+    assert pol.forecast == "persistence" and pol.scope == "cell" and pol.slack_cap == cap == 10.0
+    s_hat = pol.forecast_slack(view)
+    np.testing.assert_array_equal(s_hat, [cap, 0.0, 0.5, cap, 1.0, 1.0, 1.0])
+    assert np.isfinite(s_hat).all()
+    assert np.isnan(pol.forecast_slack(SnapshotView(SnapshotStore(7, 96), 0))).all()   # nothing published: NaN
+    seen = {}
+    spy = threshold(default_yaml, kappa=-math.inf, score_fn=lambda b, s: seen.setdefault("s", s) * 0 + 1.0)
+    cd = spy.cell_state(1, view)
+    spy.offer(make_batch(4, 7, pu_cell=[0, 3, 1, 2]), cd, make_ledger())
+    assert seen["s"].max() == cap and np.isfinite(seen["s"]).all()                   # score_fn never sees inf
+    # ring1 on the 7-cell torus: idle but nobody en route anywhere -> inf ratio, capped as well
+    rec = blank_record(7, 0, idle_avg=np.full(7, 2.0, dtype=np.float32), enroute_avg=np.zeros(7, dtype=np.float32))
+    ring_store = SnapshotStore(7, 96)
+    ring_store.publish(0, rec)
+    ring = threshold(default_yaml, "policy.threshold.scope=ring1", theta=0.35,
+                     neighbors=stub_world(tiny_cfg).space.neighbors)
+    np.testing.assert_array_equal(ring.forecast_slack(SnapshotView(ring_store, 1)), np.full(7, cap))
 
 
 def test_threshold_offer_scores_and_kappa(default_yaml):

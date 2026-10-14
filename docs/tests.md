@@ -73,6 +73,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 ### Chính sách (`tests/test_policies.py`)
 - [U] `SessionBatch` truyền cho π_θ không chứa cột ẩn.
 - [U] π_θ: θ = 0 thì không ô nào bị tắt; θ rất lớn thì mọi ô tắt.
+- [U] π_θ: ŝ không bao giờ là inf: với `scope = cell`, `forecast = persistence`, ô có xe rảnh mà không xe đi đón cho ŝ = `monitor.slack_cap`; `score_fn` chỉ nhận giá trị hữu hạn; chưa công bố thì NaN (T-39).
 - [U] Hysteresis: với chuỗi ŝ dao động quanh θ, số lần đổi trạng thái khi h > 0 ít hơn khi h = 0.
 - [U] Chính sách cũ: `cell_propensity = (1−ε)·rule + ε·0,5`; `propensity` NaN với session nhắm theo rider, bằng `explore_p` với session explore.
 - [U] κ auto: chi tiêu thực tế của lượt đánh giá nằm trong [0,85B; 1,0B].
@@ -92,6 +93,11 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [I] `test_driver_state_consistency`: mỗi tick, số xe theo trạng thái cộng lại bằng số xe online; không xe nào vừa idle vừa có order.
 
 ---
+
+## 2b. Hồi quy Sprint 7 (`tests/test_regression_s7.py`, G7) — `@slow`
+
+- [I] Với `config/default.yaml` + `tests/fixtures/regression_s7_pinned.yaml` (default.yaml ghim tại 1c2eb85, cộng giá trị cũ của mọi khóa mới S7), 1 ngày của `generate` legacy, `generate` experiment, `evaluate` threshold (κ auto) và `evaluate` all_on phải trùng từng số với `tests/fixtures/regression_s7.json` (sinh tại 1c2eb85): số dòng và băm từng cột của mọi bảng `observed/`, `market/`, `hidden/`, `results/`, `meta/`, trừ cột biến động và trừ `slack_hat` được chặn ở `slack_cap` trước khi băm (T-39). Lệch thì test in tên bảng và cột lệch. Không sinh lại mốc trong S7.
+- [U] `tests/fixtures/regression_s7.json` đủ 4 lượt và đủ các bảng chính (chạy trong `pytest -q`).
 
 ## 3. Nghiệm thu bắt buộc (5 kiểm thử của [report])
 
