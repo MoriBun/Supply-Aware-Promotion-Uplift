@@ -85,7 +85,7 @@ def vn(value: float, digits: int = 0) -> str:
     return f"{value:,.{digits}f}".replace(",", " ").replace(".", ",").replace(" ", ".")
 
 
-def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | None = None,
+def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_vnd: float | None = None,
                      baselines: dict[str, float] | None = None, share_cells_off=None,
                      star_interval: tuple[float, float] | None = None, title: str | None = None) -> Path:
     """N(pi_theta) with a 95% CI over seeds, zoomed on the sweep; below, how much each theta cuts.
@@ -125,8 +125,8 @@ def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | Non
     n_seeds = int(sweep["n_seeds"].iloc[0]) if "n_seeds" in sweep else 0
     ax_n.set_title(title or f"N(π_θ) theo ngưỡng θ, cùng ngân sách B (trung bình {n_seeds} seed, dải 95%)", pad=30)
     notes = []
-    if budget_usd is not None and budget_usd == budget_usd:
-        notes.append(f"B = {vn(budget_usd)} USD/kỳ, chi trung bình {vn(spent.min())}–{vn(spent.max())}")
+    if budget_vnd is not None and budget_vnd == budget_vnd:
+        notes.append(f"B = {vn(budget_vnd)} đ/kỳ, chi trung bình {vn(spent.min())}–{vn(spent.max())}")
     notes += [f"{label}: {vn(value)}" for label, value in (baselines or {}).items()]
     if notes:
         ax_n.text(0.0, 1.035, "  ·  ".join(notes), transform=ax_n.transAxes, ha="left", va="bottom",
@@ -141,7 +141,7 @@ def plot_theta_sweep(sweep: pd.DataFrame, path: Path, *, budget_usd: float | Non
         ax_s.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
     else:
         _line(ax_s, x, spent)
-        ax_s.set_ylabel("Chi voucher (USD / ngày)")
+        ax_s.set_ylabel("Chi voucher (đ / ngày)")
         ax_s.set_title("Chi tiêu voucher trung bình")
         ax_s.yaxis.set_major_formatter(lambda v, _: vn(v))
     ax_s.set_ylim(bottom=0)
@@ -229,7 +229,7 @@ def main(argv: list[str]) -> int:
     star = theta_star_set(runs)
     best, lo, hi = theta_star_interval(star)
     out = plot_theta_sweep(sweep, run_dir / "results" / "theta_sweep.png",
-                           budget_usd=float(runs["budget_B_usd"].iloc[0]), baselines=baselines, share_cells_off=off,
+                           budget_vnd=float(runs["budget_B_vnd"].iloc[0]), baselines=baselines, share_cells_off=off,
                            star_interval=(lo, hi))
     print(star.round(2).to_string(index=False))
     gaps = theta_star_gaps(star)

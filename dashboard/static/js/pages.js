@@ -1,7 +1,7 @@
 // The pages. Each receives the selected run (detail of /api/runs/{id}) and fetches what it needs.
 // The sweep page ("Tìm θ*") lives in sweep.js; shared bits are in common.js.
 import { html, useState, useEffect, useRef, useMemo, api, useApi, useLocalStorage, useWidth, cssVar, clamp, sum, mean,
-  fmtInt, fmtNum, fmtUSD, fmtPct, fmtSigned, fmtClock, fmtHM, fmtDur, compact, driverColors, DRIVER_LABEL, SEQ, seqColor,
+  fmtInt, fmtNum, fmtVND, fmtPct, fmtSigned, fmtClock, fmtHM, fmtDur, compact, driverColors, DRIVER_LABEL, SEQ, seqColor,
   ORDER_STATUS } from "./lib.js";
 import { LineChart, BarChart, Heatmap, StatTile, Meter, Table, Legend } from "./charts.js";
 import { HexMap, HexStatic, MapLegend, useFrames, usePlayer } from "./hexmap.js";
@@ -20,7 +20,7 @@ function initialForm(cfg) {
   return {
     name: "", policy: cfg.policy.name, theta: th.theta, scope: th.scope, forecast: th.forecast, hysteresis: th.hysteresis_h,
     score_fn: th.score_fn, kappaMode: th.kappa === "auto" ? "auto" : "manual", kappaValue: th.kappa === "auto" ? 0 : th.kappa,
-    enforce: cfg.budget.enforce, budget_mode: cfg.budget.mode, fraction: cfg.budget.fraction, fixed_usd: cfg.budget.fixed_usd ?? 5000,
+    enforce: cfg.budget.enforce, budget_mode: cfg.budget.mode, fraction: cfg.budget.fraction, fixed_vnd: cfg.budget.fixed_vnd ?? 5000,
     budget_manual: "", pct: cfg.voucher.pct_of_fare, fleet: cfg.supply.fleet_size, demand_scale: cfg.demand.demand_scale,
     radius: cfg.space.grid_radius, window_min: cfg.time.window_min ?? "", warmup: cfg.time.warmup_min, seed: cfg.meta.run_seed,
     design: cfg.experiment.design, cluster_level: String(cfg.experiment.cluster_level), p_on: cfg.experiment.p_on,
@@ -35,13 +35,13 @@ function buildRequest(f) {
   if (f.policy === "experiment") o.push(`experiment.design=${f.design}`, `experiment.cluster_level=${f.cluster_level}`, `experiment.p_on=${f.p_on}`);
   if (f.policy === "legacy") o.push(`policy.legacy.slack_on=${f.legacy_slack_on}`, `policy.legacy.explore_frac=${f.explore_frac}`);
   o.push(`budget.enforce=${f.enforce}`, `budget.mode=${f.budget_mode}`, `budget.fraction=${f.fraction}`);
-  if (f.budget_mode === "fixed") o.push(`budget.fixed_usd=${f.fixed_usd}`);
+  if (f.budget_mode === "fixed") o.push(`budget.fixed_vnd=${f.fixed_vnd}`);
   o.push(`voucher.pct_of_fare=${f.pct}`, `supply.fleet_size=${f.fleet}`, `demand.demand_scale=${f.demand_scale}`, `space.grid_radius=${f.radius}`,
     `time.warmup_min=${f.warmup}`, `meta.run_seed=${f.seed}`, `time.window_min=${f.window_min === "" || f.window_min == null ? "null" : f.window_min}`);
   for (const line of (f.extra || "").split("\n")) { const l = line.trim(); if (l && !l.startsWith("#")) o.push(l); }
   const name = f.name || `${f.policy}${f.policy === "threshold" ? ` θ=${f.theta}` : ""} seed ${f.seed}`;
   const body = { name, overrides: o, layers: [] };
-  if (f.enforce && f.budget_manual !== "" && f.budget_manual != null) body.budget_usd = Number(f.budget_manual);
+  if (f.enforce && f.budget_manual !== "" && f.budget_manual != null) body.budget_vnd = Number(f.budget_manual);
   if (f.policy === "threshold" && f.kappaMode === "manual") body.kappa = Number(f.kappaValue);
   return body;
 }
@@ -116,8 +116,8 @@ export function RunPage({ defaults, runs, run, onStarted, onSelect, params = {} 
           </div></fieldset>` : null}
           <fieldset><legend>Ngân sách và voucher</legend><div className="form-grid">
             <label className="check"><input type="checkbox" checked=${form.enforce} onChange=${set("enforce")} /> Áp ngân sách B (budget.enforce)</label>
-            <${Field} label="Cách lấy B"><select value=${form.budget_mode} onChange=${set("budget_mode")} disabled=${!form.enforce}><option value="fraction_of_all_on">fraction × chi của pilot all_on</option><option value="fixed">cố định (USD/kỳ)</option></select><//>
-            ${form.budget_mode === "fixed" ? html`<${Field} label="B cố định (USD/kỳ)"><input type="number" step="10" value=${form.fixed_usd} onChange=${num("fixed_usd")} disabled=${!form.enforce} /><//>`
+            <${Field} label="Cách lấy B"><select value=${form.budget_mode} onChange=${set("budget_mode")} disabled=${!form.enforce}><option value="fraction_of_all_on">fraction × chi của pilot all_on</option><option value="fixed">cố định (đ/kỳ)</option></select><//>
+            ${form.budget_mode === "fixed" ? html`<${Field} label="B cố định (đ/kỳ)"><input type="number" step="1000" value=${form.fixed_vnd} onChange=${num("fixed_vnd")} disabled=${!form.enforce} /><//>`
               : html`<${Field} label="fraction"><input type="number" step="0.05" min="0" value=${form.fraction} onChange=${num("fraction")} disabled=${!form.enforce} /><//>`}
             <${Field} label="Nhập B tay (bỏ qua pilot)" hint="để trống = chạy pilot"><input type="number" step="10" value=${form.budget_manual} onChange=${set("budget_manual")} disabled=${!form.enforce} /><//>
             <${Field} label="Voucher = % cước"><input type="number" step="0.05" min="0" max="1" value=${form.pct} onChange=${num("pct")} /><//>
@@ -163,7 +163,7 @@ function ProgressCard({ run, onSelect }) {
     <p className="ink2" style=${{ marginTop: 8 }}>${run.message}${run.status === "simulating" ? ` · tick ${fmtInt(run.tick)} / ≤ ${fmtInt(run.ticks_max)} · ${fmtClock(run.t_s)}` : ""}</p>
     ${run.status === "done" && run.kpis ? html`<div className="grid cols-3" style=${{ marginBottom: 10 }}>
       <${StatTile} label="N(π)" value=${fmtInt(run.kpis.N_completed)} />
-      <${StatTile} label="Chi voucher" value=${fmtUSD(run.kpis.voucher_spent_usd, 0)} sub=${run.budget_usd != null ? `B = ${fmtUSD(run.budget_usd, 0)}/kỳ` : "không áp B"} />
+      <${StatTile} label="Chi voucher" value=${fmtVND(run.kpis.voucher_spent_vnd, 0)} sub=${run.budget_vnd != null ? `B = ${fmtVND(run.budget_vnd, 0)}/kỳ` : "không áp B"} />
       <${StatTile} label="% (ô, slot) tắt" value=${fmtPct(run.kpis.share_cells_off)} />
     </div>` : null}
     ${run.kind === "sweep" ? html`<div className="row" style=${{ marginBottom: 8 }}><button className="btn sm primary" onClick=${() => { onSelect(run.id); location.hash = "#/sweep"; }}>Xem kết quả quét θ</button></div>`
@@ -295,8 +295,8 @@ export function MapPage({ run }) {
       </div>
       <div className="card">
         <div className="card-head"><h3>Ngân sách kỳ hiện tại</h3>${counts ? html`<span className="hint">kỳ ${counts.ledger[0] < 0 ? "warm-up" : counts.ledger[0]}</span>` : null}</div>
-        ${counts ? html`<${Meter} max=${counts.ledger[4] < 0 ? null : counts.ledger[4] / 100} format=${(v) => fmtUSD(v, 0)}
-          segments=${[{ value: counts.ledger[1] / 100, color: cssVar("--seq-600"), label: "đã chi" }, { value: counts.ledger[2] / 100, color: cssVar("--seq-400"), label: "đã đặt (chờ hoàn thành)" }, { value: counts.ledger[3] / 100, color: cssVar("--seq-200"), label: "đang giữ (chờ đặt xe)" }]} />` : null}
+        ${counts ? html`<${Meter} max=${counts.ledger[4] < 0 ? null : counts.ledger[4]} format=${(v) => fmtVND(v, 0)}
+          segments=${[{ value: counts.ledger[1], color: cssVar("--seq-600"), label: "đã chi" }, { value: counts.ledger[2], color: cssVar("--seq-400"), label: "đã đặt (chờ hoàn thành)" }, { value: counts.ledger[3], color: cssVar("--seq-200"), label: "đang giữ (chờ đặt xe)" }]} />` : null}
         <p className="small muted" style=${{ marginTop: 6 }}>Bất biến: chi + đặt + giữ ≤ B. Khi chạm trần, session muốn phát bị chặn (dấu × đỏ trên bản đồ).</p>
       </div>
       <div className="card">
@@ -435,17 +435,17 @@ export function DistributionPage({ run }) {
     <div className="grid cols-6">
       <${StatTile} label="Voucher đã phát (cửa sổ)" value=${fmtInt(d.n_offers)} sub=${`${fmtPct(d.n_offers / Math.max(1, d.n_sessions))} số session`} />
       <${StatTile} label="Muốn phát nhưng hết B" value=${fmtInt(d.n_blocked)} sub="budget_blocked = true" />
-      <${StatTile} label="Voucher trung bình" value=${d.mean_voucher_usd == null ? "–" : fmtUSD(d.mean_voucher_usd, 2)} sub=${run.config ? `${fmtPct(run.config.voucher.pct_of_fare, 0)} cước gốc` : ""} />
-      <${StatTile} label="Chi thực / B" value=${k.spent_share_of_budget == null ? fmtUSD(k.voucher_spent_usd) : fmtPct(k.spent_share_of_budget)} sub="chỉ voucher của chuyến hoàn thành" />
+      <${StatTile} label="Voucher trung bình" value=${d.mean_voucher_vnd == null ? "–" : fmtVND(d.mean_voucher_vnd, 2)} sub=${run.config ? `${fmtPct(run.config.voucher.pct_of_fare, 0)} cước gốc` : ""} />
+      <${StatTile} label="Chi thực / B" value=${k.spent_share_of_budget == null ? fmtVND(k.voucher_spent_vnd) : fmtPct(k.spent_share_of_budget)} sub="chỉ voucher của chuyến hoàn thành" />
       <${StatTile} label="κ tầng rider" value=${kText} sub=${run.policy === "threshold" ? `điểm ${run.score_fn}` : "không dùng"} />
       <${StatTile} label="Session trong cửa sổ" value=${fmtInt(d.n_sessions)} />
     </div>
     <div className="grid cols-2">
       <div className="card">
         <div className="card-head"><h2>Ngân sách theo thời gian</h2><span className="hint">sổ cái từng kỳ; bất biến chi + đặt + giữ ≤ B</span></div>
-        ${curve ? html`<${LineChart} x=${xh} height=${240} xFormat=${(v) => fmtHM(v * 3600)} yFormat=${(v) => fmtUSD(v, 0)} bands=${[{ x0: clock.window_start_s / 3600, x1: clock.window_end_s / 3600 }]}
-          series=${[{ name: "trần B của kỳ", color: S(8), y: curve.limit_usd, dash: true }, { name: "đã dùng (chi + đặt + giữ)", color: S(1), y: curve.used_usd }, { name: "đã chi (chuyến hoàn thành)", color: S(3), y: curve.spent_usd }]} />` : null}
-        <${Table} rows=${d.budget_periods} columns=${[{ key: "period", label: "Kỳ", fmt: (v) => (v < 0 ? "warm-up" : v) }, { key: "spent_usd", label: "Đã chi", num: true, fmt: (v) => fmtUSD(v, 2) }, { key: "limit_usd", label: "Trần B", num: true, fmt: (v) => (v == null ? "không" : fmtUSD(v, 2)) }, { key: "spent_usd", label: "Chi / B", num: true, fmt: (v, r) => (r.limit_usd ? fmtPct(v / r.limit_usd) : "–") }]} />
+        ${curve ? html`<${LineChart} x=${xh} height=${240} xFormat=${(v) => fmtHM(v * 3600)} yFormat=${(v) => fmtVND(v, 0)} bands=${[{ x0: clock.window_start_s / 3600, x1: clock.window_end_s / 3600 }]}
+          series=${[{ name: "trần B của kỳ", color: S(8), y: curve.limit_vnd, dash: true }, { name: "đã dùng (chi + đặt + giữ)", color: S(1), y: curve.used_vnd }, { name: "đã chi (chuyến hoàn thành)", color: S(3), y: curve.spent_vnd }]} />` : null}
+        <${Table} rows=${d.budget_periods} columns=${[{ key: "period", label: "Kỳ", fmt: (v) => (v < 0 ? "warm-up" : v) }, { key: "spent_vnd", label: "Đã chi", num: true, fmt: (v) => fmtVND(v, 2) }, { key: "limit_vnd", label: "Trần B", num: true, fmt: (v) => (v == null ? "không" : fmtVND(v, 2)) }, { key: "spent_vnd", label: "Chi / B", num: true, fmt: (v, r) => (r.limit_vnd ? fmtPct(v / r.limit_vnd) : "–") }]} />
       </div>
       <div className="card">
         <div className="card-head"><h2>Phát voucher theo giờ</h2><span className="hint">session mở trong giờ đó, cửa sổ đánh giá</span></div>
@@ -523,11 +523,11 @@ export function ResultsPage() {
         <span className="small muted">chọn tối đa 4 sweep; trục θ cách đều theo lưới</span>
       </div>
       ${chosen.length ? html`<${LineChart} x=${thetas.map((_, i) => i)} xLabels=${thetas.map((t) => String(t))} height=${300} series=${sweepSeries} marks=${marks}
-        yFormat=${(v) => (metric === "N" ? fmtInt(v) : fmtUSD(v, 0))} yLabel=${metric === "N" ? "chuyến / cửa sổ" : "USD"} />` : html`<div className="empty">chưa có sweep nào trong runs/</div>`}
+        yFormat=${(v) => (metric === "N" ? fmtInt(v) : fmtVND(v, 0))} yLabel=${metric === "N" ? "chuyến / cửa sổ" : "đ"} />` : html`<div className="empty">chưa có sweep nào trong runs/</div>`}
       <div className="grid cols-3" style=${{ marginTop: 10 }}>
         ${Object.entries(groups).map(([g, list]) => html`<div key=${g}><div className="small ink2" style=${{ marginBottom: 4 }}><b>runs/${g}</b></div>
           ${list.map((s) => html`<label key=${s.key} className="check small" style=${{ display: "flex" }}><input type="checkbox" checked=${selected.includes(s.key)} onChange=${() => toggle(s.key)} />
-            <span>${s.name} <span className="muted">· ${s.n_seeds} seed · θ* = ${s.argmax_theta}${s.budget_B_usd ? ` · B ${fmtUSD(s.budget_B_usd, 0)}` : ""}</span></span></label>`)}</div>`)}
+            <span>${s.name} <span className="muted">· ${s.n_seeds} seed · θ* = ${s.argmax_theta}${s.budget_B_vnd ? ` · B ${fmtVND(s.budget_B_vnd, 0)}` : ""}</span></span></label>`)}</div>`)}
       </div>
     </div>
     ${pt.map((t) => {
@@ -539,7 +539,7 @@ export function ResultsPage() {
           series=${[{ name: "ΔN so với tham chiếu", color: S(1), values: rows.map((r) => r.dN_vs_ref) }]} legend=${false} />
         <${Table} rows=${rows} maxHeight=${320} columns=${[{ key: "label", label: "Nhãn" }, { key: "policy", label: "Chính sách" }, { key: "score_fn", label: "Hàm điểm" }, { key: "theta", label: "θ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 2)) },
           { key: "kappa", label: "κ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 3)) }, { key: "N_mean", label: "N ± SE", num: true, fmt: (v, r) => `${fmtNum(v, 1)} ± ${fmtNum(r.N_se, 1)}` },
-          { key: "V_mean", label: "V (USD)", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "spent_mean", label: "Chi (USD)", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "share_cells_off", label: "% ô tắt", num: true, fmt: (v) => fmtPct(v) }]} />
+          { key: "V_mean", label: "V (đ)", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "spent_mean", label: "Chi (đ)", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "share_cells_off", label: "% ô tắt", num: true, fmt: (v) => fmtPct(v) }]} />
       </div>`;
     })}
     ${pt.length ? null : html`<div className="card empty-state" id="evidence-policies"><h2>Chưa có bảng so sánh chính sách</h2><p>Cần bảng policy_table dưới ngân sách chung để trả lời RQ2. Lượt mô phỏng đơn chưa đủ để kết luận chính sách tốt hơn.</p><a className="btn" href="#/run">Thiết kế thực nghiệm</a></div>`}
@@ -564,7 +564,7 @@ export function ResultsPage() {
     <div className="card">
       <div className="card-head"><h2>Mọi bảng policy_results trong runs/</h2><button className="btn sm" onClick=${() => setShowEv(!showEv)}>${showEv ? "ẩn" : `hiện ${ev.length} bảng`}</button></div>
       ${showEv ? html`<${Table} maxHeight=${480} rows=${ev.flatMap((t) => t.rows.map((r) => ({ ...r, key: t.key })))} columns=${[{ key: "key", label: "Thư mục" }, { key: "policy", label: "Chính sách" }, { key: "theta", label: "θ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 2)) }, { key: "n_seeds", label: "seed", num: true },
-        { key: "N_mean", label: "N ± SE", num: true, fmt: (v, r) => `${fmtNum(v, 1)}${r.N_se != null ? ` ± ${fmtNum(r.N_se, 1)}` : ""}` }, { key: "V_mean", label: "V", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "spent_mean", label: "Chi", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "budget_B_usd", label: "B/kỳ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 0)) }, { key: "share_cells_off", label: "% ô tắt", num: true, fmt: (v) => fmtPct(v) }]} />` : null}
+        { key: "N_mean", label: "N ± SE", num: true, fmt: (v, r) => `${fmtNum(v, 1)}${r.N_se != null ? ` ± ${fmtNum(r.N_se, 1)}` : ""}` }, { key: "V_mean", label: "V", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "spent_mean", label: "Chi", num: true, fmt: (v) => fmtNum(v, 0) }, { key: "budget_B_vnd", label: "B/kỳ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 0)) }, { key: "share_cells_off", label: "% ô tắt", num: true, fmt: (v) => fmtPct(v) }]} />` : null}
     </div>
   </div>`;
 }

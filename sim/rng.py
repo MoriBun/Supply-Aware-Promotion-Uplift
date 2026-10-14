@@ -7,7 +7,7 @@ random numbers of any session, order, driver or (cell, slot).
 This module also fixes the CRN contract pieces that several modules share:
 the stable ``session_id`` (spec §2, decisions T-06), the order in which a
 session's pre-drawn numbers are taken from its generator (spec §4.2, T-07) and
-the integer ``kind`` codes of the CELLSLOT stream.
+the integer ``kind`` codes of the CELLSLOT and SHOCK streams.
 """
 
 from __future__ import annotations
@@ -31,6 +31,7 @@ class Stream(enum.IntEnum):
     RIDER = 5          # key (rider_id): arm of rider-level A/B
     DRIVER = 6         # key (driver_id, counter): repositioning
     SESSION_BATCH = 7  # key (day, tick_of_day, cell): optional batched SESSION draws
+    SHOCK = 8          # key (kind, day, ...): day-level shock schedule, same under every policy (H-30)
 
 
 class CellSlotKind(enum.IntEnum):
@@ -38,6 +39,20 @@ class CellSlotKind(enum.IntEnum):
 
     LEGACY_EPS = 1     # epsilon coin of LegacyPolicy, key (kind, 0, cell, slot)
     SWITCHBACK = 2     # on/off of a (cluster, block), key (kind, level_code, cluster_id, block)
+
+
+class ShockKind(enum.IntEnum):
+    """``kind`` codes for the SHOCK stream (decisions H-30; part of the CRN contract: never renumber).
+
+    Keys hold the day and, for per-venue or per-driver draws, an index; never anything
+    that depends on the policy, so every policy meets the same shocks.
+    """
+
+    DAY_DEMAND = 1     # key (kind, day): city-wide demand multiplier of the day
+    EVENT = 2          # key (kind, day, venue_idx): event or not, end time
+    RAIN = 3           # key (kind, day): rain or not, start, duration
+    ATTEND = 4         # key (kind, day, driver_id): works today or not, off during rain or not
+    JITTER = 5         # key (kind, day, driver_id): shift-start offset of the day
 
 
 def cluster_level_code(level) -> int:

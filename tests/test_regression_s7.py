@@ -3,9 +3,12 @@
 One simulated day of every policy must reproduce, number for number, the output of
 the code before Sprint 7 once every key added in S7 is set to its old value.
 
-* Baseline: ``tests/fixtures/regression_s7.json``, written on commit 1c2eb85 (the last
-  commit before any S7 change) by ``python -m tests.test_regression_s7 --write``. It is
-  **never** regenerated during S7; a mismatch is a real behaviour change.
+* Baseline: ``tests/fixtures/regression_s7.json``, first written on commit 1c2eb85 (the last
+  commit before any S7 change) by ``python -m tests.test_regression_s7 --write``, then written
+  **once more** in B9 after money moved from USD to VND (decisions H-33, amending T-39 b): the
+  B9 unit-equivalence check showed identical counts and money columns equal to 100 x the old
+  USD values within 1e-6, but float rounding of the booking logit changes the hashes. It is not
+  regenerated again in S7; a mismatch is a real behaviour change.
 * Pinned config: ``tests/fixtures/regression_s7_pinned.yaml`` = ``config/default.yaml``
   of that commit, overlaid on the current ``default.yaml``. The B9 contract adds the old
   values of the new keys (``matching.ring_tiebreak: lowest_id``, ``cancel.exact_time:
@@ -13,9 +16,11 @@ the code before Sprint 7 once every key added in S7 is set to its old value.
 * Fingerprint: for every parquet table, the kept columns (volatile ones dropped), row
   count, dtypes and a blake2b over ``pd.util.hash_pandas_object`` of each column. Columns
   added after the baseline are ignored; columns of the baseline must still exist.
-* One deliberate normalisation: ``sessions.slack_hat`` is capped at ``monitor.slack_cap``
-  before hashing, because T7.1 (KN 2.3) caps the forecast in every branch and the only
-  value that changes is inf -> slack_cap in that column.
+* Deliberate normalisations of log-only columns, which never feed back into the run:
+  ``sessions.slack_hat`` is capped at ``monitor.slack_cap`` (T7.1, KN 2.3: inf -> slack_cap)
+  and set back to NaN outside threshold sessions, and ``lag_slot_same_block`` is set back to
+  its B9 placeholder ``True``: H7.6 (KN 3.3, decisions H-40) fills both for the experiment and
+  legacy policies only as information for the analysis.
 
 Run: ``pytest -q -m slow tests/test_regression_s7.py``.
 """
@@ -85,6 +90,10 @@ def fingerprint(out_dir: Path, *, slack_cap: float, columns_of: dict[str, list[s
         df = pd.read_parquet(path)
         if "slack_hat" in df.columns:
             df["slack_hat"] = np.minimum(df["slack_hat"].astype(np.float64), slack_cap)   # T7.1 normalisation
+            if "assign_mechanism" in df.columns:                                           # H7.6 normalisation
+                df.loc[df["assign_mechanism"].astype(str) != "threshold", "slack_hat"] = np.nan
+        if "lag_slot_same_block" in df.columns:
+            df["lag_slot_same_block"] = True                                               # H7.6 normalisation
         cols = [c for c in df.columns if c not in VOLATILE]
         if columns_of is not None and key in columns_of:
             missing = [c for c in columns_of[key] if c not in df.columns]
@@ -172,7 +181,7 @@ if __name__ == "__main__":
     b = write_baseline(a.out)
     for n, r in b["runs"].items():
         pr = pd.read_parquet(a.out / n / "results" / "policy_results.parquet")
-        print(f"{n}: N_completed={int(pr['N_completed'].iloc[0])} spent={float(pr['voucher_spent_usd'].iloc[0]):.2f} "
+        print(f"{n}: N_completed={int(pr['N_completed'].iloc[0])} spent={float(pr['voucher_spent_vnd'].iloc[0]):.2f} "
               f"tables={len(r['tables'])}")
     print("wrote", BASELINE.relative_to(ROOT), "from", b["git_sha"])
     sys.exit(0)

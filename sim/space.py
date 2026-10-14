@@ -77,6 +77,7 @@ class SpaceTime:
     eta_floor_min: float
     max_pickup_eta_min: float     # from cfg.matching, so the quote and M5 use the same limit
     max_ring: Optional[int]       # from cfg.matching; None = up to the whole grid
+    ring_tiebreak: str = "lowest_id"  # from cfg.matching: lowest_id | most_idle (decisions H-29, H-37)
     is_stub: bool = False
 
     def eta_in(self, idle_count: int | np.ndarray, hour: int | np.ndarray) -> float | np.ndarray:
@@ -101,7 +102,10 @@ class SpaceTime:
         1. Idle drivers in the rider's cell: ETA = ``eta_in(idle_count[cell], hour)``.
         2. Otherwise scan rings k = 1, 2, ... until the ring's smallest ``T[., cell, h]``
            exceeds ``max_pickup_eta_min`` or k passes ``max_ring``. In the nearest ring
-           with an idle driver, take the cell with the smallest ``T`` (ties: smallest id).
+           with an idle driver, take the cell with the smallest ``T``. Ties (on the synthetic
+           grid every cell of a ring ties) go by ``ring_tiebreak``: ``most_idle`` takes the cell
+           with the most idle drivers, then the smallest id (KN 2.1, decisions H-37);
+           ``lowest_id`` takes the smallest id (spec §4.5 before S7).
         3. An ETA above ``max_pickup_eta_min`` counts as no pickup.
 
         Returns ``(source_cell, eta_min)``, or ``(-1, inf)`` if no pickup is possible.
@@ -124,7 +128,11 @@ class SpaceTime:
             if has_idle.any():
                 candidates = ring[has_idle]
                 t_cand = t[has_idle]
-                j = int(np.argmin(t_cand))  # ring ids are ascending, so ties go to the smallest id
+                if self.ring_tiebreak == "most_idle":
+                    nearest = np.flatnonzero(t_cand == t_cand.min())
+                    j = int(nearest[np.argmax(idle_count[candidates[nearest]])])   # first max = smallest id
+                else:
+                    j = int(np.argmin(t_cand))  # ring ids are ascending, so ties go to the smallest id
                 eta = float(t_cand[j])
                 return (int(candidates[j]), eta) if eta <= limit else (-1, math.inf)
         return -1, math.inf
@@ -165,6 +173,9 @@ def build_space(cfg: Config) -> SpaceTime:
     # Road distance (km) between cell centres; within a cell use the intra-cell trip length.
     dist_km = sc.detour_factor * D.astype(np.float64) * s
     np.fill_diagonal(dist_km, sc.detour_factor * sc.intra_cell_dist_factor * math.sqrt(area))
+    if cfg.shocks.enabled:
+        # Rain layer (decisions H-39): hour index h + 24 is hour h with speeds x rain.speed_mult.
+        speed = np.concatenate([speed, speed * cfg.shocks.rain.speed_mult])
     T = (dist_km[:, :, None] / speed[None, None, :] * 60.0).astype(np.float32)
 
     return SpaceTime(
@@ -186,6 +197,7 @@ def build_space(cfg: Config) -> SpaceTime:
         eta_floor_min=sc.eta_floor_min,
         max_pickup_eta_min=cfg.matching.max_pickup_eta_min,
         max_ring=cfg.matching.max_ring,
+        ring_tiebreak=cfg.matching.ring_tiebreak,
     )
 
 

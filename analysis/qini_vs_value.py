@@ -16,7 +16,7 @@ Qini of a is higher than the Qini of b and N(a) is lower than N(b), both with 95
 exclude 0 (decisions T-33).
 
 With ``--outcome completed`` it also writes ``offer_efficiency.parquet`` (:func:`offer_efficiency`):
-the sessions each score offers at its own kappa and the extra trips per USD of that set measured
+the sessions each score offers at its own kappa and the extra trips per 100.000đ of that set measured
 on the randomized data, to tell a cost effect from a supply effect (decisions T-36).
 """
 
@@ -59,7 +59,7 @@ def session_batch(sessions: pd.DataFrame, riders: pd.DataFrame, *, seed: int = 0
         slot=col("slot", np.int16), slot_of_day=col("slot_of_day", np.int16), pu_cell=col("pu_cell", np.int16),
         do_cell=col("do_cell", np.int16), x_freq=r["x_freq"].to_numpy(np.float32),
         x_tenure=r["x_tenure"].to_numpy(np.float32), x_segment=r["x_segment"].to_numpy(np.int8),
-        quoted_fare_usd=col("quoted_fare_usd", np.float32), quoted_eta_min=col("quoted_eta_min", np.float32),
+        quoted_fare_vnd=col("quoted_fare_vnd", np.float32), quoted_eta_min=col("quoted_eta_min", np.float32),
         no_supply=col("no_supply", bool), u_target=nan, u_explore=nan, u_explore_arm=nan,
         u_score=np.random.default_rng(seed).random(n),
     )
@@ -197,19 +197,19 @@ def qini_table(data: dict, scores: dict[str, str], *, n_boot: int = 200, seed: i
 
 
 def offer_efficiency(data: dict, scored: dict[str, np.ndarray], kappas: dict[str, float]) -> pd.DataFrame:
-    """Who each score offers on the randomized data, and what offering them buys per USD.
+    """Who each score offers on the randomized data, and what offering them buys per 100.000đ.
 
     A session counts as offered when its score is >= the kappa that kappa-auto gave this score in
     the T5.1 table (theta = 0, every cell on). Within the offered set, the randomization gives the
     individual-level effect: ``q1`` / ``q0`` = completion rate with / without the voucher. A voucher
     is paid only on a completed trip, so the cost of an offer is ``voucher x q1`` and the extra
-    trips per USD are ``(q1 - q0) / (voucher x q1)``. These numbers hold the market fixed (no
+    trips per đồng are ``(q1 - q0) / (voucher x q1)``, reported per 100.000đ. These numbers hold the market fixed (no
     competition for drivers), so if they rank the scores like N under B does, the gap between
     Qini and N is a cost effect, not a supply effect (task T5.2). ``data["y"]`` must be
     ``completed``.
     """
     s, y, t = data["sessions"], np.asarray(data["y"], dtype=np.float64), np.asarray(data["t"], dtype=bool)
-    voucher = s["voucher_value_usd"].to_numpy(np.float64)
+    voucher = s["voucher_value_vnd"].to_numpy(np.float64)
     s_hat = slack_hat(s, data["snapshots"])
     n_days = s["day"].nunique()
     rows = []
@@ -223,10 +223,10 @@ def offer_efficiency(data: dict, scored: dict[str, np.ndarray], kappas: dict[str
         extra = (q1 - q0) * per_day
         known = offered & ~np.isnan(s_hat)
         rows.append({"label": label, "kappa": float(kappas[label]), "share_offered": float(offered.mean()),
-                     "voucher_per_offer_usd": float(voucher[on].mean()) if on.any() else math.nan,
+                     "voucher_per_offer_vnd": float(voucher[on].mean()) if on.any() else math.nan,
                      "share_offered_slack0": float((s_hat[known] == 0).mean()) if known.any() else math.nan,
                      "q0": q0, "q1": q1, "extra_trips_per_day": extra, "voucher_cost_per_day": cost,
-                     "extra_trips_per_100usd": 100.0 * extra / cost if cost > 0 else math.nan})
+                     "extra_trips_per_100k_vnd": 100_000.0 * extra / cost if cost > 0 else math.nan})
     return pd.DataFrame(rows)
 
 
@@ -281,15 +281,15 @@ def markdown(qini: pd.DataFrame, pairs: pd.DataFrame, runs: pd.DataFrame) -> str
 
 
 def efficiency_markdown(efficiency: pd.DataFrame) -> str:
-    """Table of :func:`offer_efficiency` sorted by N, and the rank correlation of N with extra trips per USD."""
-    lines = ["| Hàm điểm | N dưới B | Session được phát | Voucher / lượt phát (USD) | q0 / q1 | Chuyến thêm / 100 USD |",
+    """Table of :func:`offer_efficiency` sorted by N, and the rank correlation of N with extra trips per 100.000đ."""
+    lines = ["| Hàm điểm | N dưới B | Session được phát | Voucher / lượt phát (đ) | q0 / q1 | Chuyến thêm / 100.000đ |",
              "|---|---|---|---|---|---|"]
     for r in efficiency.sort_values("N_mean", ascending=False).itertuples():
         lines.append(f"| `{r.label}` | {_vn(r.N_mean)} | {_vn(100 * r.share_offered, 0)}% | "
-                     f"{_vn(r.voucher_per_offer_usd, 2)} | {_vn(r.q0, 3)} / {_vn(r.q1, 3)} | "
-                     f"{_vn(r.extra_trips_per_100usd, 2)} |")
-    rho = efficiency[["N_mean", "extra_trips_per_100usd"]].corr(method="spearman").iloc[0, 1]
-    lines += ["", f"Spearman(N dưới B, chuyến thêm / 100 USD ở mức cá nhân) = {_vn(rho, 3)} "
+                     f"{_vn(r.voucher_per_offer_vnd, 2)} | {_vn(r.q0, 3)} / {_vn(r.q1, 3)} | "
+                     f"{_vn(r.extra_trips_per_100k_vnd, 2)} |")
+    rho = efficiency[["N_mean", "extra_trips_per_100k_vnd"]].corr(method="spearman").iloc[0, 1]
+    lines += ["", f"Spearman(N dưới B, chuyến thêm / 100.000đ ở mức cá nhân) = {_vn(rho, 3)} "
                   f"trên {len(efficiency)} hàm điểm"]
     return "\n".join(lines)
 

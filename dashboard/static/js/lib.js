@@ -44,7 +44,7 @@ export function useApi(path, deps = [], { poll = 0 } = {}) {
 const nfInt = new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 });
 export const fmtInt = (x) => (x == null || Number.isNaN(x) ? "–" : nfInt.format(Math.round(x)));
 export const fmtNum = (x, d = 1) => (x == null || Number.isNaN(x) ? "–" : new Intl.NumberFormat("vi-VN", { minimumFractionDigits: d, maximumFractionDigits: d }).format(x));
-export const fmtUSD = (x, d = 0) => (x == null || Number.isNaN(x) ? "–" : fmtNum(x, d) + " USD");
+export const fmtVND = (x, d = 0) => (x == null || Number.isNaN(x) ? "–" : fmtNum(x, d) + " đ");
 export const fmtPct = (x, d = 1) => (x == null || Number.isNaN(x) ? "–" : fmtNum(100 * x, d) + " %");
 export const fmtSigned = (x, d = 1) => (x == null ? "–" : (x > 0 ? "+" : "") + fmtNum(x, d));
 export function fmtClock(t_s) {

@@ -37,8 +37,8 @@ from sim.state import (
 RESULTS_TABLES: dict[str, dict[str, str]] = {
     "policy_results": {
         "run_id": "string", "policy": "string", "theta": "float64", "seed": "int32", "world_seed": "int64",
-        "N_completed": "int64", "V_profit_usd": "float64", "voucher_spent_usd": "float64",
-        "budget_B_usd": "float64",
+        "N_completed": "int64", "V_profit_vnd": "float64", "voucher_spent_vnd": "float64",
+        "budget_B_vnd": "float64",
         "n_sessions": "int64", "n_requests": "int64", "n_abandoned": "int64", "n_cancelled": "int64",
         "mean_pickup_eta_min": "float64", "share_cells_off": "float64", "n_switches_per_cell_day": "float64",
         "runtime_s": "float64",
@@ -57,7 +57,7 @@ RESULTS_TABLES: dict[str, dict[str, str]] = {
 META_COLUMNS: dict[str, str] = {
     "run_id": "string", "mode": "string", "config_hash": "string", "config_yaml": "string", "git_sha": "string",
     "policy": "string", "hidden_view": "string", "theta": "float64", "seed": "int32", "world_seed": "int64",
-    "budget_B_usd": "float64", "budget_pilot_seed": "int64", "budget_pilot_spent_usd": "float64",
+    "budget_B_vnd": "float64", "budget_pilot_seed": "int64", "budget_pilot_spent_vnd": "float64",
     "kappa": "float64", "kappa_pilots": "int32", "window_start_s": "float64", "window_end_s": "float64", "sim_end_s": "float64",
     "n_truncated_orders": "int32", "runtime_s": "float64", "created_at": "string",
 }
@@ -91,12 +91,18 @@ SNAPSHOT_COLUMNS = {
     "idle_avg": "float32", "enroute_avg": "float32", "ontrip_avg": "float32", "waiting_avg": "float32",
     "slack": "float64", "utilization": "float32", "mean_pickup_eta_min": "float32",
     "n_sessions": "int32", "n_offers": "int32", "n_requests": "int32", "n_matched": "int32", "n_completed": "int32",
-    "n_abandoned": "int32", "n_cancelled": "int32", "voucher_spent_usd": "float32",
+    "n_abandoned": "int32", "n_cancelled": "int32", "voucher_spent_vnd": "float32",
     "promo_on": "bool", "cell_propensity": "float32", "assign_mechanism_cell": "string", "cluster_id": "int16",
     "block": "int32", "in_burnin": "bool", "slack_lag_slot": "float64", "slack_lag_day": "float64",
     "published_at_s": "float64",
 }
 assert set(SNAPSHOT_COLUMNS) == set(SNAPSHOT_FIELDS)
+
+# meta/shocks (docs/schema.md, H7.7, decisions H-41): one row per shock of the run, empty without shocks.
+SHOCKS_COLUMNS: dict[str, str] = {
+    "day": "int16", "kind": "string", "cell": "int16", "start_s": "float64", "end_s": "float64",
+    "demand_mult": "float32", "ring1_mult": "float32", "speed_mult": "float32", "n_drivers_off": "int32",
+}
 
 RUN_TABLES: dict[str, tuple[str, dict[str, str]]] = {
     "riders": ("observed", RIDERS_COLUMNS),
@@ -105,6 +111,7 @@ RUN_TABLES: dict[str, tuple[str, dict[str, str]]] = {
     "slot_snapshots": ("market", SNAPSHOT_COLUMNS),
     "riders_hidden": ("hidden", RIDERS_HIDDEN_COLUMNS),
     "sessions_hidden": ("hidden", SESSIONS_HIDDEN_COLUMNS),
+    "shocks": ("meta", SHOCKS_COLUMNS),
 }
 # Hard rule 3 / T-11, checked once at import: no hidden column in an observed or market table.
 for _name, (_folder, _cols) in RUN_TABLES.items():
@@ -219,7 +226,16 @@ def run_tables(result, riders: Riders, run_id: str, seed: int) -> dict[str, pd.D
         "riders": riders_obs, "sessions": sessions, "orders": orders_frame(result.orders, run_id, seed),
         "slot_snapshots": snapshots_frame(result.snapshots, run_id, seed),
         "riders_hidden": riders_hidden, "sessions_hidden": sessions_hidden,
+        "shocks": shocks_frame(getattr(result, "shocks", None), run_id, seed),
     }
+
+
+def shocks_frame(rows: dict | None, run_id: str, seed: int) -> pd.DataFrame:
+    """``meta/shocks`` of one run; an empty table when the run had no shocks (W0)."""
+    if rows is None:
+        rows = {name: np.zeros(0, dtype=object if dtype == "string" else dtype) for name, dtype in SHOCKS_COLUMNS.items()}
+    n = len(rows["day"])
+    return _with_keys({name: np.asarray(rows[name]) for name in SHOCKS_COLUMNS}, run_id, seed, n)
 
 
 def write_run(out_dir: Path, result, riders: Riders, run_id: str, seed: int) -> dict[str, Path]:

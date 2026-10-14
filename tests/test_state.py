@@ -140,9 +140,9 @@ def test_slot_counters_reset():
     acc = SlotCounters(3)
     acc.sum_idle += 1
     acc.n_ticks = 4
-    acc.voucher_spent_cents[1] = 250
+    acc.voucher_spent_dong[1] = 250
     acc.reset()
-    assert acc.n_ticks == 0 and (acc.sum_idle == 0).all() and (acc.voucher_spent_cents == 0).all()
+    assert acc.n_ticks == 0 and (acc.sum_idle == 0).all() and (acc.voucher_spent_dong == 0).all()
     cells = CellCounters(3)
     assert cells.idle.dtype == np.int32 and (cells.waiting == 0).all()
 

@@ -55,7 +55,7 @@ class RunSpec:
     name: str
     overrides: tuple[str, ...] = ()
     layers: tuple[str, ...] = ()               # extra YAML layers after config/default.yaml (repo-relative)
-    budget_usd: float | None = None            # explicit B per period (skips the all_on pilot)
+    budget_vnd: float | None = None            # explicit B per period (skips the all_on pilot)
     kappa: float | None = None                 # explicit kappa (skips kappa-auto)
 
     def to_dict(self) -> dict:
@@ -104,7 +104,7 @@ class DashRun:
     theta: float | None = None
     scope: str | None = None
     score_fn: str | None = None
-    budget_usd: float | None = None
+    budget_vnd: float | None = None
     kappa: float | None = None
     kappa_pilots: int = 0
     kappa_detail: dict | None = None
@@ -141,7 +141,7 @@ class DashRun:
             "stage_elapsed_s": time.time() - self.stage_started if self.status not in ("done", "error") else None,
             "spec": self.spec.to_dict(), "config_hash": self.config_hash, "clock": self.clock,
             "policy": self.policy, "theta": self.theta, "scope": self.scope, "score_fn": self.score_fn,
-            "budget_usd": self.budget_usd, "kappa": _json_float(self.kappa), "kappa_pilots": self.kappa_pilots,
+            "budget_vnd": self.budget_vnd, "kappa": _json_float(self.kappa), "kappa_pilots": self.kappa_pilots,
             "kappa_detail": self.kappa_detail,
             "n_frames": self.trace.n_frames if self.trace else self.n_frames_saved,
             "n_slots": len(self.trace.slots) if self.trace else self.n_slots_saved, "runtime": self.runtime,
@@ -190,7 +190,7 @@ class RunManager:
             if kind == "sweep":
                 run.sweep = {"theta_grid": [float(t) for t in spec.theta_grid], "n_seeds": int(spec.n_seeds),
                              "n_procs": spec.n_procs, "done": 0, "total": len(spec.theta_grid) * int(spec.n_seeds),
-                             "budget_usd": None, "kappas": None, "rows": []}
+                             "budget_vnd": None, "kappas": None, "rows": []}
             self.runs[run_key] = run
         run.note("Đã xếp hàng")
         self._queue.put(run_key)
@@ -262,20 +262,20 @@ class RunManager:
         enforce = bool(cfg.experiment.budget_enforce if cfg.policy.name == "experiment" else cfg.budget.enforce)
         budget: float | None = None
         if enforce:
-            if spec.budget_usd is not None:
-                budget = float(spec.budget_usd)
-                run.note(f"Ngân sách B = {budget:,.2f} USD/kỳ (nhập tay)")
+            if spec.budget_vnd is not None:
+                budget = float(spec.budget_vnd)
+                run.note(f"Ngân sách B = {budget:,.0f} đ/kỳ (nhập tay)")
             else:
                 run.set_stage("budget", "Pilot all_on không ngân sách để lấy B (runner.calibrate_budget)")
                 t0 = time.perf_counter()
                 budget, pilot = calibrate_budget(cfg)
                 run.runtime["budget_pilot_s"] = time.perf_counter() - t0
-                spent = None if pilot is None else pilot.voucher_spent_usd
-                run.note(f"B = {budget:,.2f} USD/kỳ"
-                         + (f" (pilot chi {spent:,.2f} USD, fraction {cfg.budget.fraction})" if spent is not None else ""))
+                spent = None if pilot is None else pilot.voucher_spent_vnd
+                run.note(f"B = {budget:,.0f} đ/kỳ"
+                         + (f" (pilot chi {spent:,.0f} đ, fraction {cfg.budget.fraction})" if spent is not None else ""))
         else:
             run.note("Không áp ngân sách (budget.enforce = false)")
-        run.budget_usd = budget
+        run.budget_vnd = budget
 
         # 2. kappa of the rider tier (spec §6, H-21).
         kappa: float | None = None
@@ -317,19 +317,19 @@ class RunManager:
             run.trace = tr
 
         t0 = time.perf_counter()
-        result, trace = run_traced(cfg, world, policy, rng, budget_usd=budget, enforce_budget=enforce,
+        result, trace = run_traced(cfg, world, policy, rng, budget_vnd=budget, enforce_budget=enforce,
                                    on_progress=on_progress, on_trace=on_trace)
         run.runtime["simulate_s"] = time.perf_counter() - t0
         run.result, run.trace = result, trace
         run.progress = 1.0
-        run.note(f"Xong mô phỏng: N = {result.N_completed}, chi {result.voucher_spent_usd:,.2f} USD, "
+        run.note(f"Xong mô phỏng: N = {result.N_completed}, chi {result.voucher_spent_vnd:,.0f} đ, "
                  f"{trace.n_frames} tick, {result.runtime_s:.1f} s")
 
         # 4. Summaries and files.
         run.set_stage("writing", "Tổng hợp và ghi bảng")
         run.summary = {
             "kpis": summ.kpis(result, cfg, theta=run.theta, kappa=kappa, kappa_pilots=run.kappa_pilots,
-                              budget_usd=budget, score_fn=run.score_fn, scope=run.scope),
+                              budget_vnd=budget, score_fn=run.score_fn, scope=run.scope),
             "slot_series": summ.slot_series(trace, clock),
             "switch_events": summ.switch_events(trace, clock, run.theta),
             "distribution": summ.distribution(result, trace, clock, kappa=kappa, x_segment=world.riders.x_segment),
@@ -369,9 +369,9 @@ class RunManager:
         t0 = time.perf_counter()
         budget = budget_for(base)
         run.runtime["budget_pilot_s"] = time.perf_counter() - t0
-        run.budget_usd = budget
-        state["budget_usd"] = budget
-        run.note("Không áp ngân sách" if budget is None else f"B = {budget:,.2f} USD/kỳ cho mọi θ")
+        run.budget_vnd = budget
+        state["budget_vnd"] = budget
+        run.note("Không áp ngân sách" if budget is None else f"B = {budget:,.0f} đ/kỳ cho mọi θ")
 
         run.set_stage("kappa", f"κ auto cho {len(grid)} θ: pilot threshold không ngân sách, lặp đến điểm bất động, "
                                f"{n_procs} tiến trình (H-21)")
@@ -417,7 +417,7 @@ class RunManager:
         meta = {
             "id": run.id, "name": run.name, "kind": "sweep", "created_at": run.created_at, "spec": run.spec.to_dict(),
             "config": run.config, "config_hash": run.config_hash, "clock": run.clock, "policy": run.policy,
-            "scope": run.scope, "score_fn": run.score_fn, "budget_usd": run.budget_usd, "runtime": run.runtime,
+            "scope": run.scope, "score_fn": run.score_fn, "budget_vnd": run.budget_vnd, "runtime": run.runtime,
             "log": run.log, "sweep": state, "sweep_brief": (run.summary or {}).get("sweep_brief"),
         }
         (d / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
@@ -431,7 +431,7 @@ class RunManager:
         out = run.out_dir
         (out / "dashboard").mkdir(parents=True, exist_ok=True)
         theta = NAN if run.theta is None else float(run.theta)
-        job = Job(cfg=cfg, seed=cfg.meta.run_seed, theta=theta, kappa=kappa, budget_usd=budget,
+        job = Job(cfg=cfg, seed=cfg.meta.run_seed, theta=theta, kappa=kappa, budget_vnd=budget,
                   enforce_budget=enforce, log_level="full", kappa_pilots=0 if ka is None else ka.n_pilots)
         rid = run_id(MODE, cfg, result.policy, theta, cfg.meta.run_seed)
         write_results(out, "policy_results", policy_results_table(MODE, [job], [result]))
@@ -442,7 +442,7 @@ class RunManager:
         meta = {
             "id": run.id, "name": run.name, "created_at": run.created_at, "spec": run.spec.to_dict(),
             "config": run.config, "config_hash": run.config_hash, "clock": run.clock, "policy": run.policy,
-            "theta": run.theta, "scope": run.scope, "score_fn": run.score_fn, "budget_usd": budget,
+            "theta": run.theta, "scope": run.scope, "score_fn": run.score_fn, "budget_vnd": budget,
             "kappa": _json_float(kappa), "kappa_pilots": run.kappa_pilots, "kappa_detail": run.kappa_detail,
             "runtime": run.runtime, "run_id": rid, "log": run.log, "n_frames": trace.n_frames,
             "n_slots": len(trace.slots),
@@ -466,7 +466,10 @@ class RunManager:
                 continue
             kind = meta.get("kind", "single")
             spec_cls = SweepSpec if kind == "sweep" else RunSpec
-            spec = spec_cls(**{k: (tuple(v) if isinstance(v, list) else v) for k, v in meta.get("spec", {}).items()})
+            try:
+                spec = spec_cls(**{k: (tuple(v) if isinstance(v, list) else v) for k, v in meta.get("spec", {}).items()})
+            except TypeError:
+                continue            # saved before a spec field was renamed (e.g. USD -> VND, decisions H-33): skip
             run = DashRun(id=run_key, name=meta.get("name", run_key), spec=spec, kind=kind,
                           created_at=meta.get("created_at", ""), out_dir=meta_path.parents[1], status="done",
                           progress=1.0)
@@ -480,7 +483,7 @@ class RunManager:
                     run.summary = json.loads((meta_path.parent / "summary.json").read_text(encoding="utf-8"))
                 except (OSError, ValueError):
                     pass
-            for k in ("config", "config_hash", "clock", "policy", "theta", "scope", "score_fn", "budget_usd", "kappa",
+            for k in ("config", "config_hash", "clock", "policy", "theta", "scope", "score_fn", "budget_vnd", "kappa",
                       "kappa_pilots", "kappa_detail", "runtime"):
                 if k in meta and meta[k] is not None:
                     setattr(run, k, meta[k])

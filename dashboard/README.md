@@ -64,7 +64,7 @@ Frame (mỗi tick): `status`, `cell` (ô hiện tại hoặc ô đích khi đang
 |---|---|---|
 | GET | `/api/config/defaults` | `config/default.yaml`, danh sách hàm điểm, preset |
 | POST | `/api/config/validate` | `{overrides:[...], layers:[...]}` → hash, số ô, cửa sổ hoặc lỗi `--set` |
-| GET/POST | `/api/runs` | danh sách / xếp hàng một lượt một θ (`name, overrides, layers, budget_usd?, kappa?`) |
+| GET/POST | `/api/runs` | danh sách / xếp hàng một lượt một θ (`name, overrides, layers, budget_vnd?, kappa?`) |
 | POST | `/api/sweeps` | xếp hàng một lượt quét θ (`name, overrides, layers, theta_grid, n_seeds, n_procs?`) |
 | GET | `/api/runs/{id}` | trạng thái, tiến độ, log, cấu hình, hình học lưới, KPI (hoặc tóm tắt θ\* với lượt quét) |
 | GET | `/api/runs/{id}/sweep` | từng (θ, seed) đã xong, tổng hợp theo θ, θ\*, tập θ\*, κ từng θ (cập nhật khi đang chạy) |

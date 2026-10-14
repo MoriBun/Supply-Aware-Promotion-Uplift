@@ -26,21 +26,21 @@ NAMES = {
     "random": "điểm random",
     "heuristic": "heuristic tần suất thấp",
     "tau_x": r"$\hat\tau(x)$ bảng nền",
-    "tau_per_usd": r"$\hat\tau(x)$/USD bảng nền",
+    "tau_per_vnd": r"$\hat\tau(x)$/đ bảng nền",
     "tau_x_dr_all": r"$\hat\tau(x)$ DR",
     "tau_xs_dr_all": r"$\hat\tau(x,s)$ DR",
-    "tau_x_dr_all_usd": r"$\hat\tau(x)$/USD DR",
-    "tau_xs_dr_all_usd": r"$\hat\tau(x,s)$/USD DR",
-    "tau_x_dr_usd": r"$\hat\tau(x)$/USD DR (lát explore)",
-    "tau_xs_dr_usd": r"$\hat\tau(x,s)$/USD DR (lát explore)",
+    "tau_x_dr_all_vnd": r"$\hat\tau(x)$/đ DR",
+    "tau_xs_dr_all_vnd": r"$\hat\tau(x,s)$/đ DR",
+    "tau_x_dr_vnd": r"$\hat\tau(x)$/đ DR (lát explore)",
+    "tau_xs_dr_vnd": r"$\hat\tau(x,s)$/đ DR (lát explore)",
     "pi_theta_0.5_heuristic": r"$\pi_\theta$, θ = 0,5, heuristic",
-    "pi_thetahatA_ring1_dr_usd": r"$\pi_{\hat\theta}$ (A) ring1 + $\hat\tau(x)$/USD DR",
-    "pi_thetahatB_ring1_dr_usd": r"$\pi_{\hat\theta}$ (B) ring1 + $\hat\tau(x)$/USD DR",
+    "pi_thetahatA_ring1_dr_vnd": r"$\pi_{\hat\theta}$ (A) ring1 + $\hat\tau(x)$/đ DR",
+    "pi_thetahatB_ring1_dr_vnd": r"$\pi_{\hat\theta}$ (B) ring1 + $\hat\tau(x)$/đ DR",
 }
-DR_TITLE = r"$\hat\tau(x)$/USD học bằng DR"     # panel title of the sweeps with the learned score (H-22 ii)
-# Rider layer ranked by effect per USD (a score of this set, or a pi_theta_hat built on one).
-PER_USD = {"tau_per_usd", "tau_x_dr_all_usd", "tau_xs_dr_all_usd", "tau_x_dr_usd", "tau_xs_dr_usd",
-           "pi_thetahatA_ring1_dr_usd", "pi_thetahatB_ring1_dr_usd"}
+DR_TITLE = r"$\hat\tau(x)$/đ học bằng DR"     # panel title of the sweeps with the learned score (H-22 ii)
+# Rider layer ranked by effect per đồng (a score of this set, or a pi_theta_hat built on one).
+PER_VND = {"tau_per_vnd", "tau_x_dr_all_vnd", "tau_xs_dr_all_vnd", "tau_x_dr_vnd", "tau_xs_dr_vnd",
+           "pi_thetahatA_ring1_dr_vnd", "pi_thetahatB_ring1_dr_vnd"}
 BASELINE = {"random", "heuristic"}
 DESIGN_NAMES = {"rider_ab": "A/B theo rider", "cluster_switchback cụm 1": "switchback cụm 1 ô",
                 "cluster_switchback cụm 7": "switchback cụm 7 ô", "cluster_switchback cụm all": "switchback toàn hệ"}
@@ -141,7 +141,7 @@ def ladder_figure(summary: pd.DataFrame, *, reference: str = "all_on_B"):
     y = np.arange(len(t))
     half = Z95 * t["dN_vs_ref_se"].to_numpy(dtype=float)
     d = t["dN_vs_ref"].to_numpy(dtype=float)
-    colors = [SLOT[1] if lab in PER_USD else SERIES for lab in t["label"]]
+    colors = [SLOT[1] if lab in PER_VND else SERIES for lab in t["label"]]
     ax.barh(y, d, height=0.62, color=colors, xerr=half, ecolor=INK_2, error_kw={"elinewidth": 1})
     for yi in range(len(t)):
         ax.annotate(f"{_signed(d[yi])}  (N = {vn(t['N_mean'].iloc[yi])})", xy=(d[yi] + np.sign(d[yi]) * half[yi], yi),
@@ -158,23 +158,23 @@ def ladder_figure(summary: pd.DataFrame, *, reference: str = "all_on_B"):
     ax.set_xlabel(f"Chuyến hoàn thành / ngày so với {NAMES.get(reference, reference)} (ghép cặp theo seed, thanh = 95%)")
     n = int(summary["n_seeds"].iloc[0]) if "n_seeds" in summary else 0
     ax.set_title(f"Cùng ngân sách B, mỗi chính sách hơn all_on có B bao nhiêu chuyến ({n} seed)", pad=22)
-    ax.text(0.0, 1.012, "cam = tầng rider xếp theo hiệu ứng mỗi USD;  xanh = xếp theo cách khác",
+    ax.text(0.0, 1.012, "cam = tầng rider xếp theo hiệu ứng mỗi đồng;  xanh = xếp theo cách khác",
             transform=ax.transAxes, fontsize=9, color=INK_2, va="bottom")
     fig.tight_layout()
     return fig
 
 
 def qini_vs_n_figure(qini: pd.DataFrame, efficiency: pd.DataFrame):
-    """T5.2. Left: Qini (95% CI) against N under B. Right: extra trips per 100 USD against N.
+    """T5.2. Left: Qini (95% CI) against N under B. Right: extra trips per 100.000đ against N.
 
     ``qini``: ``results/qini_completed`` of ``analysis.qini_vs_value``; ``efficiency``: its
     ``offer_efficiency`` (with ``N_mean``). Shared y-axis = the same N.
     """
     plt = _pyplot()
-    df = qini.set_index("label").join(efficiency.set_index("label")[["N_mean", "extra_trips_per_100usd"]],
+    df = qini.set_index("label").join(efficiency.set_index("label")[["N_mean", "extra_trips_per_100k_vnd"]],
                                       how="inner")
-    group = np.where(df.index.isin(list(PER_USD)), 1, np.where(df.index.isin(list(BASELINE)), 2, 0))
-    legend = {0: "xếp theo hiệu ứng mỗi lượt phát", 1: "xếp theo hiệu ứng mỗi USD", 2: "điểm nền (random, heuristic)"}
+    group = np.where(df.index.isin(list(PER_VND)), 1, np.where(df.index.isin(list(BASELINE)), 2, 0))
+    legend = {0: "xếp theo hiệu ứng mỗi lượt phát", 1: "xếp theo hiệu ứng mỗi đồng", 2: "điểm nền (random, heuristic)"}
     fig, (ax_q, ax_e) = plt.subplots(1, 2, figsize=(12, 5.4), sharey=True)
     for g in (0, 1, 2):
         m = group == g
@@ -184,24 +184,24 @@ def qini_vs_n_figure(qini: pd.DataFrame, efficiency: pd.DataFrame):
                       xerr=[df["qini_coef"][m] - df["qini_lo"][m], df["qini_hi"][m] - df["qini_coef"][m]],
                       fmt="o", color=SLOT[g], ecolor=SLOT[g], elinewidth=1, markersize=8, markeredgecolor=SURFACE,
                       markeredgewidth=1.5, label=legend[g])
-        ax_e.plot(df["extra_trips_per_100usd"][m], df["N_mean"][m], "o", color=SLOT[g], markersize=8,
+        ax_e.plot(df["extra_trips_per_100k_vnd"][m], df["N_mean"][m], "o", color=SLOT[g], markersize=8,
                   markeredgecolor=SURFACE, markeredgewidth=1.5)
     # Points that sit almost on top of each other get their label on the left or lower side.
-    left = {"right": {"tau_x", "tau_x_dr_all_usd"}, "left": {"tau_per_usd"}}
-    below = {"right": {"tau_xs_dr_usd", "tau_per_usd", "tau_x_dr_all_usd"}, "left": {"tau_xs_dr_usd", "tau_x_dr_all_usd"}}
+    left = {"right": {"tau_x", "tau_x_dr_all_vnd"}, "left": {"tau_per_vnd"}}
+    below = {"right": {"tau_xs_dr_vnd", "tau_per_vnd", "tau_x_dr_all_vnd"}, "left": {"tau_xs_dr_vnd", "tau_x_dr_all_vnd"}}
     for label, r in df.iterrows():
         name = NAMES.get(label, label)
-        for side, ax, x in (("left", ax_q, r["qini_coef"]), ("right", ax_e, r["extra_trips_per_100usd"])):
+        for side, ax, x in (("left", ax_q, r["qini_coef"]), ("right", ax_e, r["extra_trips_per_100k_vnd"])):
             dx, ha = (-6, "right") if label in left[side] else (6, "left")
             dy, va = (-3, "top") if label in below[side] else (3, "bottom")
             ax.annotate(name, xy=(x, r["N_mean"]), xytext=(dx, dy), textcoords="offset points", ha=ha, va=va,
                         fontsize=7.5, color=INK_2)
-    rho_e = df[["N_mean", "extra_trips_per_100usd"]].corr(method="spearman").iloc[0, 1]
+    rho_e = df[["N_mean", "extra_trips_per_100k_vnd"]].corr(method="spearman").iloc[0, 1]
     rho_q = df[["N_mean", "qini_coef"]].corr(method="spearman").iloc[0, 1]
     ax_q.set_title(f"Qini và N dưới B (Spearman {vn(rho_q, 2).replace('-', '−')})")
-    ax_e.set_title(f"Chuyến thêm / 100 USD và N dưới B (Spearman {vn(rho_e, 2)})")
+    ax_e.set_title(f"Chuyến thêm / 100.000đ và N dưới B (Spearman {vn(rho_e, 2)})")
     ax_q.set_xlabel("Hệ số Qini trên A/B theo rider (hoàn thành chuyến; thanh = 95% bootstrap theo rider)")
-    ax_e.set_xlabel("Chuyến thêm / 100 USD của tập được phát (A/B theo rider, chợ giữ nguyên)")
+    ax_e.set_xlabel("Chuyến thêm / 100.000đ của tập được phát (A/B theo rider, chợ giữ nguyên)")
     ax_q.set_ylabel("N dưới cùng B (chuyến / ngày)")
     for ax in (ax_q, ax_e):
         ax.yaxis.set_major_formatter(lambda v, _: vn(v))

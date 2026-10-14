@@ -18,25 +18,37 @@ from dataclasses import dataclass
 import numpy as np
 
 from sim import experiment
-from sim.budget import BudgetLedger, CENTS_PER_USD
+from sim.budget import BudgetLedger, DONG_PER_VND
 from sim.config import Config
 from sim.policies.base import CellDecision, OfferDecision, Policy, SessionBatch, SnapshotView
+from sim.shocks import travel_hour
 
 
-def base_fare_usd(cfg: Config, trip_min) -> np.ndarray:
-    """``p_s = base_fare_usd + per_min_usd * T[pu, do, h]`` (spec §4.3), vectorized, float32."""
+def base_fare_vnd(cfg: Config, trip_min, trip_km) -> np.ndarray:
+    """Quoted fare ``p_s`` (spec §4.3, decisions H-42), vectorized, float32.
+
+    ``p_s = open_fare_vnd + per_km_vnd * max(0, km - open_km) + per_min_vnd * T_after + platform_fee_vnd``
+    with ``T_after = T * max(0, km - open_km) / km`` the minutes driven after the opening ``open_km``
+    (GrabCar Hanoi: 28.473đ for 2 km, 9.818đ/km and 442đ/min after, 10.000đ platform fee). With
+    ``open_km = per_km_vnd = platform_fee_vnd = 0`` this is ``open_fare_vnd + per_min_vnd * T``, the
+    tariff before S7.
+    """
+    p = cfg.pricing
     trip_min = np.asarray(trip_min, dtype=np.float64)
-    fare = cfg.pricing.base_fare_usd + cfg.pricing.per_min_usd * trip_min
+    km = np.asarray(trip_km, dtype=np.float64)
+    beyond = np.maximum(0.0, km - p.open_km)
+    share = np.divide(beyond, km, out=np.zeros_like(km), where=km > 0)
+    fare = p.open_fare_vnd + p.per_km_vnd * beyond + p.per_min_vnd * trip_min * share + p.platform_fee_vnd
     return fare.astype(np.float32)
 
 
-def voucher_cents(cfg: Config, fare_usd) -> np.ndarray:
-    """``v_s = pct_of_fare * p_s`` capped by ``max_usd``, in integer cents (int64)."""
-    fare_usd = np.asarray(fare_usd, dtype=np.float64)
-    value = cfg.voucher.pct_of_fare * fare_usd
-    if cfg.voucher.max_usd is not None:
-        value = np.minimum(value, cfg.voucher.max_usd)
-    return np.rint(value * CENTS_PER_USD).astype(np.int64)
+def voucher_dong(cfg: Config, fare_vnd) -> np.ndarray:
+    """``v_s = pct_of_fare * p_s`` capped by ``max_vnd``, in integer dong (int64)."""
+    fare_vnd = np.asarray(fare_vnd, dtype=np.float64)
+    value = cfg.voucher.pct_of_fare * fare_vnd
+    if cfg.voucher.max_vnd is not None:
+        value = np.minimum(value, cfg.voucher.max_vnd)
+    return np.rint(value * DONG_PER_VND).astype(np.int64)
 
 
 @dataclass
@@ -44,13 +56,14 @@ class VoucherOutcome:
     """What the voucher layer writes back for one batch (observed columns of docs/schema.md)."""
 
     decision: OfferDecision        # policy output (propensity, mechanism, score, propensity_true)
-    voucher_cents: np.ndarray      # int64 [n], 0 when not granted
+    voucher_dong: np.ndarray      # int64 [n], 0 when not granted
     arm: np.ndarray                # int8 [n], 1 = voucher granted
     budget_blocked: np.ndarray     # bool [n], offered but the period budget was exhausted
     budget_period: np.ndarray      # int16 [n]
     promo_on_cell: np.ndarray      # bool [n]
     cell_propensity: np.ndarray    # float32 [n]
     slack_hat: np.ndarray          # float32 [n]
+    lag_slot_same_block: np.ndarray  # bool [n]: slot k-1 in the same switchback block, False in slot 0 (H-40)
 
     def __len__(self) -> int:
         return len(self.arm)
@@ -82,7 +95,7 @@ class VoucherLayer:
         dec = self.policy.offer(batch, self.cell_dec, self.ledger)
         if len(dec) != n:
             raise ValueError("policy returned an OfferDecision of the wrong length")
-        cents = voucher_cents(self.cfg, batch.quoted_fare_usd)
+        dong = voucher_dong(self.cfg, batch.quoted_fare_vnd)
         granted = np.zeros(n, dtype=np.int64)
         blocked = np.zeros(n, dtype=bool)
         periods = np.zeros(n, dtype=np.int16)
@@ -90,7 +103,7 @@ class VoucherLayer:
             periods[i] = self.ledger.period_of(float(batch.open_time_s[i]))
             if not dec.offer[i]:
                 continue
-            c = int(cents[i])
+            c = int(dong[i])
             if c > 0 and not self.ledger.reserve(int(batch.session_id[i]), float(batch.open_time_s[i]), c):
                 blocked[i] = True
                 continue
@@ -99,13 +112,14 @@ class VoucherLayer:
         cd = self.cell_dec
         return VoucherOutcome(
             decision=dec,
-            voucher_cents=granted,
+            voucher_dong=granted,
             arm=arm,
             budget_blocked=blocked,
             budget_period=periods,
             promo_on_cell=cd.promo_on[batch.pu_cell],
             cell_propensity=cd.cell_propensity[batch.pu_cell],
             slack_hat=cd.s_hat[batch.pu_cell],
+            lag_slot_same_block=np.full(n, bool(cd.lag_same_block and cd.slot > 0)),
         )
 
     def quote(self, ctx, t: float) -> None:
@@ -119,9 +133,12 @@ class VoucherLayer:
         rows = slice(start, stop)
         pu, do, hour = s.pu_cell[rows], s.do_cell[rows], s.hour[rows]
 
-        fare = base_fare_usd(self.cfg, space.T[pu, do, hour])
-        eta, no_supply = quote_eta_by_cell(space, pu, int(hour[0]), ctx.cells.idle)
-        s.quoted_fare_usd[rows] = fare
+        t_hour = travel_hour(ctx, t, hour)                   # + 24 while it rains (H7.4)
+        trip_min = space.T[pu, do, t_hour]
+        trip_km = trip_min.astype(np.float64) / 60.0 * space.speed_kmh[t_hour]   # road km, as orders.trip_km
+        fare = base_fare_vnd(self.cfg, trip_min, trip_km)
+        eta, no_supply = quote_eta_by_cell(space, pu, int(t_hour[0]), ctx.cells.idle)
+        s.quoted_fare_vnd[rows] = fare
         s.quoted_eta_min[rows] = eta
         s.no_supply[rows] = no_supply
 
@@ -131,21 +148,22 @@ class VoucherLayer:
             day=s.day[rows], hour=hour, slot=s.slot[rows], slot_of_day=s.slot_of_day[rows],
             pu_cell=pu, do_cell=do,
             x_freq=riders.x_freq[rider], x_tenure=riders.x_tenure[rider], x_segment=riders.x_segment[rider],
-            quoted_fare_usd=fare, quoted_eta_min=eta, no_supply=no_supply,
+            quoted_fare_vnd=fare, quoted_eta_min=eta, no_supply=no_supply,
             u_target=s.u_target[rows], u_explore=s.u_explore[rows], u_explore_arm=s.u_explore_arm[rows],
             u_score=s.u_score[rows],
         )
         out = self.decide(batch)
         cd, dec = self.cell_dec, out.decision
 
-        s.voucher_cents[rows] = out.voucher_cents
-        s.voucher_value_usd[rows] = (out.voucher_cents / CENTS_PER_USD).astype(np.float32)
+        s.voucher_dong[rows] = out.voucher_dong
+        s.voucher_value_vnd[rows] = (out.voucher_dong / DONG_PER_VND).astype(np.float32)
         s.arm[rows] = out.arm
         s.budget_blocked[rows] = out.budget_blocked
         s.budget_period[rows] = out.budget_period
         s.promo_on_cell[rows] = out.promo_on_cell
         s.cell_propensity[rows] = out.cell_propensity
         s.slack_hat[rows] = out.slack_hat
+        s.lag_slot_same_block[rows] = out.lag_slot_same_block
         s.assign_mechanism[rows] = dec.mechanism
         s.propensity[rows] = dec.propensity
         s.score[rows] = dec.score

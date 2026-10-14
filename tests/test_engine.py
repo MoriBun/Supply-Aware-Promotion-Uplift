@@ -43,8 +43,8 @@ def test_build_context_and_fakes(tiny_cfg):
         guarded.monitor.view(0)
     assert isinstance(guarded.monitor, ForbiddenAccess) and ctx.monitor is not guarded.monitor
     real = build_context(tiny_cfg, stub_world(tiny_cfg), FixedPolicy(False, 7), Rng.from_config(tiny_cfg),
-                         budget_usd=10.0, enforce_budget=True)
-    assert real.ledger.enforce and real.ledger.limit_cents(0) == 1000
+                         budget_vnd=1000.0, enforce_budget=True)
+    assert real.ledger.enforce and real.ledger.limit_dong(0) == 1000
 
 
 def _no_demand(cfg):
@@ -63,9 +63,9 @@ def test_all_off_skeleton_runs(tiny_cfg):
     res = _run(tiny_cfg, on=False)
     clock = Clock.from_config(tiny_cfg)
     assert isinstance(res, RunResult) and res.policy == "all_off"
-    assert res.N_completed == 0 and res.V_profit_usd == 0.0 and res.voucher_spent_usd == 0.0
+    assert res.N_completed == 0 and res.V_profit_vnd == 0.0 and res.voucher_spent_vnd == 0.0
     assert res.n_sessions == res.n_requests == res.n_abandoned == res.n_cancelled == 0
-    assert np.isnan(res.mean_pickup_eta_min) and np.isnan(res.abandon_rate) and np.isnan(res.budget_B_usd)
+    assert np.isnan(res.mean_pickup_eta_min) and np.isnan(res.abandon_rate) and np.isnan(res.budget_B_vnd)
     assert res.window_start_s == clock.window_start_s and res.window_end_s == clock.window_end_s
     assert res.sim_end_s == clock.window_end_s          # no open orders -> no cool-down
     assert res.n_truncated_orders == 0 and res.runtime_s > 0
@@ -73,7 +73,7 @@ def test_all_off_skeleton_runs(tiny_cfg):
     assert np.isinf(res.mean_slack)                     # no en-route driver-ticks
     assert res.promo_on.shape == (len(clock.window_slots), 7) and not res.promo_on.any()
     assert res.share_cells_off == 1.0 and res.n_switches_per_cell_day == 0.0
-    np.testing.assert_array_equal(res.spent_by_period_usd, [0.0])
+    np.testing.assert_array_equal(res.spent_by_period_vnd, [0.0])
     assert len(res.offer_score) == 0 and res.profile == {}
     assert res.sessions is None and res.orders is None and res.snapshots is None
 
@@ -107,8 +107,8 @@ def test_budget_arguments(tiny_cfg):
     rng = Rng.from_config(tiny_cfg)
     with pytest.raises(ValueError):
         run(tiny_cfg, world, policy, rng)                       # enforce true (config) but no B
-    res = run(tiny_cfg, world, policy, rng, budget_usd=50.0)    # enforced with B
-    assert res.budget_B_usd == 50.0
+    res = run(tiny_cfg, world, policy, rng, budget_vnd=5000.0)    # enforced with B
+    assert res.budget_B_vnd == 5000.0
     with pytest.raises(ValueError):
         run(tiny_cfg, world, policy, rng, log_level="verbose", enforce_budget=False)
 
@@ -118,5 +118,12 @@ def test_default_config_skeleton_is_fast(default_yaml):
     from sim.config import load_config
     cfg = load_config(default_yaml)
     res = _run(cfg)
-    assert res.sim_end_s == 90000 and res.promo_on.shape == (96, 37)
+    assert res.sim_end_s == 90000 and res.promo_on.shape == (96, 61)    # H7.1: 61 cells
     assert res.runtime_s < 5.0
+
+
+def test_every_s7_contract_key_is_implemented():
+    # B9 (decisions H-29, H-30) refused contract keys whose behaviour was not implemented yet; each S7
+    # task removed its line (H7.2 ring_tiebreak, H7.3 exact_time, H7.4 shocks, H7.8 Hanoi tariff).
+    from sim.engine import _NOT_YET
+    assert _NOT_YET == ()

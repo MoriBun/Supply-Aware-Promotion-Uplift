@@ -31,7 +31,7 @@ def evaluate_job(cfg, policy: str) -> Job:
     budget = budget_for(cfg)
     theta = float(cfg.policy.threshold.theta) if policy == "threshold" else float("nan")
     kappa = resolve_kappa(cfg, theta, budget)
-    return Job(cfg=cfg, seed=cfg.meta.run_seed, theta=theta, kappa=kappa, budget_usd=budget,
+    return Job(cfg=cfg, seed=cfg.meta.run_seed, theta=theta, kappa=kappa, budget_vnd=budget,
                enforce_budget=cfg.budget.enforce)
 
 
@@ -57,7 +57,7 @@ def test_a5_one_simulated_day_within_the_time_limit(policy):
 
 
 def calibration_metrics(cfg, n_seeds: int = 5) -> dict[str, float]:
-    """The five CAL quantities of docs/tests.md §4, pooled over ``n_seeds`` seeds of all_off.
+    """The CAL quantities of docs/tests.md §4, pooled over ``n_seeds`` seeds of all_off.
 
     - A session is "in surplus" when the slack its cell had in the **previous** slot is above 1
       (``slack_lag_slot``, what a policy can see). The slack of the session's own slot is an
@@ -66,15 +66,21 @@ def calibration_metrics(cfg, n_seeds: int = 5) -> dict[str, float]:
     - Request uplift: ``mean(p_request_treat) / mean(p_request_control) - 1`` over the same
       sessions. Both probabilities are evaluated in the same context (same fare, same quoted
       ETA), so the figure is free of the congestion a real all_on run adds (decisions H-16).
-    - Mean gross fare: completed in-window orders.
     - Shares of (cell, slot) in the window with slack < 0.35 and > 1 (their own slot).
+    - ``busy_rel_h6/h7/h8`` (decisions H-31): trip hours of completed in-window orders by hour of
+      day of the request, divided by the busiest hour; the definition of ``analysis/tlc_hourly.py``
+      (column ``busy_real``) so the figures compare with NYC TLC.
+    - ``mean_trip_km``: mean ``trip_km`` of completed in-window orders.
+    - ``trips_per_driver_day``: completed in-window orders / (``fleet_size`` x days of the window);
+      every driver works one shift a day when shocks are off (W0, where calibration happens).
     """
     seeds = [cfg.meta.run_seed + i for i in range(n_seeds)]
     jobs = [Job(cfg=with_policy(cfg, "all_off"), seed=s, enforce_budget=False, log_level="full") for s in seeds]
     requested = sessions = 0
     p_treat = p_control = 0.0
     n_slack = n_tight = n_surplus = 0
-    fare_sum, fare_n = 0.0, 0
+    km_sum, n_done, driver_days = 0.0, 0, 0.0
+    busy = np.zeros(24)
     for res in run_jobs(jobs, n_procs=cfg.runner.n_procs):
         first_slot = int(res.snapshots[0]["slot"][0])
         slack = np.stack([rec["slack"] for rec in res.snapshots])              # [slot - first_slot, cell]
@@ -93,14 +99,20 @@ def calibration_metrics(cfg, n_seeds: int = 5) -> dict[str, float]:
         n_surplus += int((table > 1.0).sum())
         o = res.orders
         done = o.col("in_window") & (o.col("status") == int(OrderStatus.COMPLETED))
-        fare_sum += float(o.col("gross_fare_usd")[done].sum())
-        fare_n += int(done.sum())
+        km_sum += float(o.col("trip_km")[done].astype(np.float64).sum())
+        n_done += int(done.sum())
+        driver_days += cfg.supply.fleet_size * (res.window_end_s - res.window_start_s) / 86400.0
+        hour = (o.col("request_time_s")[done] % 86400.0 // 3600.0).astype(np.int64)
+        np.add.at(busy, hour, o.col("trip_time_min")[done].astype(np.float64) / 60.0)
+    busy_rel = busy / busy.max()
     return {
         "p_request_no_voucher": requested / sessions,
         "request_uplift_surplus": p_treat / p_control - 1.0,
-        "mean_gross_fare_usd": fare_sum / fare_n,
         "share_cellslots_slack_below_0_35": n_tight / n_slack,
         "share_cellslots_slack_above_1": n_surplus / n_slack,
+        "busy_rel_h6": float(busy_rel[6]), "busy_rel_h7": float(busy_rel[7]), "busy_rel_h8": float(busy_rel[8]),
+        "mean_trip_km": km_sum / n_done,
+        "trips_per_driver_day": n_done / driver_days,
     }
 
 

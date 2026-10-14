@@ -94,7 +94,7 @@ Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (m�
 | **θ̂ (theta hat)** | θ **ước lượng từ dữ liệu quan sát** bằng phương pháp phân tích (ví dụ 0,25 với ring1). Đánh dấu để so với θ\* "thật" của simulator. |
 | **hysteresis h (trễ bật lại)** | ô đã tắt chỉ bật lại khi ŝ > θ + h, để tránh bật tắt liên tục. Mặc định 0. |
 | **τ̂ (tau hat, điểm rider)** | điểm ưu tiên của một session, do **hàm điểm** (`score_fn`) tính. Ý nghĩa: ước lượng voucher làm tăng xác suất đặt của khách này bao nhiêu (uplift). Điểm cao thì ưu tiên phát. |
-| **score_fn (hàm điểm)** | `random`: điểm ngẫu nhiên. `heuristic_low_freq`: ưu tiên khách ít dùng app (điểm = −x_freq). `analysis.uplift:tau_x_dr…`: mô hình uplift học từ dữ liệu, trong đó `tau_x` chỉ dùng thuộc tính khách, `tau_xs` dùng cả ŝ, `dr` = doubly robust (phương pháp ước lượng), `per_dollar` / `USD` = điểm chia cho tiền voucher kỳ vọng, `all` = học trên mọi session, không có `all` = chỉ học trên lát explore. |
+| **score_fn (hàm điểm)** | `random`: điểm ngẫu nhiên. `heuristic_low_freq`: ưu tiên khách ít dùng app (điểm = −x_freq). `analysis.uplift:tau_x_dr…`: mô hình uplift học từ dữ liệu, trong đó `tau_x` chỉ dùng thuộc tính khách, `tau_xs` dùng cả ŝ, `dr` = doubly robust (phương pháp ước lượng), `per_dollar` / `vnd` = điểm chia cho tiền voucher kỳ vọng, `all` = học trên mọi session, không có `all` = chỉ học trên lát explore. |
 | **κ (kappa, ngưỡng điểm)** | ngưỡng tầng rider: chỉ phát cho session có τ̂ ≥ κ. `κ = −∞` nghĩa là không hạn chế, phát cho mọi session ở ô bật. |
 | **κ auto / pilot** | κ không đặt tay. Chạy một lượt **pilot** (lượt thử, seed riêng) không áp ngân sách, lấy phân bố điểm, rồi chọn κ sao cho tổng chi ≈ B. Lặp lại tối đa 10 lần cho đến khi chi ≤ B. Số lần lặp hiện trong ngoặc, ví dụ "κ 0,412 (3 pilot)". |
 | **all_on** | bật mọi ô, phát mọi session, chịu B. |
@@ -109,8 +109,8 @@ Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (m�
 | Ký hiệu | Nghĩa |
 |---|---|
 | **N(π)** | **chỉ tiêu chính**: số chuyến hoàn thành trong cửa sổ đánh giá dưới chính sách π. |
-| **V(π)** | chỉ tiêu phụ: lợi nhuận nền tảng, USD = tổng (cước sau voucher − tiền trả tài xế). Voucher luôn làm V giảm. |
-| **B** | ngân sách voucher mỗi kỳ, USD. Mặc định B = 0,3 × chi tiêu của all_on không ngân sách (tính bằng một lượt pilot). Có thể đặt cố định. |
+| **V(π)** | chỉ tiêu phụ: lợi nhuận nền tảng, VND = tổng (cước sau voucher − tiền trả tài xế). Voucher luôn làm V giảm. |
+| **B** | ngân sách voucher mỗi kỳ, VND. Mặc định B = 0,3 × chi tiêu của all_on không ngân sách (tính bằng một lượt pilot). Có thể đặt cố định. |
 | **fraction** | hệ số 0,3 nói trên. |
 | **sổ cái (ledger)** | bộ đếm ngân sách theo kỳ gồm ba phần. **Đã chi (spent):** voucher của chuyến đã hoàn thành. **Đã đặt (committed):** voucher của chuyến đã đặt, đang chạy. **Đang giữ (reserved):** voucher đã phát, khách chưa quyết định đặt. Bất biến: chi + đặt + giữ ≤ B. Khi chạm trần, session muốn phát bị chặn. |
 | **Chi / B (spent_share_of_budget)** | tiền voucher của chuyến hoàn thành chia cho B × số kỳ. Dưới 100 % là bình thường, vì tiền giữ và tiền đặt của chuyến hủy được nhả lại. |
@@ -137,14 +137,14 @@ Tên lượt, trạng thái, và các sự kiện chính: chính sách, θ cố 
 |---|---|---|
 | **Chuyến hoàn thành · N(π)** | chỉ tiêu chính, đếm theo thời điểm đặt xe nằm trong cửa sổ. Dòng dưới: chuyến mỗi giờ. | càng cao càng tốt khi cùng B. |
 | **Tỷ lệ hoàn thành / đặt xe** | N(π) chia số lượt đặt. | thấp nghĩa là nhiều hủy hoặc bỏ. |
-| **Ngân sách voucher đã chi** | USD voucher của chuyến hoàn thành. Dòng dưới: phần trăm trên tổng B = B mỗi kỳ × số kỳ. | gần 100 % là dùng hết. Thấp bất thường nghĩa là κ quá cao hoặc cắt quá nhiều ô. |
+| **Ngân sách voucher đã chi** | Tiền voucher (VND) của chuyến hoàn thành. Dòng dưới: phần trăm trên tổng B = B mỗi kỳ × số kỳ. | gần 100 % là dùng hết. Thấp bất thường nghĩa là κ quá cao hoặc cắt quá nhiều ô. |
 | **ETA đón trung bình** | phút xe đi đón, trung bình các lượt đã ghép. | dài là thiếu xe. |
 
 ### Dải chỉ số phụ
 
 | Ô | Nghĩa |
 |---|---|
-| Lợi nhuận V(π) · phụ | USD, chỉ tiêu phụ; voucher làm V giảm. |
+| Lợi nhuận V(π) · phụ | VND, chỉ tiêu phụ; voucher làm V giảm. |
 | Tỷ lệ (ô, slot) tắt voucher | số cặp (ô, slot) tắt trên tổng, trong cửa sổ. |
 | Hủy khi xe đang đến | `Cancelled` / lượt đặt. |
 | Bỏ chờ trước khi ghép | `Abandoned` / lượt đặt. Thường ≈ 0, xem mục 8. |
@@ -231,7 +231,7 @@ Chạy **một** lượt với θ cố định, có ghi frame từng tick để 
 | κ: auto / nhập tay | auto chạy pilot; nhập tay bỏ qua pilot. |
 | Thiết kế, Cụm, p_on | với `experiment`: kiểu switchback, cỡ cụm (1 ô, ~7 ô, toàn hệ), xác suất bật. |
 | slack_on, explore_frac | với `legacy`: ngưỡng slack bật ô, tỷ lệ lát ngẫu nhiên. |
-| Cách lấy B | fraction × pilot all_on, hoặc cố định USD/kỳ. |
+| Cách lấy B | fraction × pilot all_on, hoặc cố định VND/kỳ. |
 | Nhập B tay | bỏ qua pilot, dùng B này. |
 | Kiểm tra config | xác nhận cú pháp override, trả về hash, số ô, số xe, cửa sổ. |
 
@@ -344,7 +344,7 @@ Tầng rider: ai nhận voucher và ngân sách dùng ra sao. Chỉ tính sessio
 |---|---|
 | Voucher đã phát (cửa sổ) | số session nhận voucher; dòng dưới là tỷ lệ trên tổng session. |
 | Muốn phát nhưng hết B | số session bị chặn. |
-| Voucher trung bình | USD mỗi voucher; dòng dưới là % cước. |
+| Voucher trung bình | VND mỗi voucher; dòng dưới là % cước. |
 | Chi thực / B | chỉ voucher của chuyến **hoàn thành**. Voucher phát ra mà khách không đặt hoặc hủy thì không tốn tiền. |
 | κ tầng rider | ngưỡng điểm và tên hàm điểm. |
 | Session trong cửa sổ | tổng session. |
@@ -393,10 +393,10 @@ Cột ngang ΔN so với chính sách tham chiếu (ΔN = 0), thanh lỗi là SE
 | `all_off`, `all_on` | không voucher / voucher cho mọi người chịu B. |
 | `random` | phát ngẫu nhiên trong B. |
 | `heuristic` | ưu tiên khách ít dùng app, không cắt ô. |
-| `tau_x_dr_usd` | điểm uplift học từ dữ liệu, chỉ thuộc tính khách, chia USD, không cắt ô. |
-| `tau_xs_dr_usd` | như trên nhưng điểm có dùng ŝ. |
+| `tau_x_dr_vnd` | điểm uplift học từ dữ liệu, chỉ thuộc tính khách, chia cho tiền voucher (VND), không cắt ô. |
+| `tau_xs_dr_vnd` | như trên nhưng điểm có dùng ŝ. |
 | `pi_theta_0.5_heuristic` | π_θ với θ = 0,5 và điểm heuristic. |
-| `pi_thetahatA_ring1_dr_usd` | π_θ với θ = θ̂ ước lượng từ dữ liệu (cách A), scope ring1, điểm DR. |
+| `pi_thetahatA_ring1_dr_vnd` | π_θ với θ = θ̂ ước lượng từ dữ liệu (cách A), scope ring1, điểm DR. |
 
 ### Đường throughput (A1)
 

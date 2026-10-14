@@ -8,7 +8,7 @@ import math
 
 import numpy as np
 
-from sim.budget import CENTS_PER_USD
+from sim.budget import DONG_PER_VND
 from sim.config import Config
 from sim.engine import RunResult
 from sim.state import Clock, MECHANISM_NAMES, OrderStatus
@@ -32,18 +32,18 @@ def _list(a) -> list:
 
 
 def kpis(result: RunResult, cfg: Config, *, theta: float | None, kappa: float | None, kappa_pilots: int,
-         budget_usd: float | None, score_fn: str | None, scope: str | None) -> dict:
+         budget_vnd: float | None, score_fn: str | None, scope: str | None) -> dict:
     spent_share = None
-    if budget_usd and budget_usd > 0:
+    if budget_vnd and budget_vnd > 0:
         n_periods = Clock.from_config(cfg).n_periods
-        spent_share = result.voucher_spent_usd / (budget_usd * n_periods)
+        spent_share = result.voucher_spent_vnd / (budget_vnd * n_periods)
     return {
         "policy": result.policy, "theta": _f(theta) if theta is not None else None,
         "kappa": _f(kappa) if kappa is not None else None, "kappa_pilots": int(kappa_pilots),
         "score_fn": score_fn, "scope": scope,
-        "budget_B_usd": _f(budget_usd) if budget_usd is not None else None,
-        "N_completed": int(result.N_completed), "V_profit_usd": _f(result.V_profit_usd),
-        "voucher_spent_usd": _f(result.voucher_spent_usd), "spent_share_of_budget": _f(spent_share) if spent_share is not None else None,
+        "budget_B_vnd": _f(budget_vnd) if budget_vnd is not None else None,
+        "N_completed": int(result.N_completed), "V_profit_vnd": _f(result.V_profit_vnd),
+        "voucher_spent_vnd": _f(result.voucher_spent_vnd), "spent_share_of_budget": _f(spent_share) if spent_share is not None else None,
         "n_sessions": int(result.n_sessions), "n_requests": int(result.n_requests),
         "n_abandoned": int(result.n_abandoned), "n_cancelled": int(result.n_cancelled),
         "mean_pickup_eta_min": _f(result.mean_pickup_eta_min), "share_cells_off": _f(result.share_cells_off),
@@ -59,7 +59,7 @@ def kpis(result: RunResult, cfg: Config, *, theta: float | None, kappa: float | 
 def slot_series(trace: Trace, clock: Clock) -> dict:
     """One value per slot: cells off, mean forecast, completed / requests / offers / spend, window flag."""
     rows = {"slot": [], "t_start": [], "hour": [], "in_window": [], "cells_off": [], "s_hat_mean": [],
-            "n_completed": [], "n_requests": [], "n_offers": [], "n_sessions": [], "voucher_spent_usd": [],
+            "n_completed": [], "n_requests": [], "n_offers": [], "n_sessions": [], "voucher_spent_vnd": [],
             "slack_mean": [], "mean_pickup_eta_min": [], "n_abandoned": [], "n_cancelled": []}
     for rec in trace.slots:
         t0 = rec["t_start"]
@@ -77,7 +77,7 @@ def slot_series(trace: Trace, clock: Clock) -> dict:
             rows["n_sessions"].append(int(rec["n_sessions"].sum()))
             rows["n_abandoned"].append(int(rec["n_abandoned"].sum()))
             rows["n_cancelled"].append(int(rec["n_cancelled"].sum()))
-            rows["voucher_spent_usd"].append(_f(rec["voucher_spent_usd"].sum()))
+            rows["voucher_spent_vnd"].append(_f(rec["voucher_spent_vnd"].sum()))
             sl = rec["slack"].astype(np.float64)
             fin = np.isfinite(sl)
             rows["slack_mean"].append(_f(np.minimum(sl[fin], 10.0).mean()) if fin.any() else None)
@@ -85,7 +85,7 @@ def slot_series(trace: Trace, clock: Clock) -> dict:
             rows["mean_pickup_eta_min"].append(_f(np.nanmean(eta)) if np.isfinite(eta).any() else None)
         else:
             for k in ("n_completed", "n_requests", "n_offers", "n_sessions", "n_abandoned", "n_cancelled",
-                      "voucher_spent_usd", "slack_mean", "mean_pickup_eta_min"):
+                      "voucher_spent_vnd", "slack_mean", "mean_pickup_eta_min"):
                 rows[k].append(None)
     return rows
 
@@ -193,15 +193,15 @@ def distribution(result: RunResult, trace: Trace, clock: Clock, *, kappa: float 
     if frames is not None:
         led = frames["ledger"]
         ledger_curve = {"t": _list(frames["t"]), "period": led[:, 0].tolist(),
-                        "used_usd": _list((led[:, 1] + led[:, 2] + led[:, 3]) / CENTS_PER_USD),
-                        "spent_usd": _list(led[:, 1] / CENTS_PER_USD), "committed_usd": _list(led[:, 2] / CENTS_PER_USD),
-                        "reserved_usd": _list(led[:, 3] / CENTS_PER_USD),
-                        "limit_usd": [None if v < 0 else v / CENTS_PER_USD for v in led[:, 4]]}
-    voucher = s.col("voucher_value_usd").astype(np.float64)
+                        "used_vnd": _list((led[:, 1] + led[:, 2] + led[:, 3]) / DONG_PER_VND),
+                        "spent_vnd": _list(led[:, 1] / DONG_PER_VND), "committed_vnd": _list(led[:, 2] / DONG_PER_VND),
+                        "reserved_vnd": _list(led[:, 3] / DONG_PER_VND),
+                        "limit_vnd": [None if v < 0 else v / DONG_PER_VND for v in led[:, 4]]}
+    voucher = s.col("voucher_value_vnd").astype(np.float64)
     return {
         "by_hour": by_hour, "by_mechanism": by_mech, "by_segment": by_segment, "score_hist": hist, "by_arm": by_arm,
         "budget_periods": periods, "ledger_curve": ledger_curve,
         "n_offers": int((in_win & arm).sum()), "n_blocked": int((in_win & blocked).sum()),
-        "n_sessions": int(in_win.sum()), "mean_voucher_usd": _f(voucher[in_win & arm].mean()) if (in_win & arm).any() else None,
+        "n_sessions": int(in_win.sum()), "mean_voucher_vnd": _f(voucher[in_win & arm].mean()) if (in_win & arm).any() else None,
         "voucher_pct_of_fare": None,
     }

@@ -30,9 +30,9 @@ def test_cluster_levels_cover_every_cell_without_overlap(space):
     ids = ex.cluster_ids(space, 7)
     assert ids.dtype == np.int16 and len(ids) == space.n_cells and ex.n_clusters(ids) == 7
     sizes = sorted(np.bincount(ids).tolist())
-    assert sizes == [3, 3, 4, 6, 7, 7, 7]                               # spec §4.10, R = 3
+    assert sizes == [7, 7, 7, 8, 9, 11, 12]                             # R = 4 (H7.1, decisions H-36); R = 3 gave 3–7
     centres = np.flatnonzero((space.cell_q.astype(int) + 5 * space.cell_r.astype(int)) % 7 == 0)
-    assert (space.D[np.arange(space.n_cells), centres[ids]] <= 1).all()   # every cell next to its centre
+    assert (space.D[np.arange(space.n_cells), centres[ids]] <= 2).all()   # every cell within 2 rings of its centre
     for z in range(space.n_cells):                                      # nearest centre, ties to the smaller id
         d = space.D[z, centres]
         assert d[ids[z]] == d.min() and ids[z] == int(np.flatnonzero(d == d.min())[0])

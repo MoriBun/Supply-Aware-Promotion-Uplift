@@ -42,13 +42,27 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [U] Không ghép nếu ETA > `max_pickup_eta_min`; order chờ tick sau.
 - [U] Chỉ ghép xe `idle` và còn trong ca.
 - [U] Hòa ETA thì chọn xe có `idle_since` nhỏ nhất (tiêu chí phá hòa).
+- [U] Vành ngoài hòa T: `most_idle` lấy ô nhiều xe rảnh nhất, hòa tiếp thì id nhỏ; `lowest_id` lấy id nhỏ; báo giá và ghép dùng cùng luật (`test_space.py`, H-37).
+- [I] Thế giới đối xứng (`cell_weight_sigma = 0`, 6 giờ): tương quan giữa `cell_id` và số lần ô cho mượn xe ≤ −0,5 với `lowest_id`, |·| < 0,3 với `most_idle` (`test_integration.py`, KN 2.1).
 
 ### M6 / M7 Trip và hủy (`tests/test_trips_cancel.py`)
 - [U] Thời điểm đón = ghép + ETA; thời điểm trả = đón + trip_time.
-- [U] Tiền: `driver_pay = 0,76*gross`; `profit = net − driver_pay`.
+- [U] Tiền (H-42): `driver_pay = 0,75 × (gross − phí nền tảng)`; `profit = net − driver_pay` = phí + 0,25 × (gross − phí) − voucher.
+- [U] Giá GrabCar Hà Nội: chuyến 6 km, 20 phút ≈ 83.638đ; trong 2 km đầu chỉ giá mở cửa + phí; giá trị B9 cho lại giá cũ; voucher 25% chạm trần 20.000đ (`test_pricing.py`).
 - [U] Order Waiting quá `max_wait` thì Abandoned.
 - [U] Hủy khi đi đón: xe rảnh ở ô xuất phát nếu hủy trước nửa ETA, ở ô khách nếu sau; `idle_since = t`; không ghép lại trong cùng tick.
-- [U] Hazard hủy tăng theo ETA: với 10.000 order giả lập, tỷ lệ hủy ở ETA 10 phút > ở ETA 3 phút.
+- [U] Hazard hủy tăng theo ETA: với 10.000 order giả lập, tỷ lệ hủy ở ETA 10 phút > ở ETA 3 phút; với `exact_time` tỷ lệ khớp hazard chính xác `1 − exp(−h·ETA)`, không có thì khớp `1 − exp(−h·(ETA − 1))` (H-38).
+- [U] `exact_time`: `t_cancel` rơi giữa tick cuối và lúc đón thì bước 1 hủy thay vì đón, xe rảnh ở ô khách, `idle_since = t_cancel`, voucher nhả, đếm `n_cancelled`; không có `exact_time` thì đón.
+
+### Biến động W1 (`tests/test_shocks.py`, H7.5)
+- [I] Bật biến động nhưng mọi hiệu ứng trung tính thì từng số trùng với tắt biến động; tắt thì không dựng lịch, `T` giữ 24 giờ.
+- [I] Mọi chính sách của một seed gặp cùng lịch biến động và cùng session; lịch đổi theo `run_seed`, ô địa điểm chỉ theo `world_seed`.
+- [U] Không module chính sách nào import `sim.shocks`; `SessionBatch` không có trường biến động.
+- [U] Tần suất và độ lớn theo tham số trên 28 ngày: tỷ lệ ngày mưa, giờ bắt đầu và độ dài trong khoảng, trung bình và độ lệch log của hệ số ngày, tỷ lệ đi làm và nghỉ khi mưa, độ lệch chuẩn giờ vào ca, tần suất sự kiện theo loại, ô địa điểm phân biệt.
+- [U] Hệ số cầu kết hợp ngày × mưa × sự kiện; mưa làm mọi thời gian đi chia `speed_mult`; `travel_hour` trả `h + 24` khi mưa.
+- [U] Tài xế nghỉ bỏ ngày đó, ca bắt đầu ngày đi làm đầu tiên cộng độ lệch; tài xế được đánh dấu dừng khi mưa và quay lại đúng ô sau mưa.
+- [I] `test_driver_state_consistency` chạy thêm trên W1 (ca theo lịch, có mưa và sự kiện trong cửa sổ).
+- [I] Lượt chạy log đầy đủ ghi `meta/shocks` khớp lịch đã rút (W1) và bảng rỗng đúng cột (W0) (H7.7).
 
 ### M8 / M9 Cung (`tests/test_supply.py`)
 - [U] `early_exit_enabled = false` thì không xe nào rời trước `shift_end`.
@@ -75,17 +89,19 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [U] π_θ: θ = 0 thì không ô nào bị tắt; θ rất lớn thì mọi ô tắt.
 - [U] π_θ: ŝ không bao giờ là inf: với `scope = cell`, `forecast = persistence`, ô có xe rảnh mà không xe đi đón cho ŝ = `monitor.slack_cap`; `score_fn` chỉ nhận giá trị hữu hạn; chưa công bố thì NaN (T-39).
 - [U] Hysteresis: với chuỗi ŝ dao động quanh θ, số lần đổi trạng thái khi h > 0 ít hơn khi h = 0.
+- [U] Thí nghiệm và luật cũ ghi `s_hat` = slack đã công bố của slot k−1, chặn ở `slack_cap`, không đổi quyết định; `lag_same_block` sai ở slot đầu khối và slot 0, đúng trong khối và với A/B theo khách; cột session khớp (H7.6, H-40).
 - [U] Chính sách cũ: `cell_propensity = (1−ε)·rule + ε·0,5`; `propensity` NaN với session nhắm theo rider, bằng `explore_p` với session explore.
 - [U] κ auto: chi tiêu thực tế của lượt đánh giá nằm trong [0,85B; 1,0B].
 
 - [U] `scope = city`: mọi ô cùng ŝ = (Σ idle)/(Σ enroute) toàn thành phố, cùng một quyết định; quy tắc H-14 và chặn ở `slack_cap` áp ở cấp thành phố; không cần bảng ô kề (T-40).
-- [U] Oracle: điểm = (p1 − p0)/(v·p1) khớp `choice.request_probability` với voucher từ `pricing.voucher_cents`; v = 0 → NaN → không phát; `load_score_fn("oracle")` raise; `OracleHiddenView` chỉ được tạo khi `policy.name = threshold`; `hidden_view` bằng `legacy` với chính sách cũ, `oracle` với threshold+oracle, `none` với các lượt khác (T-40, T-41).
-- [U] Runner (`tests/test_runner.py`): `run_metadata` có `budget_pilot_seed = pilot_seed(cfg)` và `budget_pilot_spent_usd > 0` khi áp ngân sách, −1 và NaN khi không; `policy_results` có `world_seed` (T-40).
+- [U] Oracle: điểm = (p1 − p0)/(v·p1) khớp `choice.request_probability` với voucher từ `pricing.voucher_dong`; v = 0 → NaN → không phát; `load_score_fn("oracle")` raise; `OracleHiddenView` chỉ được tạo khi `policy.name = threshold`; `hidden_view` bằng `legacy` với chính sách cũ, `oracle` với threshold+oracle, `none` với các lượt khác (T-40, T-41).
+- [U] Runner (`tests/test_runner.py`): `run_metadata` có `budget_pilot_seed = pilot_seed(cfg)` và `budget_pilot_spent_vnd > 0` khi áp ngân sách, −1 và NaN khi không; `policy_results` có `world_seed` (T-40).
 
 ### Cấu hình (`tests/test_config.py`)
 - [U] Khóa lạ trong YAML thì raise lỗi.
 - [U] `--set` ghi đè đúng kiểu.
 - [U] Cùng config cho cùng `config_hash`.
+- [U] Hợp đồng B9 (H-29…H-33): mọi khóa mới có mặt với giá trị cũ; giá trị mới hợp lệ được nhận, giá trị sai kiểu hoặc ngoài khoảng bị từ chối (`shocks.*`, `events.venues`, chỉ tiêu CAL mới); khóa chưa cài mà đặt giá trị mới thì `engine.build_context` báo `NotImplementedError` (`tests/test_engine.py`); mã luồng `SHOCK = 8`, `ShockKind`, `WorldPart.VENUES = 4` không đổi (`test_rng.py`, `test_demand.py`).
 
 ---
 
@@ -129,6 +145,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 
 ### A5. Thời gian chạy
 - `mode evaluate`, `default.yaml`, 1 ngày, log tối thiểu, 1 lõi: **trung vị 3 lần ≤ 30 giây**.
+- **A5-HN** (H-34, từ H7.1, cấu hình quy mô Hà Nội): `evaluate` `all_on` 1 ngày, 1 tiến trình, trung vị 3 lần **≤ 60 giây** (`performance.max_seconds_per_sim_day`). Vượt thì profile và tối ưu đúng bước nặng nhất, tối đa 1 ngày công; vẫn vượt thì ghi số thật, không nới thêm.
 
 ---
 
@@ -140,10 +157,12 @@ Chạy all_off, 5 seed, `default.yaml` (`tests/test_acceptance_core.py`, đánh 
 |---|---|---|
 | P(đặt) không voucher | requested / sessions, all_off, session ở ô dư cung | 0,13–0,17 |
 | Tăng request khi dư cung | `mean(p_request_treat) / mean(p_request_control) − 1` trên session ở ô dư cung (cột ẩn, cùng bối cảnh; H-16) | +35% … +70% |
-| Giá gốc trung bình | mean gross_fare của order hoàn thành trong cửa sổ | 17,2–21,0 USD |
 | Tỷ lệ (ô, slot) căng | share slack < 0,35 (all_off; slack của chính (ô, slot), I = 0 thì slack = 0, H-14) | 10–35% |
 | Tỷ lệ (ô, slot) dư | share slack > 1 (all_off) | 30–80% |
+| Tỷ lệ xe bận lúc 6/7/8h (H-31) | giờ-xe chở khách của chuyến hoàn thành đặt trong giờ h / giờ cao nhất (như `analysis/tlc_hourly.py`) | 0,31–0,61 / 0,55–0,85 / 0,63–0,93 |
+| Quãng đường TB (H-31) | mean `trip_km` của order hoàn thành trong cửa sổ | 5–8 km |
+| Chuyến / tài xế / ngày (H-31) | order hoàn thành trong cửa sổ / (`fleet_size` × số ngày cửa sổ), W0 | 8–18 |
 
-Hai dải tỷ lệ (ô, slot) căng và dư là **thiết kế kịch bản** ("có vùng căng thật"), không phải số đo từ dữ liệu thực tế; số tuyệt đối theo USD và số xe là quy ước (H-23). Không dùng N(π_θ), θ\*, GTE làm mục tiêu hiệu chỉnh.
+Hai dải tỷ lệ (ô, slot) căng và dư là **thiết kế kịch bản** ("có vùng căng thật"), không phải số đo từ dữ liệu thực tế; số tuyệt đối về tiền và số xe là quy ước (H-23). Bỏ chỉ tiêu giá gốc trung bình ở B9 vì giá do bảng giá quyết định (H-31). Từ B9 tới khi hiệu chỉnh xong (S8), test CAL chậm không đạt vì các chỉ tiêu mới chưa hiệu chỉnh: ghi log, không nới dải. Không dùng N(π_θ), θ\*, GTE làm mục tiêu hiệu chỉnh.
 
-Núm chỉnh theo thứ tự: `alpha0` (cho P(đặt)), `beta_price_per_usd` và `delta0` (cho uplift), `per_min_usd` (cho giá), `fleet_size` và `demand_scale` (cho phân bố slack). Ghi giá trị cuối vào `default.yaml` và lý do vào `docs/decisions.md`.
+Núm chỉnh (S8, thứ tự ưu tiên ở `docs/de_xuat_tham_so_ha_noi.md` mục C): `alpha0`, `delta0` (P(đặt), uplift); `fleet_size`, `demand_scale` (phân bố slack); `shift_start_mixture` (xe bận theo giờ); `dest_decay_rings` (quãng đường). Ghi giá trị cuối vào `default.yaml` và lý do vào `docs/decisions.md`.

@@ -49,7 +49,7 @@ def tlc_hourly() -> tuple[pd.DataFrame, dict]:
     summary = {
         "trips": len(d), "days": n_days, "share_manhattan": float((borough == "Manhattan").mean()),
         "trip_min": float(d["trip_time"].mean() / 60), "trip_miles": float(d["trip_miles"].mean()),
-        "fare_usd": float(d["base_passenger_fare"].mean()),
+        "fare_vnd": float(d["base_passenger_fare"].mean()),
         "driver_share": float(d["driver_pay"].sum() / d["base_passenger_fare"].sum()),
         "wait_mean": float(uber["wait"].mean()), "wait_median": float(uber["wait"].median()),
         "wait_p90": float(uber["wait"].quantile(0.9)), "share_wait_over_10": float((uber["wait"] > 10).mean()),

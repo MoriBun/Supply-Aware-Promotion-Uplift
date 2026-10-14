@@ -40,19 +40,19 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
 | D3 | π_θ hai tầng: cắt ô theo chỉ số căng cung, phát voucher cho rider theo điểm τ̂ trong ngân sách | Accepted (T-17); đổi được qua config | [report M3] |
 | D4 | Chỉ số căng cung mặc định là slack = I/E (xe rảnh / xe đang đi đón) | Accepted (T-10, T-17); đổi qua `policy.threshold.indicator` | Castillo et al. 2025 |
 | D5 | `max_pickup_eta` = 30 phút; tìm xe theo vành mở rộng dần | Accepted (T-17); đổi qua `matching.max_pickup_eta_min` | Giới hạn thấp làm mất WGC [report M5] |
-| D6 | Lưới mặc định bán kính 3 (37 ô), torus | Accepted | [report Bảng 2]. thời gian đón tối đa (qua 3 vành) ≈ 17 phút giờ thường, ≈ 23 phút giờ cao điểm; 19 ô chỉ ≈ 11–15 phút, có thể không đủ cho WGC |
+| D6 | Lưới mặc định bán kính 3 (37 ô), torus. **Từ H7.1 (H-36): bán kính 4 (61 ô), ô H3 độ phân giải 7 cạnh 1,41 km, 315 km²** | Accepted | [report Bảng 2]. thời gian đón tối đa (qua 3 vành) ≈ 17 phút giờ thường, ≈ 23 phút giờ cao điểm; 19 ô chỉ ≈ 11–15 phút, có thể không đủ cho WGC |
 | D7 | Cung độc lập với chính sách: rời sớm theo thu nhập tắt; repositioning theo quy tắc tĩnh | Accepted | [report M8, M9] |
 | D8 | Code dạng struct-of-arrays (numpy); không tạo object Python cho mỗi xe/khách trong vòng lặp nóng | Accepted | Mục tiêu ≤ 30 giây / ngày mô phỏng |
 | D9 | CRN: mọi phép ngẫu nhiên lấy từ luồng được khóa theo định danh ổn định (session, order, driver, cell-slot) | Accepted | [report M13] |
 | D10 | Thí nghiệm (switchback, A/B) và lượt GTE không áp ngân sách | Accepted | [report M3, M13] |
-| D11 | Cụm cho switchback: cụm "7 ô" xây theo quy tắc hoa lục giác; trên torus 37 ô cụm có kích thước 3–7 | Accepted | Không chia đều được vì 37 là số nguyên tố |
+| D11 | Cụm cho switchback: cụm "7 ô" xây theo quy tắc hoa lục giác; trên torus 37 ô cụm có kích thước 3–7; **trên torus 61 ô (H7.1, H-36): 7 cụm, kích thước 7–12, ô xa tâm tối đa 2 vành** | Accepted | Không chia đều được vì 37 là số nguyên tố |
 | D12 | κ (ngưỡng điểm tầng rider) hiệu chỉnh bằng pilot lặp đến điểm bất động để chi tiêu của pilot ≤ B, chung seed pilot cho mọi θ; kèm dừng cứng khi chạm B | Accepted | [report M3]; H-21 |
 
 ---
 
 ## 2. Quy ước chung
 
-- **Đơn vị:** thời gian nội bộ tính bằng **giây**, kiểu `float64` (thời điểm) hoặc `int64` (chỉ số tick); tiền tính bằng **USD**; quãng đường tính bằng **km**. ETA công bố cho rider đổi sang phút.
+- **Đơn vị:** thời gian nội bộ tính bằng **giây**, kiểu `float64` (thời điểm) hoặc `int64` (chỉ số tick); tiền tính bằng **VND** (H-33; trước S7 là USD); quãng đường tính bằng **km**. ETA công bố cho rider đổi sang phút.
 - **Chỉ số thời gian:**
   - `tick = t // tick_s`;
   - `slot = t // (slot_min*60)`, tính từ đầu lượt chạy;
@@ -191,7 +191,7 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 - Hệ số hành vi, với `zf` là x_freq chuẩn hóa z-score:
   ```
   alpha_i      = alpha0 + alpha_freq*zf + alpha_u*u_latent + N(0, alpha_noise_sd)
-  beta_price_i = -beta_price_per_usd * beta_price_seg_mult[seg] * exp(N(0, beta_price_noise_sd))
+  beta_price_i = -(beta_price_per_kvnd / 1000) * beta_price_seg_mult[seg] * exp(N(0, beta_price_noise_sd))   # trên mỗi đồng
   beta_eta_i   = -beta_eta_per_min * exp(N(0, beta_eta_noise_sd))
   delta_i      = delta0 + delta_u*u_latent + delta_seg[seg] + N(0, delta_noise_sd)
   max_wait_i   ~ LogNormal(mu, max_wait_sigma), mu = ln(max_wait_mode_min) + max_wait_sigma²   # mode = 5 phút
@@ -199,9 +199,9 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 
 ### 4.3 M3 PricingAndPromotion (`pricing.py`, `policies/`)
 
-**Giá gốc:** `p_s = base_fare_usd + per_min_usd * T[pu, do, h]`.
+**Giá gốc** (H-33): `p_s = open_fare_vnd + per_km_vnd * max(0, km − open_km) + per_min_vnd * T_sau + platform_fee_vnd`, với `T_sau = T[pu, do, h] * max(0, km − open_km) / km` (phần thời gian sau `open_km`; bằng `T` khi `open_km = 0`). Quãng đường km = `T / 60 × tốc độ giờ đó` (như `orders.trip_km`). Từ H7.8 dùng bảng giá GrabCar Hà Nội (H-42). Bảng giá GrabCar Hà Nội và cách chia lợi nhuận có phí nền tảng: `docs/de_xuat_tham_so_ha_noi.md` mục B4.
 
-**Voucher nếu được phát:** `v_s = pct_of_fare * p_s`, chặn trên bởi `max_usd` nếu có. Giá thực trả `net = p_s - v_s`.
+**Voucher nếu được phát:** `v_s = pct_of_fare * p_s`, chặn trên bởi `max_vnd` nếu có. Giá thực trả `net = p_s - v_s`.
 
 **Sổ ngân sách `BudgetLedger`** (khi `budget.enforce` bật):
 - `reserved`: giữ khi phát voucher ở bước 5; nhả ở bước 6 nếu rider không đặt.
@@ -210,7 +210,7 @@ n_z(t) ~ Poisson(λ_z(t))        # luồng DEMAND khóa (day, tick_of_day, cell)
 - Chỉ phát voucher khi `spent + committed + reserved + v_s ≤ B`. Nếu không đủ thì session ghi `budget_blocked = True`.
 - Bất biến: `spent + committed + reserved ≤ B` tại mọi thời điểm.
 - **Kỳ ngân sách** (T-03): dài `P = min(1440, window_min)` phút, neo theo cửa sổ đánh giá: kỳ d là `[window_start + d*P, window_start + (d+1)*P)`. Mỗi kỳ có bộ đếm `spent/committed/reserved` riêng và cùng mức B. Một reservation thuộc kỳ của `open_time` session và giữ nguyên kỳ đó khi order kết thúc trong cool-down; bất biến giữ theo từng kỳ. Warm-up là kỳ −1 với ngân sách `B * warmup_min / P`, để trạng thái đầu cửa sổ phản ánh chính sách; chi tiêu warm-up không tính vào đánh giá.
-- Ledger khóa theo `session_id`, tiền tính bằng **cent nguyên** để bất biến chính xác.
+- Ledger khóa theo `session_id`, tiền tính bằng **đồng nguyên** (`DONG_PER_VND = 1`, H-33; trước S7 là cent của USD) để bất biến chính xác.
 
 **Tính B khi `mode = fraction_of_all_on`:**
 1. Chạy pilot `all_on` với seed `pilot_seed_offset`, không áp ngân sách.
@@ -245,7 +245,7 @@ Duyệt các order `Waiting` theo `request_time` tăng dần (FIFO). Với mỗi
    - ETA = `ETA_in(idle[z], h)`, tính **trước** khi trừ xe.
    - Chọn xe trong ô z có `idle_since` nhỏ nhất. Mọi xe trong ô có cùng ETA; tiêu chí này chỉ để phá hòa.
 2. **Nếu ô trống:** xét lần lượt vành k = 1, 2, … theo `D[z, ·] = k`, đến khi `min T[·, z, h] > max_pickup_eta_min` hoặc vượt `max_ring`.
-   - Ở vành gần nhất còn xe rảnh, chọn ô c có `T[c, z, h]` nhỏ nhất; nếu hòa thì lấy `cell_id` nhỏ hơn.
+   - Ở vành gần nhất còn xe rảnh, chọn ô c có `T[c, z, h]` nhỏ nhất. Nếu hòa (trên lưới giả mọi ô cùng vành đều hòa): `matching.ring_tiebreak = most_idle` (mặc định từ H7.2) lấy ô có **nhiều xe rảnh nhất**, rồi `cell_id` nhỏ hơn; `lowest_id` lấy `cell_id` nhỏ hơn (luật trước S7, H-37).
    - Trong ô c, chọn xe có `idle_since` nhỏ nhất.
    - ETA = `T[c, z, h]`.
 3. **Nếu `ETA > max_pickup_eta_min`** hoặc không có xe: order tiếp tục chờ đến tick sau.
@@ -268,8 +268,8 @@ Chỉ xe `idle` **và** còn trong ca mới được ghép.
   - `gross_fare = p_s`;
   - `voucher_value = v_s`;
   - `net_fare = p_s - v_s`;
-  - `driver_pay = (1 - commission_rate) * gross_fare`;
-  - `platform_profit = net_fare - driver_pay`.
+  - `driver_pay = (1 - commission_rate) * (gross_fare - platform_fee_vnd)` (phí nền tảng thuộc nền tảng, H-42);
+  - `platform_profit = net_fare - driver_pay` = `platform_fee_vnd + commission_rate * (gross_fare - platform_fee_vnd) - voucher`.
 
 ### 4.7 M7 Cancellation (`cancel.py`)
 
@@ -284,6 +284,7 @@ Chỉ xe `idle` **và** còn trong ca mới được ghép.
   - order chuyển `Cancelled`, `cancel_reason = "rider_en_route"`; nhả ngân sách;
   - xe chuyển `idle` **tại chỗ đang đứng**: nếu `(t - matched_time) < pickup_eta/2` thì ở `driver_origin_cell`, ngược lại ở ô khách;
   - `idle_since = t`; xe không được ghép lại trong cùng tick.
+- **`cancel.exact_time = true`** (mặc định từ H7.3, H-38): khách hủy ở đúng `t_cancel = matched_time + 60 * e_cancel / h_per_min`. Ở bước 1, xe đến hạn đón mà `t_cancel < pickup_at` thì hủy thay vì đón; ở bước 1 và bước 8, vị trí xe (luật nửa ETA) và `idle_since` tính tại `t_cancel`. Không rút thêm số. `false` giữ luật cũ (chỉ xét ở bước 8 theo tick), dùng cho file ghim G7.
 - `e_cancel` rút sẵn theo session, nên cùng một session có cùng ngưỡng hủy ở mọi chính sách.
 
 ### 4.8 M8 SupplyModel (`supply.py`)
@@ -339,7 +340,7 @@ Trong mỗi slot, sau bước 9 của **mỗi tick**, cộng dồn cho từng ô
 Cuối slot, lấy trung bình theo số tick để có `I, E, O, W`, rồi tính:
 - `slack = I / E` [Castillo et al. 2025]. Khi E = 0: `+inf` nếu I > 0; **0 nếu I = 0** (ô không có xe rảnh nào thì là ô căng, H-14).
 - `utilization = (E + O) / (I + E + O)`; nếu mẫu số = 0 thì NaN. Xe `repositioning` và `offline` không tính (T-09).
-- Đếm trong slot theo **thời điểm sự kiện** và **ô đón** (T-15): `n_sessions`, `n_offers`, `n_requests` theo `open_time`; `n_matched` và `mean_pickup_eta_min` theo `matched_time`; `n_abandoned`, `n_cancelled` theo thời điểm hủy; `n_completed`, `voucher_spent_usd` theo `dropoff_time`.
+- Đếm trong slot theo **thời điểm sự kiện** và **ô đón** (T-15): `n_sessions`, `n_offers`, `n_requests` theo `open_time`; `n_matched` và `mean_pickup_eta_min` theo `matched_time`; `n_abandoned`, `n_cancelled` theo thời điểm hủy; `n_completed`, `voucher_spent_vnd` theo `dropoff_time`.
 - Giá trị trễ để làm feature: `slack_lag_slot` (slot k-1) và `slack_lag_day` (slot k-96; NaN nếu chưa có).
 
 Snapshot của slot k được **công bố** sau khi slot k kết thúc. Chính sách ở slot k+1 chỉ thấy các snapshot ≤ k. Cài đặt như một hàng đợi, và có assert kiểm tra thứ tự này.
@@ -352,6 +353,16 @@ Snapshot của slot k được **công bố** sau khi slot k kết thúc. Chính
 - Kết thúc lượt chạy: ghi `run_metadata`, gồm config đầy đủ, `config_hash`, `git_sha` và thời gian chạy.
 
 ### 4.13 M13 Runner (`runner.py`): xem §7
+
+### 4.14 Biến động tự nhiên (`shocks.py`, thế giới W1; H-30, H-39)
+
+Chỉ khi `shocks.enabled = true` (overlay `config/world_w1.yaml`); tắt thì không dựng gì và simulator chạy như cũ. Giá trị và nguồn: `docs/de_xuat_tham_so_ha_noi.md` B5.
+
+- **Lịch rút trước** cho mọi ngày của lượt chạy (gồm warm-up, cool-down), luồng SHOCK theo `run_seed`: hệ số cầu ngày `exp(N(−σ²/2, σ))` khóa `(DAY_DEMAND, day)`; mưa khóa `(RAIN, day)`: có mưa với xác suất `p_per_day`, giờ bắt đầu và độ dài rút đều; sự kiện khóa `(EVENT, day, venue_idx)`: mỗi địa điểm có sự kiện với xác suất của loại, giờ tan rút đều, cầu tăng trong `surge_min` phút sau giờ tan; tài xế khóa `(ATTEND, day, driver_id)` (đi làm, nghỉ khi mưa) và `(JITTER, day, driver_id)` (lệch giờ vào ca `N(0, sd)`). Ô địa điểm: luồng WORLD `WorldPart.VENUES`, chọn không lặp, cố định theo `world_seed`.
+- **Cầu (bước 4):** λ của mỗi ô nhân `day_mult × rain_demand_mult (khi mưa) × mult_venue (ô địa điểm) × mult_ring1 (6 ô kề)` của các sự kiện đang trong khung tăng.
+- **Tốc độ:** `space.T` và `speed_kmh` có thêm lớp giờ `h + 24` với tốc độ × `speed_mult`; trong lúc mưa mọi chỗ tra thời gian đi (báo giá, ghép, thời gian chuyến theo giờ đón, điều xe) dùng lớp này (`shocks.travel_hour`). Cột `hour` của session không đổi.
+- **Cung (bước 2, chế độ `schedule`):** ca bắt đầu ngày k bị bỏ nếu tài xế không đi làm ngày k (lấy ca của ngày đi làm kế tiếp); giờ vào ca cộng `jitter_s[k]`. Khi mưa, tài xế được đánh dấu của ngày đó rời khi đang rảnh (OFFLINE, ghi ô), tài xế đang bận rời khi xong việc; hết mưa thì quay lại đúng ô cũ nếu còn ca. Ca đang chạy lúc t = 0 (bắt đầu hôm trước) không chịu biến động.
+- Chính sách không đọc được lịch (không nằm trong `SessionBatch` hay `SnapshotView`); lịch ghi ra `meta/shocks` (H7.7).
 
 ---
 
@@ -372,6 +383,7 @@ def rng_for(stream: Stream, *key: int) -> np.random.Generator:
 | CELLSLOT | `(kind, cell_or_cluster, slot_or_block)` | ε của chính sách cũ, switchback |
 | RIDER | `(rider_id)` | arm của A/B theo rider |
 | DRIVER | `(driver_id, counter)` | repositioning |
+| SHOCK | `(kind, day, …)` | lịch biến động W1 (§4.14, H-30): `DAY_DEMAND`, `RAIN` khóa `(kind, day)`; `EVENT` khóa `(kind, day, venue_idx)`; `ATTEND`, `JITTER` khóa `(kind, day, driver_id)`. Theo `run_seed`, không phụ thuộc chính sách |
 
 **Yêu cầu:**
 - Không dùng `np.random.*` toàn cục và không dùng `random` của Python.

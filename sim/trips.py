@@ -10,12 +10,15 @@ repositioning drivers.
 
 Event times are exact (``pickup_at``, ``dropoff_at``), not rounded to the tick
 that processes them; the trip duration was fixed at match time (matching.py).
+With ``cancel.exact_time`` a due pickup whose rider crossed the cancellation
+threshold first (``t_cancel < pickup_at``) is a cancellation instead (decisions H-38).
 """
 
 from __future__ import annotations
 
 import numpy as np
 
+from sim import cancel
 from sim.monitor import MarketMonitor
 from sim.state import DriverStatus, OrderStatus, SimContext
 
@@ -30,7 +33,13 @@ def advance(ctx: SimContext, t: float) -> None:
     if len(due) == 0:
         return
     status = drivers.status[due]
-    _pick_up(ctx, due[status == _EN_ROUTE])
+    pickups = due[status == _EN_ROUTE]
+    if ctx.cfg.cancel.exact_time and len(pickups):
+        t_cancel = cancel.cancel_time_s(ctx, drivers.order[pickups])
+        first = t_cancel < drivers.busy_until[pickups]          # the rider gave up before the driver arrived
+        cancel.cancel_drivers(ctx, pickups[first], t_cancel[first])
+        pickups = pickups[~first]
+    _pick_up(ctx, pickups)
     # A trip shorter than a tick can start and end in the same step, so look again.
     on_trip = np.flatnonzero((drivers.status == _ON_TRIP) & (drivers.busy_until <= t))
     _drop_off(ctx, on_trip)
@@ -65,15 +74,16 @@ def _drop_off(ctx: SimContext, d_idx: np.ndarray) -> None:
     dropoff_at = drivers.busy_until[d_idx]
     pu_cell, do_cell = orders.pu_cell[o_idx], orders.do_cell[o_idx]
 
-    # Payments at completion (spec §4.6).
-    gross = orders.gross_fare_usd[o_idx].astype(np.float64)
-    driver_pay = (1.0 - ctx.cfg.pricing.commission_rate) * gross
+    # Payments at completion (spec §4.6, decisions H-42): the platform fee goes to the platform, the
+    # commission applies to the rest; profit = fee + commission x (gross - fee) - voucher.
+    gross = orders.gross_fare_vnd[o_idx].astype(np.float64)
+    driver_pay = (1.0 - ctx.cfg.pricing.commission_rate) * (gross - ctx.cfg.pricing.platform_fee_vnd)
     orders.status[o_idx] = int(OrderStatus.COMPLETED)
     orders.dropoff_time_s[o_idx] = dropoff_at
-    orders.driver_pay_usd[o_idx] = driver_pay
-    orders.platform_profit_usd[o_idx] = orders.net_fare_usd[o_idx].astype(np.float64) - driver_pay
+    orders.driver_pay_vnd[o_idx] = driver_pay
+    orders.platform_profit_vnd[o_idx] = orders.net_fare_vnd[o_idx].astype(np.float64) - driver_pay
 
-    voucher = orders.voucher_cents[o_idx]
+    voucher = orders.voucher_dong[o_idx]
     session_id = orders.session_id[o_idx]
     for i in np.flatnonzero(voucher > 0):
         ctx.ledger.settle(int(session_id[i]))              # committed -> spent
@@ -83,7 +93,7 @@ def _drop_off(ctx: SimContext, d_idx: np.ndarray) -> None:
     drivers.idle_since[d_idx] = dropoff_at
     drivers.busy_until[d_idx] = np.inf
     drivers.order[d_idx] = -1
-    drivers.earnings_usd[d_idx] += driver_pay
+    drivers.earnings_vnd[d_idx] += driver_pay
 
     np.subtract.at(cells.ontrip, pu_cell, 1)
     np.add.at(cells.idle, do_cell, 1)

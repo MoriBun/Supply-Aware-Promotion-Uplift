@@ -42,13 +42,13 @@ def test_sweeps_figure_marks_theta_star_and_skips_large_thetas(plt):
 
 
 def test_ladder_qini_design_and_u_latent_figures(plt):
-    summary = pd.DataFrame({"label": ["all_on_B", "random", "tau_per_usd", "all_off"], "N_mean": [100.0, 110, 130, 80],
+    summary = pd.DataFrame({"label": ["all_on_B", "random", "tau_per_vnd", "all_off"], "N_mean": [100.0, 110, 130, 80],
                             "dN_vs_ref": [0.0, 10, 30, -20], "dN_vs_ref_se": [0.0, 1, 2, 1], "n_seeds": [30] * 4})
     assert len(figures.ladder_figure(summary).axes) == 1
-    qini = pd.DataFrame({"label": ["random", "tau_x", "tau_per_usd"], "qini_coef": [10.0, 800, -500],
+    qini = pd.DataFrame({"label": ["random", "tau_x", "tau_per_vnd"], "qini_coef": [10.0, 800, -500],
                          "qini_lo": [-100.0, 400, -1000], "qini_hi": [120.0, 1200, -10]})
-    eff = pd.DataFrame({"label": ["random", "tau_x", "tau_per_usd"], "N_mean": [110.0, 108, 130],
-                        "extra_trips_per_100usd": [8.0, 7.5, 12.5]})
+    eff = pd.DataFrame({"label": ["random", "tau_x", "tau_per_vnd"], "N_mean": [110.0, 108, 130],
+                        "extra_trips_per_100k_vnd": [8.0, 7.5, 12.5]})
     fig = figures.qini_vs_n_figure(qini, eff)
     assert len(fig.axes) == 2 and "−1,00" in fig.axes[0].get_title(loc="left")           # Spearman of Qini with N
     designs = pd.DataFrame({"design": ["rider_ab", "cluster_switchback cụm all"], "per_day": [1600.0, 1250],

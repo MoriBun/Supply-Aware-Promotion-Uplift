@@ -24,7 +24,7 @@ from dashboard.geometry import torus_display_vectors, world_geometry
 from dashboard.trace import EVENT_CODE, Trace, run_traced
 
 ROOT = Path(__file__).resolve().parents[1]
-COMPARED = ("N_completed", "V_profit_usd", "voucher_spent_usd", "n_sessions", "n_requests", "n_abandoned", "n_cancelled",
+COMPARED = ("N_completed", "V_profit_vnd", "voucher_spent_vnd", "n_sessions", "n_requests", "n_abandoned", "n_cancelled",
             "mean_pickup_eta_min", "share_cells_off", "n_switches_per_cell_day", "mean_slack", "sim_end_s",
             "n_truncated_orders")
 
@@ -39,9 +39,9 @@ def _setup(cfg: Config, theta: float = 0.5):
 def test_traced_run_matches_engine(tiny_cfg: Config) -> None:
     """Recording frames must not change a single number of the run (same steps, same order)."""
     world, policy, rng = _setup(tiny_cfg)
-    expected = engine.run(tiny_cfg, world, policy, rng, log_level="full", budget_usd=50.0, enforce_budget=True)
+    expected = engine.run(tiny_cfg, world, policy, rng, log_level="full", budget_vnd=50.0, enforce_budget=True)
     world, policy, rng = _setup(tiny_cfg)
-    result, trace = run_traced(tiny_cfg, world, policy, rng, budget_usd=50.0, enforce_budget=True)
+    result, trace = run_traced(tiny_cfg, world, policy, rng, budget_vnd=50.0, enforce_budget=True)
     for name in COMPARED:
         a, b = getattr(expected, name), getattr(result, name)
         assert a == b or (isinstance(a, float) and math.isnan(a) and math.isnan(b)), name
@@ -51,14 +51,18 @@ def test_traced_run_matches_engine(tiny_cfg: Config) -> None:
     for col in expected.orders.names():
         x, y = expected.orders.col(col), result.orders.col(col)
         assert np.array_equal(x, y, equal_nan=x.dtype.kind == "f"), col
-    assert len(expected.snapshots) == len(result.snapshots) == len(trace.slots)
+    # Every published slot has a snapshot; a run may end in cool-down inside a slot that started but was
+    # never published (longer trips on the Hanoi grid, H7.1), so the trace can hold one more slot.
+    published = sum(rec["published"] for rec in trace.slots)
+    assert len(expected.snapshots) == len(result.snapshots) == published
+    assert len(trace.slots) - published in (0, 1) and all(rec["published"] for rec in trace.slots[:published])
     assert trace.n_frames == int(result.sim_end_s // tiny_cfg.time.tick_s)
 
 
 def test_frames_consistent_with_counters(tiny_cfg: Config) -> None:
     """Per-cell idle / en-route counts of a frame equal the driver statuses of that frame; counters are monotone."""
     world, policy, rng = _setup(tiny_cfg)
-    _, trace = run_traced(tiny_cfg, world, policy, rng, budget_usd=50.0, enforce_budget=True)
+    _, trace = run_traced(tiny_cfg, world, policy, rng, budget_vnd=50.0, enforce_budget=True)
     a = trace.frame_arrays()
     idle, enroute = int(DriverStatus.IDLE), int(DriverStatus.EN_ROUTE)
     for k in range(trace.n_frames):
@@ -102,16 +106,16 @@ def test_gte_discovery_excludes_budgeted_and_unpaired_runs(tmp_path: Path) -> No
         ("all_on", 2, 9999, None),
         ("all_on", 0, 500, 50), ("all_off", 0, 100, 50),
     ]
-    table = pd.DataFrame(rows, columns=["policy", "seed", "N_completed", "budget_B_usd"])
-    table["V_profit_usd"] = 0.0
-    table["voucher_spent_usd"] = 0.0
+    table = pd.DataFrame(rows, columns=["policy", "seed", "N_completed", "budget_B_vnd"])
+    table["V_profit_vnd"] = 0.0
+    table["voucher_spent_vnd"] = 0.0
     table.to_parquet(target / "policy_results.parquet", index=False)
     got = gte_tables(tmp_path)
     assert len(got) == 1
     assert got[0]["GTE"] == 20.0 and got[0]["GTE_se"] == 10.0
     assert got[0]["N_on"] == 120.0 and got[0]["N_off"] == 100.0
     assert got[0]["n_seeds"] == 2
-    table.loc[:, "budget_B_usd"] = 50.0
+    table.loc[:, "budget_B_vnd"] = 50.0
     table.to_parquet(target / "policy_results.parquet", index=False)
     assert gte_tables(tmp_path) == []
 
@@ -153,7 +157,7 @@ def test_api_runs_a_tiny_run(tmp_path: Path) -> None:
         time.sleep(0.2)
     assert info["status"] == "done", info.get("error")
     assert info["kappa"] == -1.0 and info["kappa_pilots"] == 0
-    assert info["budget_usd"] > 0 and info["n_frames"] > 0 and len(info["geometry"]["cells"]) == 7
+    assert info["budget_vnd"] > 0 and info["n_frames"] > 0 and len(info["geometry"]["cells"]) == 7
     frames = client.get(f"/api/runs/{rid}/frames", params={"start": 0, "count": 1000}).json()
     assert frames["frames"] == info["n_frames"] and frames["done"] is True
     assert len(frames["status"][0]) == 10 and len(frames["events"]) == frames["frames"]
@@ -203,7 +207,7 @@ def test_api_sweep_finds_theta_star(tmp_path: Path) -> None:
     assert all(p["n"] == 2 for p in agg["per_theta"])
     assert len(sweep["kappas"]) == 3 and all(k["n_pilots"] >= 1 for k in sweep["kappas"])
     # same B for every theta, and the on-disk tables are the ones of mode sweep_theta
-    assert len({r["budget_B_usd"] for r in sweep["rows"]}) == 1
+    assert len({r["budget_B_vnd"] for r in sweep["rows"]}) == 1
     table = pd.read_parquet(tmp_path / rid / "results" / "policy_results.parquet")
     assert len(table) == 6 and set(table["theta"]) == {0.0, 0.5, 1.0} and table["run_id"].str.startswith("sweep_theta-").all()
     star = pd.read_parquet(tmp_path / rid / "results" / "theta_sweep.parquet")

@@ -117,7 +117,7 @@ def test_duplicate_key_raises(tmp_path):
         ("space.edge_km=1", lambda c: c.space.edge_km, 1.0),
         ("space.torus=false", lambda c: c.space.torus, False),
         ("matching.max_ring=2", lambda c: c.matching.max_ring, 2),
-        ("voucher.max_usd=5.5", lambda c: c.voucher.max_usd, 5.5),
+        ("voucher.max_vnd=5.5", lambda c: c.voucher.max_vnd, 5.5),
         ("experiment.cluster_level=all", lambda c: c.experiment.cluster_level, "all"),
         ("policy.threshold.kappa=0.25", lambda c: c.policy.threshold.kappa, 0.25),
         ("policy.name=all_off", lambda c: c.policy.name, "all_off"),
@@ -183,8 +183,8 @@ def test_set_wrong_type_raises(default_yaml, assignment):
         "experiment.burnin_min=60",            # not < block_min
         "riders.x_segment_probs=[0.5, 0.5, 0.5]",
         "space.speed_factor_by_hour=[1.0, 1.0]",
-        "budget.mode=fixed",                   # fixed_usd is null
-        "calibration_targets.mean_gross_fare_usd=[21.0, 17.2]",
+        "budget.mode=fixed",                   # fixed_vnd is null
+        "calibration_targets.mean_trip_km=[8.0, 5.0]",
         "time.window_min=100",                 # not a multiple of slot_min (15)
         "time.window_min=0",
         "time.window_min=1500",                # > 1 day but not whole days (H-02)
@@ -231,3 +231,59 @@ def test_config_is_frozen(default_yaml):
     cfg = load_config(default_yaml)
     with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.space.grid_radius = 5
+
+
+# --- Sprint 7 contract B9 (decisions H-29 ... H-33) ---------------------------
+
+
+def test_s7_contract_keys_load_with_old_behaviour(default_yaml):
+    # B9: every new key exists; the keys that change the model default to the old behaviour
+    # until the task that implements them switches the default (H-29).
+    cfg = load_config(default_yaml)
+    assert cfg.matching.ring_tiebreak == "most_idle"                 # H7.2 switched the default
+    assert cfg.cancel.exact_time is True                             # H7.3 switched the default
+    assert cfg.shocks.enabled is False
+    assert cfg.policy.threshold.scope == "cell"
+    assert len(cfg.shocks.events.venues) >= 1 and all(len(row) == 7 for row in cfg.shocks.events.venues)
+    assert len(cfg.shocks.rain.duration_h_range) == 2
+    for h in (6, 7, 8):
+        lo, hi = getattr(cfg.calibration_targets, f"busy_rel_h{h}")
+        assert 0.0 <= lo <= hi <= 1.0
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    ["matching.ring_tiebreak=most_idle", "cancel.exact_time=true", "shocks.enabled=true",
+     "policy.threshold.scope=city", "policy.threshold.score_fn=oracle"],
+)
+def test_s7_contract_values_are_accepted(default_yaml, assignment):
+    load_config(default_yaml, [assignment])
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    ["matching.ring_tiebreak=random", "cancel.exact_time=1", "policy.threshold.scope=cluster"],
+)
+def test_s7_contract_wrong_values_raise(default_yaml, assignment):
+    with pytest.raises(ConfigError):
+        load_config(default_yaml, [assignment])
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        "shocks.day_demand.sigma=-0.1",
+        "shocks.events.venues=[[1, 1.5, 21.0, 23.0, 60.0, 2.0, 1.0]]",      # probability > 1
+        "shocks.events.venues=[[1, 0.1, 23.0, 20.0, 60.0, 2.0, 1.0]]",      # end_from > end_to
+        "shocks.events.venues=[[-1, 0.1, 21.0, 23.0, 60.0, 2.0, 1.0]]",     # negative count
+        "shocks.rain.speed_mult=0",
+        "shocks.rain.duration_h_range=[3.0, 1.0]",
+        "shocks.rain.driver_off_share=1.2",
+        "shocks.attendance.p_work=-0.1",
+        "shocks.shift_jitter.sd_min=-5",
+        "calibration_targets.busy_rel_h7=[0.85, 0.55]",
+    ],
+)
+def test_s7_contract_out_of_range_raises(default_yaml, assignment):
+    with pytest.raises(ConfigError, match="invalid config"):
+        load_config(default_yaml, [assignment])

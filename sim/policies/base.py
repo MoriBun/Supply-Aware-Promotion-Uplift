@@ -28,7 +28,7 @@ SNAPSHOT_FIELDS: tuple[str, ...] = (
     "cell", "slot", "day", "slot_of_day", "hour",
     "idle_avg", "enroute_avg", "ontrip_avg", "waiting_avg", "slack", "utilization", "mean_pickup_eta_min",
     "n_sessions", "n_offers", "n_requests", "n_matched", "n_completed", "n_abandoned", "n_cancelled",
-    "voucher_spent_usd", "promo_on", "cell_propensity", "assign_mechanism_cell", "cluster_id", "block",
+    "voucher_spent_vnd", "promo_on", "cell_propensity", "assign_mechanism_cell", "cluster_id", "block",
     "in_burnin", "slack_lag_slot", "slack_lag_day", "published_at_s",
 )
 
@@ -59,7 +59,7 @@ class SessionBatch:
     x_freq: np.ndarray          # float32
     x_tenure: np.ndarray        # float32
     x_segment: np.ndarray       # int8
-    quoted_fare_usd: np.ndarray  # float32
+    quoted_fare_vnd: np.ndarray  # float32
     quoted_eta_min: np.ndarray   # float32
     no_supply: np.ndarray        # bool
     u_target: np.ndarray         # float64
@@ -99,6 +99,7 @@ class CellDecision:
     cluster_id: np.ndarray        # int16 [N], -1 if not an experiment
     block: int = -1               # -1 if not an experiment (decisions T-15)
     in_burnin: bool = False
+    lag_same_block: bool = True   # slot k-1 in the same switchback block (H-40); True without blocks
 
     @classmethod
     def blank(cls, slot: int, n_cells: int, *, promo_on: bool = False,

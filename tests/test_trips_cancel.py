@@ -5,6 +5,7 @@ import math
 import numpy as np
 import pytest
 
+from sim.budget import DONG_PER_VND
 from sim import cancel, matching, trips
 from sim.budget import LedgerState
 from sim.cancel import cancel_hazard_per_min
@@ -30,21 +31,21 @@ def idle_driver(ctx, driver_id, cell, idle_since=0.0):
     return driver_id
 
 
-def booked_order(ctx, pu_cell, do_cell, *, request_time_s=T0, rider_id=0, fare_usd=20.0, voucher_cents=0,
+def booked_order(ctx, pu_cell, do_cell, *, request_time_s=T0, rider_id=0, fare_vnd=2000.0, voucher_dong=0,
                  trip_noise=1.0, e_cancel=1e9):
     """A booked session and its Waiting order, as steps 4-6 leave them (voucher reserved and committed)."""
     sid = 5000 + ctx.sessions.n
     s_idx = ctx.sessions.append(session_id=sid, rider_id=rider_id, pu_cell=pu_cell, do_cell=do_cell,
                                 open_time_s=request_time_s, trip_noise=trip_noise, e_cancel=e_cancel,
-                                requested=True, voucher_cents=voucher_cents)
+                                requested=True, voucher_dong=voucher_dong)
     o_idx = ctx.orders.append(order_id=sid, session_id=sid, rider_id=rider_id, pu_cell=pu_cell, do_cell=do_cell,
-                              request_time_s=request_time_s, gross_fare_usd=fare_usd,
-                              voucher_value_usd=voucher_cents / 100.0, net_fare_usd=fare_usd - voucher_cents / 100.0,
-                              session_idx=s_idx, voucher_cents=voucher_cents, in_window=True)
+                              request_time_s=request_time_s, gross_fare_vnd=fare_vnd,
+                              voucher_value_vnd=voucher_dong / DONG_PER_VND, net_fare_vnd=fare_vnd - voucher_dong / DONG_PER_VND,
+                              session_idx=s_idx, voucher_dong=voucher_dong, in_window=True)
     ctx.sessions.order_idx[s_idx] = o_idx
     ctx.cells.waiting[pu_cell] += 1
-    if voucher_cents:
-        assert ctx.ledger.reserve(sid, request_time_s, voucher_cents)
+    if voucher_dong:
+        assert ctx.ledger.reserve(sid, request_time_s, voucher_dong)
         ctx.ledger.commit(sid)
     return o_idx
 
@@ -72,7 +73,8 @@ def counters_ok(ctx):
 
 @pytest.fixture
 def cfg():
-    return load_config(DEFAULT)
+    # M6/M7 unit tests on the pre-H7.1 grid (37 cells, 0.75 km): the hand-built pickups stay within reach.
+    return load_config(DEFAULT, ["space.grid_radius=3", "space.edge_km=0.75"])
 
 
 @pytest.fixture
@@ -114,22 +116,23 @@ def test_pickup_is_match_plus_eta_and_dropoff_is_pickup_plus_trip_time(ctx):
 
 
 def test_payments_at_completion(cfg, ctx):
-    order = booked_order(ctx, 4, 9, fare_usd=25.0, voucher_cents=500)
+    # H7.8 (decisions H-42): the platform fee goes to the platform, the commission applies to the rest.
+    order = booked_order(ctx, 4, 9, fare_vnd=85000.0, voucher_dong=20000)
     driver = idle_driver(ctx, 0, 4)
     matching.match(ctx, T0)
     o = ctx.orders
-    assert o.driver_pay_usd[order] == 0.0 and o.platform_profit_usd[order] == 0.0     # nothing before completion
+    assert o.driver_pay_vnd[order] == 0.0 and o.platform_profit_vnd[order] == 0.0     # nothing before completion
     run_until(ctx, T0 + 60, T0 + 3600, cancellation=False)
     assert o.status[order] == COMPLETED
-    assert cfg.pricing.commission_rate == 0.24
-    assert o.driver_pay_usd[order] == pytest.approx(0.76 * 25.0)                       # 76% of the gross fare
-    assert o.net_fare_usd[order] == pytest.approx(20.0)
-    assert o.platform_profit_usd[order] == pytest.approx(20.0 - 0.76 * 25.0)           # net - driver pay
-    assert ctx.drivers.earnings_usd[driver] == pytest.approx(0.76 * 25.0)
+    assert cfg.pricing.commission_rate == 0.25 and cfg.pricing.platform_fee_vnd == 10000
+    assert o.driver_pay_vnd[order] == pytest.approx(0.75 * (85000.0 - 10000.0))        # 75% of the fare after the fee
+    assert o.net_fare_vnd[order] == pytest.approx(65000.0)
+    assert o.platform_profit_vnd[order] == pytest.approx(10000.0 + 0.25 * 75000.0 - 20000.0)   # fee + commission - voucher
+    assert ctx.drivers.earnings_vnd[driver] == pytest.approx(0.75 * 75000.0)
     # Voucher: committed -> spent, counted in the pickup cell at dropoff time (T-15).
     sid = int(o.session_id[order])
-    assert ctx.ledger.entry(sid) == (ctx.ledger.period_of(T0), 500, LedgerState.SPENT)
-    assert ctx.slot_counters.voucher_spent_cents[4] == 500
+    assert ctx.ledger.entry(sid) == (ctx.ledger.period_of(T0), 20000, LedgerState.SPENT)
+    assert ctx.slot_counters.voucher_spent_dong[4] == 20000
     ctx.ledger.check_invariant()
 
 
@@ -139,7 +142,7 @@ def test_order_without_voucher_never_touches_the_ledger(ctx):
     matching.match(ctx, T0)
     run_until(ctx, T0 + 60, T0 + 3600)
     assert ctx.orders.status[0] == COMPLETED and ctx.ledger.n_entries == 0
-    assert ctx.slot_counters.voucher_spent_cents.sum() == 0
+    assert ctx.slot_counters.voucher_spent_dong.sum() == 0
 
 
 def test_driver_serves_one_order_after_another(ctx):
@@ -176,7 +179,7 @@ def test_waiting_order_is_abandoned_after_max_wait(ctx):
     riders = ctx.world.riders
     rider = int(np.argmin(np.abs(riders.max_wait_min - 5.0)))
     max_wait_s = float(riders.max_wait_min[rider]) * 60
-    order = booked_order(ctx, 6, 8, rider_id=rider, voucher_cents=300)
+    order = booked_order(ctx, 6, 8, rider_id=rider, voucher_dong=300)
     last_ok = T0 + math.ceil(max_wait_s / 60) * 60 - 60
     run_until(ctx, T0, last_ok)
     assert ctx.orders.status[order] == WAITING and ctx.cells.waiting[6] == 1
@@ -218,7 +221,7 @@ def test_cancelled_driver_is_idle_where_they_stand(cfg, ctx, cancel_after_min, a
     assert eta / 2 > 2 and eta > 12 > eta / 2
     # e_cancel chosen so that the cumulative hazard reaches it exactly after `cancel_after_min` minutes.
     threshold = float(cancel_hazard_per_min(cfg, eta)) * cancel_after_min
-    order = booked_order(ctx, 0, 5, e_cancel=threshold, voucher_cents=400)
+    order = booked_order(ctx, 0, 5, e_cancel=threshold, voucher_dong=400)
     other = booked_order(ctx, 0, 5, request_time_s=T0 + 60)
     driver = idle_driver(ctx, 2, source)
     matching.match(ctx, T0)
@@ -263,9 +266,9 @@ def test_hazard_formula(cfg):
                                [c.base_per_min, c.base_per_min, c.base_per_min + 7 * c.slope_per_min2])
 
 
-def cancel_rate(eta_min: float, n: int = 10_000) -> float:
+def cancel_rate(eta_min: float, n: int = 10_000, exact_time: bool = True) -> float:
     """Share of ``n`` matched orders cancelled before pickup at a given pickup ETA."""
-    cfg = load_config(DEFAULT, [f"supply.fleet_size={n}"])
+    cfg = load_config(DEFAULT, [f"supply.fleet_size={n}", f"cancel.exact_time={str(exact_time).lower()}"])
     ctx = make_context(cfg)
     e_cancel = np.random.default_rng(int(eta_min * 10)).exponential(1.0, n)
     s0, s1 = ctx.sessions.reserve(n)
@@ -287,14 +290,54 @@ def cancel_rate(eta_min: float, n: int = 10_000) -> float:
     return float((o.col("status") == CANCELLED).mean())
 
 
-def test_cancellation_rate_grows_with_pickup_eta(cfg):
+@pytest.mark.parametrize("exact_time", [True, False])
+def test_cancellation_rate_grows_with_pickup_eta(cfg, exact_time):
     # docs/tests.md M7: with 10 000 simulated orders the rate at ETA 10 min is above the rate at 3 min.
-    short, long = cancel_rate(3.0), cancel_rate(10.0)
+    short, long = cancel_rate(3.0, exact_time=exact_time), cancel_rate(10.0, exact_time=exact_time)
     assert long > short
-    # Checked at whole minutes before pickup: P = 1 - exp(-h * (eta - 1)).
+    # exact_time (H7.3, decisions H-38): the exact hazard, P = 1 - exp(-h * eta). Before S7 the minute
+    # before pickup was never checked (KN 2.2): P = 1 - exp(-h * (eta - 1)).
     for rate, eta in ((short, 3.0), (long, 10.0)):
-        expected = 1 - math.exp(-float(cancel_hazard_per_min(cfg, eta)) * (eta - 1))
+        exposure = eta if exact_time else eta - 1
+        expected = 1 - math.exp(-float(cancel_hazard_per_min(cfg, eta)) * exposure)
         assert rate == pytest.approx(expected, abs=4 * math.sqrt(expected * (1 - expected) / 10_000))
+
+
+def test_exact_cancellation_before_pickup_frees_the_driver_and_the_voucher_at_t_cancel(cfg):
+    # The rider crosses the threshold between the last tick and a pickup due inside the next tick: with exact_time the
+    # order is cancelled at t_cancel in step 1 (driver at the rider's cell, idle_since = t_cancel,
+    # voucher released); without it the pickup happens (H7.3, decisions H-38, KN 2.2).
+    for exact in (True, False):
+        c = load_config(DEFAULT, ["space.grid_radius=3", "space.edge_km=0.75", f"cancel.exact_time={str(exact).lower()}"])
+        ctx = make_context(c)
+        source = int(ctx.world.space.rings[0][1][0])
+        eta = float(ctx.world.space.T[source, 0, 12])
+        h = float(cancel_hazard_per_min(c, eta))
+        last_tick = T0 + 60 * math.ceil(eta - 1)                             # last tick strictly before pickup
+        t_cancel_offset = (last_tick + T0 + eta * 60) / 2 - T0               # between that tick and the pickup
+        order = booked_order(ctx, 0, 5, e_cancel=h * t_cancel_offset / 60.0, voucher_dong=500)
+        idle_driver(ctx, 0, source)
+        matching.match(ctx, T0)
+        pickup_at = T0 + eta * 60
+        t = T0
+        while t + 60 < pickup_at:
+            t += 60
+            trips.advance(ctx, t)
+            cancel.en_route(ctx, t)
+            assert ctx.orders.status[order] == MATCHED                       # not yet: H < e_cancel at every tick
+        t += 60
+        trips.advance(ctx, t)                                                # the tick that reaches pickup_at
+        sid = int(ctx.orders.session_id[order])
+        if exact:
+            assert ctx.orders.status[order] == CANCELLED
+            assert ctx.drivers.idle_since[0] == pytest.approx(T0 + t_cancel_offset)
+            assert ctx.drivers.cell[0] == 0                                  # past half the ETA: at the rider's cell
+            assert ctx.ledger.entry(sid)[2] == LedgerState.RELEASED
+            assert ctx.slot_counters.n_cancelled[0] == 1
+        else:
+            assert ctx.orders.status[order] == O_ON_TRIP
+        ctx.ledger.check_invariant()
+        counters_ok(ctx)
 
 
 def test_same_session_cancels_at_the_same_moment_whatever_the_policy(cfg):

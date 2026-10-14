@@ -37,7 +37,7 @@ from sim.runner import (
 MODE = "sweep_theta"
 NAN = float("nan")
 
-ROW_FIELDS = ("theta", "seed", "N_completed", "V_profit_usd", "voucher_spent_usd", "budget_B_usd", "share_cells_off",
+ROW_FIELDS = ("theta", "seed", "N_completed", "V_profit_vnd", "voucher_spent_vnd", "budget_B_vnd", "share_cells_off",
               "mean_pickup_eta_min", "n_sessions", "n_requests", "n_abandoned", "n_cancelled", "n_switches_per_cell_day",
               "kappa", "runtime_s")
 
@@ -60,7 +60,7 @@ def build_jobs(base: Config, grid: list[float], n_seeds: int, budget: float | No
     """One job per (theta, seed), in theta-major order, as ``runner.sweep_theta`` builds them."""
     jobs: list[Job] = []
     for theta, ka in zip(grid, kappas, strict=True):
-        jobs += [Job(cfg=base, seed=s, theta=float(theta), kappa=ka.kappa, budget_usd=budget,
+        jobs += [Job(cfg=base, seed=s, theta=float(theta), kappa=ka.kappa, budget_vnd=budget,
                      enforce_budget=base.budget.enforce, kappa_pilots=ka.n_pilots)
                  for s in seeds_for(base, n_seeds)]
     return jobs
@@ -95,8 +95,8 @@ def run_jobs_live(jobs: list[Job], *, n_procs: int, on_result: ResultFn,
 def row_of(job: Job, res: RunResult) -> dict:
     return {
         "theta": float(job.theta), "seed": int(job.seed), "N_completed": int(res.N_completed),
-        "V_profit_usd": _f(res.V_profit_usd), "voucher_spent_usd": _f(res.voucher_spent_usd),
-        "budget_B_usd": _f(res.budget_B_usd), "share_cells_off": _f(res.share_cells_off),
+        "V_profit_vnd": _f(res.V_profit_vnd), "voucher_spent_vnd": _f(res.voucher_spent_vnd),
+        "budget_B_vnd": _f(res.budget_B_vnd), "share_cells_off": _f(res.share_cells_off),
         "mean_pickup_eta_min": _f(res.mean_pickup_eta_min), "n_sessions": int(res.n_sessions),
         "n_requests": int(res.n_requests), "n_abandoned": int(res.n_abandoned), "n_cancelled": int(res.n_cancelled),
         "n_switches_per_cell_day": _f(res.n_switches_per_cell_day),
@@ -121,7 +121,7 @@ def aggregate(rows: list[dict], grid: list[float], *, alpha: float = 0.05) -> di
         n = int(len(g))
         rec = {"theta": t, "n": n}
         if n:
-            for col, name in (("N_completed", "N"), ("V_profit_usd", "V"), ("voucher_spent_usd", "spent"),
+            for col, name in (("N_completed", "N"), ("V_profit_vnd", "V"), ("voucher_spent_vnd", "spent"),
                               ("share_cells_off", "share_off"), ("mean_pickup_eta_min", "eta")):
                 v = g[col].astype(float)
                 rec[f"{name}_mean"] = _f(v.mean())
@@ -152,7 +152,7 @@ def aggregate(rows: list[dict], grid: list[float], *, alpha: float = 0.05) -> di
             gain = {"vs_theta": 0.0, "dN": _f(d.mean()), "dN_se": _f(d.std(ddof=1) / math.sqrt(len(d))) if len(d) > 1 else None,
                     "n_seeds": int(len(d))}
     return {"per_theta": per, "argmax_theta": argmax, "star": star, "gain_vs_zero": gain,
-            "n_rows": int(len(df)), "budget_B_usd": _f(df["budget_B_usd"].dropna().iloc[0]) if df["budget_B_usd"].notna().any() else None}
+            "n_rows": int(len(df)), "budget_B_vnd": _f(df["budget_B_vnd"].dropna().iloc[0]) if df["budget_B_vnd"].notna().any() else None}
 
 
 def write_tables(out_dir: Path, jobs: list[Job], results: list[RunResult]) -> pd.DataFrame:

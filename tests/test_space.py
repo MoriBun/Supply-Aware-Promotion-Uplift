@@ -75,14 +75,18 @@ def test_neighbour_directions_follow_axial_offsets(space):
     assert space.neighbors[centre].tolist() == expected
 
 
-def test_clusters_of_seven_have_spec_sizes(space):
-    # Handoff B1 check (docs/phan_cong.md): cluster centres (q + 5r) mod 7 == 0, each cell
-    # to the nearest centre by torus distance, ties to the smaller cell id (spec §4.10).
+@pytest.mark.parametrize("R, sizes, max_dist", [
+    (3, [3, 3, 4, 6, 7, 7, 7], 1),         # 37 cells, Handoff B1 (docs/phan_cong.md)
+    (4, [7, 7, 7, 8, 9, 11, 12], 2),       # 61 cells, Hanoi grid of H7.1 (decisions H-36)
+])
+def test_clusters_of_seven_have_spec_sizes(default_yaml, R, sizes, max_dist):
+    # Cluster centres (q + 5r) mod 7 == 0, each cell to the nearest centre by torus distance,
+    # ties to the smaller cell id (spec §4.10).
+    space = make_space(default_yaml, f"space.grid_radius={R}")
     centres = np.flatnonzero((space.cell_q.astype(int) + 5 * space.cell_r.astype(int)) % 7 == 0)
     nearest = centres[np.argmin(space.D[:, centres], axis=1)]
-    assert (space.D[np.arange(space.n_cells), nearest] <= 1).all()
-    sizes = sorted(np.bincount(nearest, minlength=space.n_cells)[centres].tolist())
-    assert sizes == [3, 3, 4, 6, 7, 7, 7]
+    assert space.D[np.arange(space.n_cells), nearest].max() == max_dist
+    assert sorted(np.bincount(nearest, minlength=space.n_cells)[centres].tolist()) == sizes
 
 
 # --- no torus -----------------------------------------------------------------
@@ -183,7 +187,7 @@ def test_pickup_takes_nearest_ring_then_smallest_id(space):
 
 def test_pickup_goes_to_farther_ring_when_nearer_are_empty(space):
     z, h = 3, 12
-    far = space.rings[z][-1]
+    far = space.rings[z][1]                       # ring 2: reachable; ring 4 of R = 4 is beyond 30 min
     idle = np.zeros(space.n_cells, dtype=np.int32)
     idle[far[0]] = 2
     src, eta = space.find_pickup(z, h, idle)
@@ -256,3 +260,20 @@ def test_tiny_fixture_builds(tiny_cfg):
     sp = build_space(tiny_cfg)
     assert sp.n_cells == 7
     assert sp.D.max() == 1
+
+
+# --- ring tie-break (H7.2, KN 2.1, decisions H-37) -------------------------------------------
+
+
+def test_most_idle_tiebreak_takes_the_ring_cell_with_most_idle_drivers(default_yaml):
+    space = make_space(default_yaml, "matching.ring_tiebreak=most_idle")
+    z, h = 0, 18
+    ring1 = space.rings[z][0]
+    idle = np.zeros(space.n_cells, dtype=np.int32)
+    idle[ring1[0]], idle[ring1[2]], idle[ring1[4]] = 1, 3, 3
+    src, eta = space.find_pickup(z, h, idle)
+    assert src == int(ring1[2])                                   # most idle; the tie 3 = 3 goes to the smaller id
+    assert eta == pytest.approx(float(space.T[ring1[2], z, h]))
+    assert space.quote_eta(z, h, idle) == (pytest.approx(eta), False)   # quote and match share the rule (H-04)
+    old = make_space(default_yaml, "matching.ring_tiebreak=lowest_id")
+    assert old.find_pickup(z, h, idle)[0] == int(ring1[0])        # pre-S7 rule: smallest id

@@ -86,7 +86,7 @@ class RidersConfig:
     alpha_freq: float
     alpha_u: float
     alpha_noise_sd: float
-    beta_price_per_usd: float
+    beta_price_per_kvnd: float
     beta_price_seg_mult: tuple[float, ...]
     beta_price_noise_sd: float
     beta_eta_per_min: float
@@ -101,16 +101,18 @@ class RidersConfig:
 
 @dataclass(frozen=True)
 class PricingConfig:
-    base_fare_usd: float
-    per_min_usd: float
-    target_mean_fare_usd: float
+    open_fare_vnd: float
+    open_km: float
+    per_km_vnd: float
+    per_min_vnd: float
+    platform_fee_vnd: float
     commission_rate: float
 
 
 @dataclass(frozen=True)
 class VoucherConfig:
     pct_of_fare: float
-    max_usd: Optional[float]
+    max_vnd: Optional[float]
 
 
 @dataclass(frozen=True)
@@ -118,7 +120,7 @@ class BudgetConfig:
     enforce: bool
     mode: Literal["fraction_of_all_on", "fixed"]
     fraction: float
-    fixed_usd: Optional[float]
+    fixed_vnd: Optional[float]
     pilot_seed_offset: int
 
 
@@ -158,6 +160,7 @@ class PolicyConfig:
 class MatchingConfig:
     max_pickup_eta_min: float
     max_ring: Optional[int]
+    ring_tiebreak: Literal["lowest_id", "most_idle"]
 
 
 @dataclass(frozen=True)
@@ -165,6 +168,7 @@ class CancelConfig:
     base_per_min: float
     slope_per_min2: float
     eta_free_min: float
+    exact_time: bool
 
 
 @dataclass(frozen=True)
@@ -176,7 +180,7 @@ class SupplyConfig:
     shift_len_sd_h: float
     shift_len_clip_h: tuple[float, float]
     early_exit_enabled: bool
-    reservation_wage_usd_h: float
+    reservation_wage_vnd_h: float
 
 
 @dataclass(frozen=True)
@@ -194,6 +198,47 @@ class ExperimentConfig:
     burnin_min: int
     p_on: float
     budget_enforce: bool
+
+
+@dataclass(frozen=True)
+class DayDemandShockConfig:
+    sigma: float
+
+
+@dataclass(frozen=True)
+class EventShockConfig:
+    # one row per venue kind: [n_venues, p_per_day, end_from_h, end_to_h, surge_min, mult_venue, mult_ring1]
+    venues: tuple[tuple[int, float, float, float, float, float, float], ...]
+
+
+@dataclass(frozen=True)
+class RainShockConfig:
+    p_per_day: float
+    start_hour_range: tuple[float, float]
+    duration_h_range: tuple[float, float]
+    demand_mult: float
+    speed_mult: float
+    driver_off_share: float
+
+
+@dataclass(frozen=True)
+class AttendanceShockConfig:
+    p_work: float
+
+
+@dataclass(frozen=True)
+class ShiftJitterShockConfig:
+    sd_min: float
+
+
+@dataclass(frozen=True)
+class ShocksConfig:
+    enabled: bool
+    day_demand: DayDemandShockConfig
+    events: EventShockConfig
+    rain: RainShockConfig
+    attendance: AttendanceShockConfig
+    shift_jitter: ShiftJitterShockConfig
 
 
 @dataclass(frozen=True)
@@ -233,9 +278,13 @@ class RunnerConfig:
 class CalibrationTargetsConfig:
     p_request_no_voucher: tuple[float, float]
     request_uplift_surplus: tuple[float, float]
-    mean_gross_fare_usd: tuple[float, float]
     share_cellslots_slack_below_0_35: tuple[float, float]
     share_cellslots_slack_above_1: tuple[float, float]
+    busy_rel_h6: tuple[float, float]
+    busy_rel_h7: tuple[float, float]
+    busy_rel_h8: tuple[float, float]
+    mean_trip_km: tuple[float, float]
+    trips_per_driver_day: tuple[float, float]
 
 
 @dataclass(frozen=True)
@@ -259,6 +308,7 @@ class Config:
     supply: SupplyConfig
     reposition: RepositionConfig
     experiment: ExperimentConfig
+    shocks: ShocksConfig
     monitor: MonitorConfig
     sweep: SweepConfig
     generate: GenerateConfig
@@ -553,26 +603,28 @@ def _check_ranges(cfg: Config) -> None:
     need(len(r.beta_price_seg_mult) == n_seg, "riders.beta_price_seg_mult", f"must have {n_seg} values")
     need(all(v >= 0 for v in r.beta_price_seg_mult), "riders.beta_price_seg_mult", "values must be >= 0")
     need(len(r.delta_seg) == n_seg, "riders.delta_seg", f"must have {n_seg} values")
-    for name in ("alpha_noise_sd", "beta_price_per_usd", "beta_price_noise_sd", "beta_eta_per_min",
+    for name in ("alpha_noise_sd", "beta_price_per_kvnd", "beta_price_noise_sd", "beta_eta_per_min",
                  "beta_eta_noise_sd", "delta_noise_sd", "max_wait_sigma"):
         nonneg(f"riders.{name}", getattr(r, name))
     positive("riders.max_wait_mode_min", r.max_wait_mode_min)
 
     p = cfg.pricing
-    nonneg("pricing.base_fare_usd", p.base_fare_usd)
-    nonneg("pricing.per_min_usd", p.per_min_usd)
-    positive("pricing.target_mean_fare_usd", p.target_mean_fare_usd)
+    nonneg("pricing.open_fare_vnd", p.open_fare_vnd)
+    nonneg("pricing.open_km", p.open_km)
+    nonneg("pricing.per_km_vnd", p.per_km_vnd)
+    nonneg("pricing.per_min_vnd", p.per_min_vnd)
+    nonneg("pricing.platform_fee_vnd", p.platform_fee_vnd)
     prob("pricing.commission_rate", p.commission_rate)
 
     prob("voucher.pct_of_fare", cfg.voucher.pct_of_fare)
-    if cfg.voucher.max_usd is not None:
-        positive("voucher.max_usd", cfg.voucher.max_usd)
+    if cfg.voucher.max_vnd is not None:
+        positive("voucher.max_vnd", cfg.voucher.max_vnd)
 
     b = cfg.budget
     prob("budget.fraction", b.fraction)
-    if b.fixed_usd is not None:
-        nonneg("budget.fixed_usd", b.fixed_usd)
-    need(b.mode != "fixed" or b.fixed_usd is not None, "budget.fixed_usd", "required when budget.mode = fixed")
+    if b.fixed_vnd is not None:
+        nonneg("budget.fixed_vnd", b.fixed_vnd)
+    need(b.mode != "fixed" or b.fixed_vnd is not None, "budget.fixed_vnd", "required when budget.mode = fixed")
     nonneg("budget.pilot_seed_offset", b.pilot_seed_offset)
 
     lg = cfg.policy.legacy
@@ -604,7 +656,7 @@ def _check_ranges(cfg: Config) -> None:
     nonneg("supply.shift_len_sd_h", sp.shift_len_sd_h)
     lo, hi = sp.shift_len_clip_h
     need(0 < lo <= hi <= 24, "supply.shift_len_clip_h", f"need 0 < lo <= hi <= 24, got {[lo, hi]}")
-    nonneg("supply.reservation_wage_usd_h", sp.reservation_wage_usd_h)
+    nonneg("supply.reservation_wage_vnd_h", sp.reservation_wage_vnd_h)
 
     positive("reposition.max_idle_min", cfg.reposition.max_idle_min)
 
@@ -620,6 +672,28 @@ def _check_ranges(cfg: Config) -> None:
         need(t.warmup_min % e.block_min == 0, "time.warmup_min",
              f"must be a multiple of experiment.block_min ({e.block_min}), got {t.warmup_min}")
     prob("experiment.p_on", e.p_on)
+
+    sh = cfg.shocks
+    nonneg("shocks.day_demand.sigma", sh.day_demand.sigma)
+    for i, (n, p_day, end_lo, end_hi, surge_min, mult_v, mult_r) in enumerate(sh.events.venues):
+        where = f"shocks.events.venues[{i}]"
+        need(n >= 0, where, f"number of venues must be >= 0, got {n}")
+        prob(f"{where} p_per_day", p_day)
+        need(0 <= end_lo <= end_hi <= 24, where, f"need 0 <= end_from <= end_to <= 24, got {[end_lo, end_hi]}")
+        nonneg(f"{where} surge_min", surge_min)
+        nonneg(f"{where} mult_venue", mult_v)
+        nonneg(f"{where} mult_ring1", mult_r)
+    rn = sh.rain
+    prob("shocks.rain.p_per_day", rn.p_per_day)
+    need(0 <= rn.start_hour_range[0] <= rn.start_hour_range[1] <= 24, "shocks.rain.start_hour_range",
+         f"need 0 <= from <= to <= 24, got {list(rn.start_hour_range)}")
+    need(0 <= rn.duration_h_range[0] <= rn.duration_h_range[1] <= 24, "shocks.rain.duration_h_range",
+         f"need 0 <= lo <= hi <= 24, got {list(rn.duration_h_range)}")
+    nonneg("shocks.rain.demand_mult", rn.demand_mult)
+    positive("shocks.rain.speed_mult", rn.speed_mult)
+    prob("shocks.rain.driver_off_share", rn.driver_off_share)
+    prob("shocks.attendance.p_work", sh.attendance.p_work)
+    nonneg("shocks.shift_jitter.sd_min", sh.shift_jitter.sd_min)
 
     positive("monitor.slack_cap", cfg.monitor.slack_cap)
 

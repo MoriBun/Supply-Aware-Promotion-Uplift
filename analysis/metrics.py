@@ -37,11 +37,11 @@ def value_table(policy_results: pd.DataFrame, *, z: float = Z95) -> pd.DataFrame
         key = key if isinstance(key, tuple) else (key,)
         row = dict(zip(keys, key))
         row["n_seeds"] = int(len(g))
-        for metric, prefix in (("N_completed", "N"), ("V_profit_usd", "V")):
+        for metric, prefix in (("N_completed", "N"), ("V_profit_vnd", "V")):
             mean, se = float(g[metric].mean()), _se(g[metric])
             row[f"{prefix}_mean"], row[f"{prefix}_se"] = mean, se
             row[f"{prefix}_lo"], row[f"{prefix}_hi"] = mean - z * se, mean + z * se
-        row["spent_mean"] = float(g["voucher_spent_usd"].mean())
+        row["spent_mean"] = float(g["voucher_spent_vnd"].mean())
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -143,8 +143,8 @@ def sweep_by_theta(policy_results: pd.DataFrame, *, metric: str = "N_completed",
     """One row per theta of a sweep: mean and SE over seeds, share of (cell, slot) off, spend, theta* membership."""
     g = policy_results.groupby("theta")
     out = pd.DataFrame({"mean": g[metric].mean(), "se": g[metric].std(ddof=1) / np.sqrt(g.size()),
-                        "share_cells_off": g["share_cells_off"].mean(), "spent_mean": g["voucher_spent_usd"].mean()})
-    out["spent_over_B"] = out["spent_mean"] / float(policy_results["budget_B_usd"].iloc[0])
+                        "share_cells_off": g["share_cells_off"].mean(), "spent_mean": g["voucher_spent_vnd"].mean()})
+    out["spent_over_B"] = out["spent_mean"] / float(policy_results["budget_B_vnd"].iloc[0])
     out["in_set"] = theta_star_set(policy_results, metric=metric, alpha=alpha).set_index("theta")["in_set"]
     return out.reset_index()
 

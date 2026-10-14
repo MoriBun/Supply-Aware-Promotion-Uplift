@@ -27,9 +27,9 @@ def results_frame() -> pd.DataFrame:
     rows = []
     for seed, (n_on, n_off) in enumerate(((100, 90), (110, 95), (105, 100), (120, 101))):
         rows.append({"policy": "all_on", "theta": np.nan, "seed": seed, "N_completed": n_on,
-                     "V_profit_usd": 1.0 * n_on, "voucher_spent_usd": 50.0})
+                     "V_profit_vnd": 1.0 * n_on, "voucher_spent_vnd": 50.0})
         rows.append({"policy": "all_off", "theta": np.nan, "seed": seed, "N_completed": n_off,
-                     "V_profit_usd": 2.0 * n_off, "voucher_spent_usd": 0.0})
+                     "V_profit_vnd": 2.0 * n_off, "voucher_spent_vnd": 0.0})
     return pd.DataFrame(rows)
 
 
@@ -58,7 +58,7 @@ def test_paired_difference_by_seed():
     assert d["n_seeds"] == 4 and d["mean"] == pytest.approx(np.mean([10, 15, 5, 19]))
     assert d["se"] == pytest.approx(np.std([10, 15, 5, 19], ddof=1) / 2) and d["share_a_better"] == 1.0
     assert d["lo"] < d["mean"] < d["hi"]
-    v = paired_difference(results_frame(), "all_on", "all_off", metric="V_profit_usd")
+    v = paired_difference(results_frame(), "all_on", "all_off", metric="V_profit_vnd")
     assert v["mean"] == pytest.approx(np.mean([100 - 180, 110 - 190, 105 - 200, 120 - 202]))
     with pytest.raises(ValueError):
         paired_difference(results_frame(), "all_on", "legacy")
@@ -139,8 +139,8 @@ def test_sweep_regret_on_grid_between_grid_points_and_outside():
 
 def test_sweep_by_theta_and_overview():
     from analysis.metrics import sweep_by_theta, sweep_overview
-    results = sweep_results().assign(share_cells_off=lambda d: d["theta"] / 10, voucher_spent_usd=40.0,
-                                     budget_B_usd=50.0)
+    results = sweep_results().assign(share_cells_off=lambda d: d["theta"] / 10, voucher_spent_vnd=40.0,
+                                     budget_B_vnd=50.0)
     by = sweep_by_theta(results)
     assert by["theta"].tolist() == [0.0, 0.5, 1.0, 5.0] and by["in_set"].tolist() == [False, True, True, False]
     assert by["mean"].iloc[1] == pytest.approx(109.0) and by["spent_over_B"].eq(0.8).all()
@@ -231,7 +231,7 @@ def test_check_dataset_accepts_generated_data_and_catches_a_leak(tmp_path):
     problems, summary = check_run_dir(tmp_path / "gen")
     assert problems == []
     assert summary["mode"] == "generate" and summary["policy"] == "legacy" and summary["days"] == 1.0
-    assert summary["sessions"] > 0 and summary["N_completed"] > 0 and summary["budget_B_usd"] > 0
+    assert summary["sessions"] > 0 and summary["N_completed"] > 0 and summary["budget_B_vnd"] > 0
     assert 0 < summary["share_arm"] < 1 and summary["truncated"] == 0
     assert markdown_row(summary).startswith("| `gen` | generate | legacy | 1 |")
     # A hidden column smuggled into observed/ must be reported.
@@ -246,7 +246,7 @@ def test_check_dataset_accepts_generated_data_and_catches_a_leak(tmp_path):
 def test_check_budget_audits_legacy_and_all_on_runs(tmp_path, capsys):
     # Legacy with a small fixed B: sessions are blocked, including explore sessions of cells that are off.
     legacy = load_config(TINY, ["policy.name=legacy", "generate.days=1", "runner.n_procs=1",
-                                "budget.mode=fixed", "budget.fixed_usd=4", "policy.legacy.explore_frac=0.3"])
+                                "budget.mode=fixed", "budget.fixed_vnd=400", "policy.legacy.explore_frac=0.3"])
     generate(legacy, tmp_path / "legacy")
     assert check_budget.main(["check_budget", str(tmp_path / "legacy")]) == 0
     out = capsys.readouterr().out
@@ -256,7 +256,7 @@ def test_check_budget_audits_legacy_and_all_on_runs(tmp_path, capsys):
     assert len(blocked_off) > 0 and (blocked_off["assign_mechanism"] == "explore").all()
     # Several seeds with a full log: one folder per run, each audited.
     on = load_config(TINY, ["policy.name=all_on", "sweep.n_seeds=2", "runner.n_procs=1",
-                            "budget.mode=fixed", "budget.fixed_usd=4"])
+                            "budget.mode=fixed", "budget.fixed_vnd=400"])
     evaluate(on, tmp_path / "on", log_level="full")
     assert check_budget.main(["check_budget", str(tmp_path / "on")]) == 0
     assert capsys.readouterr().out.count("policy=all_on") == 2
@@ -271,7 +271,7 @@ def test_gate_plots_write_png_files(tmp_path):
                           "N_se": [2.0, 2.5, 2.0, 3.0], "V_mean": [1.0, 2.0, 3.0, 4.0], "V_se": [0.1] * 4,
                           "spent_mean": [50.0, 50.0, 48.0, 30.0], "n_seeds": [10] * 4,
                           "is_argmax": [False, True, False, False]})
-    png = plot_theta_sweep(sweep, tmp_path / "plots" / "sweep.png", budget_usd=50.0,
+    png = plot_theta_sweep(sweep, tmp_path / "plots" / "sweep.png", budget_vnd=50.0,
                            baselines={"all_off": 90.0, "all_on không ngân sách": 105.0})
     assert png.exists() and png.stat().st_size > 10_000 and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n"
     wide = sweep.assign(theta=[0.0, 0.5, 5.0, 30.0])                           # two orders of magnitude: ordinal axis
@@ -297,6 +297,6 @@ def test_check_dataset_on_results_only_and_experiment_dirs(tmp_path):
     generate(exp, tmp_path / "exp")
     problems, summary = check_run_dir(tmp_path / "exp")
     assert problems == [] and "cluster_switchback, cụm all" in summary["design"]
-    assert math.isnan(summary["budget_B_usd"]) and summary["share_blocked"] == 0.0
+    assert math.isnan(summary["budget_B_vnd"]) and summary["share_blocked"] == 0.0
     problems, _ = check_run_dir(tmp_path / "missing")
     assert problems and "missing" in problems[0]
