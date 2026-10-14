@@ -41,7 +41,7 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | config_yaml | string | toàn văn config đã áp override |
 | git_sha | string | commit của code |
 | policy | string | |
-| uses_hidden | bool | chính sách của lượt chạy đọc biến ẩn: `legacy` (`u_latent`) hoặc `threshold` với `score_fn = oracle` (hệ số đặt xe); false với mọi lượt khác (T-40, KN 3.1) |
+| hidden_view | string | cổng tới biến ẩn mà chính sách của lượt chạy mở: `legacy` (`LegacyHiddenView`, `u_latent`), `oracle` (`OracleHiddenView`, hệ số đặt xe, chỉ với `threshold` + `score_fn = oracle`), hoặc `none` (T-40, T-41, KN 3.1) |
 | theta | float64 | NaN nếu không áp dụng |
 | seed | int32 | |
 | world_seed | int64 | |
@@ -90,8 +90,7 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | budget_blocked | bool | muốn phát nhưng hết ngân sách |
 | budget_period | int16 | kỳ ngân sách của session (T-03); −1 = warm-up |
 | score | float32 | điểm tầng rider; NaN nếu không dùng |
-| slack_hat | float32 | ŝ dùng ra quyết định; NaN nếu không dùng |
-| slack_lag_cell | float64 | slack của **ô đón** ở slot k−1 đã công bố (= `slot_snapshots.slack_lag_slot` của (ô đón, slot)), chặn ở `monitor.slack_cap`; NaN nếu chưa công bố. Ghi cho **mọi** chính sách để chia hiệu ứng theo độ căng trễ (T-40, KN 3.3, Q8). Tên khác `slack_lag_slot` để không trùng cột của `slot_snapshots` khi join. Điền ở T7.4; trước đó NaN |
+| slack_hat | float32 | ŝ của ô đón: với `threshold` là dự báo dùng ra quyết định; với `experiment` và `legacy` (từ T7.4) là slack đã công bố của slot k−1, chặn ở `monitor.slack_cap`; NaN nếu chưa công bố hoặc chính sách cố định (T-41, KN 3.3, Q8) |
 | lag_slot_same_block | bool | slot k−1 cùng khối switchback với slot k; `true` với chính sách không có khối (T-40). Điền ở T7.4; trước đó `true` |
 | requested | bool | kết quả M4 |
 | in_window | bool | open_time trong cửa sổ đánh giá |

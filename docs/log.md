@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S7 (phân công v3, `docs/phan_cong_v3.md`). PR B9 `develop1 → develop` đang mở, chờ Hoàng thêm phần lõi và duyệt. Xong trên nhánh: mốc hồi quy G7, T7.1, B9 phần Tình (T-40), T7.2 city, T7.3 oracle, T7.5 phần cột `budget_pilot_*`/`world_seed`/`uses_hidden`. Chờ Hoàng: định nghĩa `slack_lag_cell` (T7.4), bảng `meta/shocks` (phần còn lại của T7.5). Gate P6 (T-31) vẫn chờ mentor.
+**Đang làm:** S7 theo `phan_cong_v3.md` bản Hà Nội (3efb025). Đã gộp `develop`: PR #23 (T7.1, mốc G7), PR #24 (scope `city`, oracle, cột runner, T-40). Đang căn lại theo phân công mới (T-41: `hidden_view`, bỏ `slack_lag_cell`). B9 giờ do Hoàng soạn trên `develop2`, Tình duyệt. Sau B9: T7.3 đổi đơn vị oracle sang 1.000đ, T7.4, T7.5 (`budget_pilot_spent_vnd`, `meta/shocks`), T7.6 giá cước Hà Nội. Gate P6 (T-31) vẫn chờ mentor.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -400,6 +400,14 @@ Mẫu:
 - Lệch spec / quyết định mới: T-40 (b), (d).
 - Bàn giao: thuộc B11 (việc 1.5). `meta/shocks` của T7.5 chờ Hoàng chốt cột.
 - Còn lại / bước tiếp: T7.4 (`slack_lag_cell`, `lag_slot_same_block`), `logger` ghi `meta/shocks`.
+
+### 2026-10-14 · đính chính · căn PR #24 theo phân công v3 bản Hà Nội (T-41) · xong (chưa commit)
+- Nhánh/PR: `develop1` → `develop`, PR nhỏ; review: Hoàng (đụng `state.py`, `schema.md`, `logger.py`).
+- Đã làm: `run_metadata.uses_hidden` → `hidden_view` (string `none`/`legacy`/`oracle`; `sim.policies.hidden_view`); bỏ cột session `slack_lag_cell`, `slack_hat` nhận nghĩa mới ở schema (T7.4 điền); sửa test, spec §6, tests.md, chú thích YAML; `decisions.md` T-41.
+- Test: `pytest -q` → 560 passed, 12 deselected (146,7 s; py3.11); hồi quy G7 → 4 passed (64,5 s).
+- Lệch spec / quyết định mới: T-41 (đính chính T-40 c, d).
+- Bàn giao: không. Lưu ý cho Hoàng khi soạn B9 trên `develop2`: kéo `develop` trước, vì `city`, `oracle`, `lag_slot_same_block`, `budget_pilot_*`, `world_seed`, `hidden_view` đã có; B9 chỉ còn đổi `_usd` → `_vnd` (gồm `budget_pilot_spent_usd`) và thêm phần lõi.
+- Còn lại / bước tiếp: duyệt B9 của Hoàng; T7.4 có thể làm ngay (không phụ thuộc B9); T7.3 đơn vị 1.000đ, T7.5, T7.6 sau B9.
 
 ## 2. Hoàng
 

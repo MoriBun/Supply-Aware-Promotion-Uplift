@@ -38,7 +38,7 @@ from sim.budget import resolve_budget_usd
 from sim.config import Config, config_hash, to_dict
 from sim.engine import RunResult
 from sim.logger import git_sha, write_metadata, write_results, write_run
-from sim.policies import make_policy, uses_hidden
+from sim.policies import hidden_view, make_policy
 from sim.policies.scores import import_callable
 from sim.population import build_world
 from sim.rng import Rng
@@ -203,7 +203,7 @@ def metadata_table(mode: str, jobs: list[Job], results: list[RunResult], *,
             "run_id": run_id(mode, job.cfg, res.policy, job.theta, job.seed), "mode": mode,
             "config_hash": config_hash(job.cfg),
             "config_yaml": yaml.safe_dump(to_dict(with_seed(job.cfg, job.seed)), sort_keys=True),
-            "git_sha": sha, "policy": res.policy, "uses_hidden": uses_hidden(job.cfg), "theta": job.theta,
+            "git_sha": sha, "policy": res.policy, "hidden_view": hidden_view(job.cfg), "theta": job.theta,
             "seed": job.seed, "world_seed": job.cfg.meta.world_seed,
             "budget_B_usd": res.budget_B_usd if budget_B_usd is None else budget_B_usd,
             "budget_pilot_seed": int(job.budget_pilot_seed), "budget_pilot_spent_usd": float(job.budget_pilot_spent_usd),

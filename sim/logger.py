@@ -56,7 +56,7 @@ RESULTS_TABLES: dict[str, dict[str, str]] = {
 
 META_COLUMNS: dict[str, str] = {
     "run_id": "string", "mode": "string", "config_hash": "string", "config_yaml": "string", "git_sha": "string",
-    "policy": "string", "uses_hidden": "bool", "theta": "float64", "seed": "int32", "world_seed": "int64",
+    "policy": "string", "hidden_view": "string", "theta": "float64", "seed": "int32", "world_seed": "int64",
     "budget_B_usd": "float64", "budget_pilot_seed": "int64", "budget_pilot_spent_usd": "float64",
     "kappa": "float64", "kappa_pilots": "int32", "window_start_s": "float64", "window_end_s": "float64", "sim_end_s": "float64",
     "n_truncated_orders": "int32", "runtime_s": "float64", "created_at": "string",

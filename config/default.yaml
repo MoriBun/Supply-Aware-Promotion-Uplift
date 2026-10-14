@@ -143,7 +143,7 @@ policy:
     hysteresis_h: 0.0             # 0 = tắt; bật lại khi ŝ > θ + h [report]
     score_fn: heuristic_low_freq  # random | heuristic_low_freq | oracle | "module.path:function"
                                   # oracle = (p1 − p0)/(v·p1) từ hệ số ẩn của khách, chỉ với policy.name = threshold,
-                                  # lượt chạy bị gắn cờ uses_hidden [decisions T-40, KN 3.1]
+                                  # run_metadata ghi hidden_view = oracle [decisions T-40, T-41, KN 3.1]
     kappa: auto                   # auto = hiệu chỉnh bằng pilot để chi tiêu kỳ vọng ≈ B
     kappa_max_iter: 10            # κ auto: số lượt pilot chạy lại tối đa sau lượt κ = −∞ (lặp đến khi
                                   # chi của pilot ≤ B); 0 = một lượt pilot như trước H-21 [decisions H-21, T-32] [assume]
