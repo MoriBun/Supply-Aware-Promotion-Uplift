@@ -41,7 +41,7 @@ Quy ước ký hiệu:
 - Đã gộp vào `develop`: PR #23 (Tình: T7.1 chặn ŝ, bộ kiểm hồi quy G7, T-39); PR #24 (Tình: `scope = city`, oracle qua `OracleHiddenView`, cột `lag_slot_same_block`, `budget_pilot_*`, `world_seed`, T-40); PR #25 (Hoàng: kế hoạch v3 Hà Nội, ĐX).
 - Đính chính T-41 (`uses_hidden` → `hidden_view`, bỏ cột `slack_lag_cell`, `slack_hat` nhận nghĩa mới) đã gộp ở PR #26.
 - **B9 ✅ xong** (Hoàng, `develop2`, chờ PR và Tình duyệt): khóa mô hình, `shocks:`, luồng `SHOCK`, chỉ tiêu CAL mới, đổi tiền sang VND, A5-HN; kiểm tương đương đơn vị đạt và mốc G7 sinh lại một lần (H-29…H-35). `pytest -q` 583 passed; G7 4 passed.
-- **S7 chưa xong:** còn H7.1–H7.8, rồi kiểm tra cuối sprint G7 và bàn giao B10.
+- **S7 (14/10 tối): H7.1–H7.8 ✅ xong** (B9, H7.1 đã push; H7.2–H7.8 trên `develop2`, chờ commit). **G7 dở:** đã đạt `pytest -q`, hồi quy G7, A5-HN (≤ 23 giây/ngày), kiểm giá, tỷ lệ hủy, tỷ lệ điều chuyển; test chậm 9 passed, 3 failed: CAL và A1 (tiêu chí 4) do chưa hiệu chỉnh, việc của S8; A4 lỗi vì đọc config của dữ liệu cũ (USD) trong `runs/`, hết khi sinh lại dữ liệu ở S8 (chi tiết trong log G7). Còn PR S7 và bàn giao B10.
 
 ---
 

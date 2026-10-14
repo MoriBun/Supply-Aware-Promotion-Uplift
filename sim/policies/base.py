@@ -99,6 +99,7 @@ class CellDecision:
     cluster_id: np.ndarray        # int16 [N], -1 if not an experiment
     block: int = -1               # -1 if not an experiment (decisions T-15)
     in_burnin: bool = False
+    lag_same_block: bool = True   # slot k-1 in the same switchback block (H-40); True without blocks
 
     @classmethod
     def blank(cls, slot: int, n_cells: int, *, promo_on: bool = False,

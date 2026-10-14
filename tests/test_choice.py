@@ -25,7 +25,8 @@ def quote_by_hand(ctx, *, voucher: bool, eta_min: float = 4.0) -> None:
     start, stop = ctx.tick_sessions
     s, space = ctx.sessions, ctx.world.space
     rows = slice(start, stop)
-    fare = base_fare_vnd(ctx.cfg, space.T[s.pu_cell[rows], s.do_cell[rows], s.hour[rows]])
+    t_min = space.T[s.pu_cell[rows], s.do_cell[rows], s.hour[rows]]
+    fare = base_fare_vnd(ctx.cfg, t_min, t_min.astype(np.float64) / 60.0 * space.speed_kmh[s.hour[rows]])
     s.quoted_fare_vnd[rows] = fare
     s.quoted_eta_min[rows] = eta_min
     if voucher:
@@ -214,7 +215,7 @@ def test_sessions_without_voucher_never_touch_the_ledger(off):
 
 def test_budget_block_leaves_the_session_without_voucher(tiny_cfg):
     # With a small enforced budget some sessions are refused at quote time; they decide at v = 0.
-    ctx = run_ticks(tiny_cfg, range(60, 180), voucher=True, budget_vnd=3000.0, enforce_budget=True)
+    ctx = run_ticks(tiny_cfg, range(60, 180), voucher=True, budget_vnd=60000.0, enforce_budget=True)
     s = ctx.sessions
     granted = s.col("voucher_dong") > 0
     assert granted.any() and (~granted).any()

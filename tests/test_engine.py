@@ -122,12 +122,8 @@ def test_default_config_skeleton_is_fast(default_yaml):
     assert res.runtime_s < 5.0
 
 
-@pytest.mark.parametrize("override", ["matching.ring_tiebreak=most_idle", "cancel.exact_time=true",
-                                      "shocks.enabled=true"])
-def test_s7_contract_keys_not_implemented_yet_refuse_to_run(tiny_layers, override):
-    # B9 (decisions H-29, H-30): a contract key whose behaviour is not implemented must not silently
-    # run the old model. The task that implements the key removes it from this list.
-    from sim.config import load_config
-    cfg = load_config(tiny_layers, [override])
-    with pytest.raises(NotImplementedError, match="S7 contract"):
-        build_context(cfg, stub_world(cfg), FixedPolicy(False, 7), Rng.from_config(cfg))
+def test_every_s7_contract_key_is_implemented():
+    # B9 (decisions H-29, H-30) refused contract keys whose behaviour was not implemented yet; each S7
+    # task removed its line (H7.2 ring_tiebreak, H7.3 exact_time, H7.4 shocks, H7.8 Hanoi tariff).
+    from sim.engine import _NOT_YET
+    assert _NOT_YET == ()

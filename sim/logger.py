@@ -98,6 +98,12 @@ SNAPSHOT_COLUMNS = {
 }
 assert set(SNAPSHOT_COLUMNS) == set(SNAPSHOT_FIELDS)
 
+# meta/shocks (docs/schema.md, H7.7, decisions H-41): one row per shock of the run, empty without shocks.
+SHOCKS_COLUMNS: dict[str, str] = {
+    "day": "int16", "kind": "string", "cell": "int16", "start_s": "float64", "end_s": "float64",
+    "demand_mult": "float32", "ring1_mult": "float32", "speed_mult": "float32", "n_drivers_off": "int32",
+}
+
 RUN_TABLES: dict[str, tuple[str, dict[str, str]]] = {
     "riders": ("observed", RIDERS_COLUMNS),
     "sessions": ("observed", SESSIONS_COLUMNS),
@@ -105,6 +111,7 @@ RUN_TABLES: dict[str, tuple[str, dict[str, str]]] = {
     "slot_snapshots": ("market", SNAPSHOT_COLUMNS),
     "riders_hidden": ("hidden", RIDERS_HIDDEN_COLUMNS),
     "sessions_hidden": ("hidden", SESSIONS_HIDDEN_COLUMNS),
+    "shocks": ("meta", SHOCKS_COLUMNS),
 }
 # Hard rule 3 / T-11, checked once at import: no hidden column in an observed or market table.
 for _name, (_folder, _cols) in RUN_TABLES.items():
@@ -219,7 +226,16 @@ def run_tables(result, riders: Riders, run_id: str, seed: int) -> dict[str, pd.D
         "riders": riders_obs, "sessions": sessions, "orders": orders_frame(result.orders, run_id, seed),
         "slot_snapshots": snapshots_frame(result.snapshots, run_id, seed),
         "riders_hidden": riders_hidden, "sessions_hidden": sessions_hidden,
+        "shocks": shocks_frame(getattr(result, "shocks", None), run_id, seed),
     }
+
+
+def shocks_frame(rows: dict | None, run_id: str, seed: int) -> pd.DataFrame:
+    """``meta/shocks`` of one run; an empty table when the run had no shocks (W0)."""
+    if rows is None:
+        rows = {name: np.zeros(0, dtype=object if dtype == "string" else dtype) for name, dtype in SHOCKS_COLUMNS.items()}
+    n = len(rows["day"])
+    return _with_keys({name: np.asarray(rows[name]) for name in SHOCKS_COLUMNS}, run_id, seed, n)
 
 
 def write_run(out_dir: Path, result, riders: Riders, run_id: str, seed: int) -> dict[str, Path]:

@@ -20,6 +20,7 @@ from sim.config import Config
 from sim.monitor import MarketMonitor
 from sim.policies.base import Policy
 from sim.population import World
+from sim.shocks import build_schedule
 from sim.pricing import VoucherLayer
 from sim.rng import Rng
 from sim.state import (
@@ -68,17 +69,12 @@ class RunResult:
     sessions: SessionBuffer | None = None      # log_level = "full" only
     orders: OrderBuffer | None = None          # log_level = "full" only
     snapshots: list | None = None              # log_level = "full" only
+    shocks: dict | None = None                 # rows of meta/shocks (sim.shocks.ShockSchedule.table), H7.7
 
 
 # S7 contract keys (decisions H-29, H-30) whose behaviour is not implemented yet: refuse rather than
-# silently run the old model. Each task removes its line when it implements the key.
-_NOT_YET = (
-    (lambda cfg: cfg.matching.ring_tiebreak != "lowest_id", "matching.ring_tiebreak = most_idle (task H7.2)"),
-    (lambda cfg: cfg.cancel.exact_time, "cancel.exact_time = true (task H7.3)"),
-    (lambda cfg: cfg.shocks.enabled, "shocks.enabled = true (task H7.4)"),
-    (lambda cfg: cfg.pricing.open_km != 0 or cfg.pricing.per_km_vnd != 0 or cfg.pricing.platform_fee_vnd != 0,
-     "pricing.open_km / per_km_vnd / platform_fee_vnd != 0 (task H7.8)"),
-)
+# silently run the old model. Each task removed its line when it implemented the key; empty since H7.8.
+_NOT_YET: tuple = ()
 
 
 def _check_contract_keys(cfg: Config) -> None:
@@ -106,6 +102,7 @@ def build_context(cfg: Config, world: World, policy: Policy, rng: Rng, *, budget
         cells=CellCounters(n_cells), slot_counters=SlotCounters(n_cells),
         ledger=ledger, layer=VoucherLayer(cfg, policy, ledger, n_cells), monitor=MarketMonitor(cfg, clock, n_cells),
         profile={name: 0.0 for name in STEP_NAMES},
+        shocks=build_schedule(cfg, world, rng, clock) if cfg.shocks.enabled else None,
     )
 
 
@@ -259,6 +256,7 @@ def _aggregate(ctx: SimContext, policy: Policy, sim_end_s: float, n_truncated: i
         offer_score=sessions.col("score")[offered].astype(np.float32),
         offer_voucher_vnd=(sessions.col("voucher_dong")[offered] / DONG_PER_VND).astype(np.float32),
         offer_completed=offer_completed,
+        shocks=None if ctx.shocks is None else ctx.shocks.table(),
     )
 
 

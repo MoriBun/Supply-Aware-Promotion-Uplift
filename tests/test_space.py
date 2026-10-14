@@ -260,3 +260,20 @@ def test_tiny_fixture_builds(tiny_cfg):
     sp = build_space(tiny_cfg)
     assert sp.n_cells == 7
     assert sp.D.max() == 1
+
+
+# --- ring tie-break (H7.2, KN 2.1, decisions H-37) -------------------------------------------
+
+
+def test_most_idle_tiebreak_takes_the_ring_cell_with_most_idle_drivers(default_yaml):
+    space = make_space(default_yaml, "matching.ring_tiebreak=most_idle")
+    z, h = 0, 18
+    ring1 = space.rings[z][0]
+    idle = np.zeros(space.n_cells, dtype=np.int32)
+    idle[ring1[0]], idle[ring1[2]], idle[ring1[4]] = 1, 3, 3
+    src, eta = space.find_pickup(z, h, idle)
+    assert src == int(ring1[2])                                   # most idle; the tie 3 = 3 goes to the smaller id
+    assert eta == pytest.approx(float(space.T[ring1[2], z, h]))
+    assert space.quote_eta(z, h, idle) == (pytest.approx(eta), False)   # quote and match share the rule (H-04)
+    old = make_space(default_yaml, "matching.ring_tiebreak=lowest_id")
+    assert old.find_pickup(z, h, idle)[0] == int(ring1[0])        # pre-S7 rule: smallest id

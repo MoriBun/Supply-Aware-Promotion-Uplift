@@ -16,9 +16,11 @@ the code before Sprint 7 once every key added in S7 is set to its old value.
 * Fingerprint: for every parquet table, the kept columns (volatile ones dropped), row
   count, dtypes and a blake2b over ``pd.util.hash_pandas_object`` of each column. Columns
   added after the baseline are ignored; columns of the baseline must still exist.
-* One deliberate normalisation: ``sessions.slack_hat`` is capped at ``monitor.slack_cap``
-  before hashing, because T7.1 (KN 2.3) caps the forecast in every branch and the only
-  value that changes is inf -> slack_cap in that column.
+* Deliberate normalisations of log-only columns, which never feed back into the run:
+  ``sessions.slack_hat`` is capped at ``monitor.slack_cap`` (T7.1, KN 2.3: inf -> slack_cap)
+  and set back to NaN outside threshold sessions, and ``lag_slot_same_block`` is set back to
+  its B9 placeholder ``True``: H7.6 (KN 3.3, decisions H-40) fills both for the experiment and
+  legacy policies only as information for the analysis.
 
 Run: ``pytest -q -m slow tests/test_regression_s7.py``.
 """
@@ -88,6 +90,10 @@ def fingerprint(out_dir: Path, *, slack_cap: float, columns_of: dict[str, list[s
         df = pd.read_parquet(path)
         if "slack_hat" in df.columns:
             df["slack_hat"] = np.minimum(df["slack_hat"].astype(np.float64), slack_cap)   # T7.1 normalisation
+            if "assign_mechanism" in df.columns:                                           # H7.6 normalisation
+                df.loc[df["assign_mechanism"].astype(str) != "threshold", "slack_hat"] = np.nan
+        if "lag_slot_same_block" in df.columns:
+            df["lag_slot_same_block"] = True                                               # H7.6 normalisation
         cols = [c for c in df.columns if c not in VOLATILE]
         if columns_of is not None and key in columns_of:
             missing = [c for c in columns_of[key] if c not in df.columns]

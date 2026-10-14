@@ -240,8 +240,8 @@ def test_s7_contract_keys_load_with_old_behaviour(default_yaml):
     # B9: every new key exists; the keys that change the model default to the old behaviour
     # until the task that implements them switches the default (H-29).
     cfg = load_config(default_yaml)
-    assert cfg.matching.ring_tiebreak == "lowest_id"
-    assert cfg.cancel.exact_time is False
+    assert cfg.matching.ring_tiebreak == "most_idle"                 # H7.2 switched the default
+    assert cfg.cancel.exact_time is True                             # H7.3 switched the default
     assert cfg.shocks.enabled is False
     assert cfg.policy.threshold.scope == "cell"
     assert len(cfg.shocks.events.venues) >= 1 and all(len(row) == 7 for row in cfg.shocks.events.venues)

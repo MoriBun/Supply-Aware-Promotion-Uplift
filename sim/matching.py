@@ -16,6 +16,7 @@ from __future__ import annotations
 import numpy as np
 
 from sim.monitor import MarketMonitor
+from sim.shocks import travel_hour
 from sim.state import DriverStatus, OrderStatus, SimContext
 
 _IDLE, _EN_ROUTE = int(DriverStatus.IDLE), int(DriverStatus.EN_ROUTE)
@@ -41,7 +42,7 @@ def match(ctx: SimContext, t: float) -> None:
     queue = eligible[np.lexsort((eligible, drivers.idle_since[eligible], cell_of))]
     head = np.searchsorted(np.sort(cell_of), np.arange(n_cells))   # start of each cell's queue
 
-    hour = clock.hour_of(t)
+    hour = travel_hour(ctx, t, clock.hour_of(t))        # + 24 while it rains (H7.4)
     pu_cell = orders.pu_cell
     unreachable = np.zeros(n_cells, dtype=bool)   # no pickup from this cell for the rest of the tick
     left = len(eligible)
@@ -74,7 +75,7 @@ def match(ctx: SimContext, t: float) -> None:
     pickup_at = t + eta_min * 60.0
 
     # Trip duration is fixed at match time: T[pickup, dropoff, hour of pickup] * trip_noise (spec §4.6).
-    h_pickup = ((pickup_at % 86400) // 3600).astype(np.int64)
+    h_pickup = travel_hour(ctx, pickup_at, ((pickup_at % 86400) // 3600).astype(np.int64))
     base_min = space.T[rider_cell, orders.do_cell[o_idx], h_pickup].astype(np.float64)
     trip_noise = ctx.sessions.trip_noise[orders.session_idx[o_idx]]
 

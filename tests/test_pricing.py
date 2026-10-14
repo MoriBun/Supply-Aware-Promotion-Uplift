@@ -19,19 +19,28 @@ from tests.fakes import make_batch, make_context, make_ledger, stub_world
 
 
 def test_base_fare_formula(default_yaml):
-    cfg = load_config(default_yaml)  # values come from the config: P3 calibrates per_min_vnd
-    fare = base_fare_vnd(cfg, [0.0, 10.0])
+    # GrabCar Hanoi (H7.8, decisions H-42): 28.473đ for the first 2 km, 9.818đ/km and 442đ/min after,
+    # 10.000đ platform fee; minutes after 2 km pro rata of the distance.
+    cfg = load_config(default_yaml)
+    fare = base_fare_vnd(cfg, [20.0, 5.0, 4.0], [6.0, 1.5, 2.0])
     assert fare.dtype == np.float32
-    np.testing.assert_allclose(fare, [cfg.pricing.open_fare_vnd, cfg.pricing.open_fare_vnd + 10.0 * cfg.pricing.per_min_vnd],
-                               rtol=1e-6)
+    np.testing.assert_allclose(fare, [28473 + 4 * 9818 + 442 * 20 * 4 / 6 + 10000,     # 83.638đ (ĐX B4)
+                                      28473 + 10000, 28473 + 10000], rtol=1e-6)        # within the opening 2 km
+    assert float(fare[0]) == pytest.approx(83638.33, abs=0.01)
+    # The pre-S7 tariff (B9 values in the new unit): open + per_min x T, km-independent.
+    old = load_config(default_yaml, ["pricing.open_fare_vnd=300", "pricing.open_km=0", "pricing.per_km_vnd=0",
+                                     "pricing.per_min_vnd=170", "pricing.platform_fee_vnd=0"])
+    np.testing.assert_allclose(base_fare_vnd(old, [0.0, 10.0], [1.5, 4.0]), [300.0, 300.0 + 1700.0], rtol=1e-6)
 
 
 def test_voucher_dong_pct_and_cap(default_yaml):
-    cfg = load_config(default_yaml)   # 20%, no cap
+    cfg = load_config(default_yaml, ["voucher.pct_of_fare=0.2", "voucher.max_vnd=null"])   # 20%, no cap
     np.testing.assert_array_equal(voucher_dong(cfg, [1700.0, 0.0, 1912.5]), [340, 0, 382])
     assert voucher_dong(cfg, [1700.0]).dtype == np.int64
-    capped = load_config(default_yaml, ["voucher.max_vnd=200.0"])
+    capped = load_config(default_yaml, ["voucher.pct_of_fare=0.2", "voucher.max_vnd=200.0"])
     np.testing.assert_array_equal(voucher_dong(capped, [1700.0, 500.0]), [200, 100])
+    hanoi = load_config(default_yaml)                                  # 25%, at most 20.000đ (H7.8)
+    np.testing.assert_array_equal(voucher_dong(hanoi, [40000.0, 80000.0, 83638.33]), [10000, 20000, 20000])
 
 
 def test_money_helpers():
@@ -294,8 +303,8 @@ def test_layer_all_off_offers_nothing(default_yaml):
 
 def test_layer_all_on_within_budget(default_yaml):
     led = make_ledger(budget_vnd=10000.0)
-    out = _layer(load_config(default_yaml), True, led).decide(make_batch(5, 7, fare_vnd=2000.0))
-    assert out.arm.tolist() == [1] * 5 and (out.voucher_dong == 400).all()
+    out = _layer(load_config(default_yaml), True, led).decide(make_batch(5, 7, fare_vnd=1600.0))
+    assert out.arm.tolist() == [1] * 5 and (out.voucher_dong == 400).all()                # 25% of 1.600đ
     assert out.decision.offer.all() and out.promo_on_cell.all() and np.isnan(out.slack_hat).all()
     assert led.totals(0) == (0, 0, 2000)
 
@@ -303,7 +312,7 @@ def test_layer_all_on_within_budget(default_yaml):
 def test_layer_applies_budget_in_session_id_order(default_yaml):
     # Budget for exactly 2 vouchers of 400 đ; ids given in reverse so the smallest ids must win.
     led = make_ledger(budget_vnd=800.0)
-    batch = make_batch(4, 7, fare_vnd=2000.0, session_ids=[40, 30, 20, 10])
+    batch = make_batch(4, 7, fare_vnd=1600.0, session_ids=[40, 30, 20, 10])
     out = _layer(load_config(default_yaml), True, led).decide(batch)
     assert out.arm.tolist() == [0, 0, 1, 1]
     assert out.budget_blocked.tolist() == [True, True, False, False]
@@ -354,7 +363,9 @@ def test_quote_writes_fare_eta_and_policy_columns_all_off(default_yaml, quoted_o
     s, space = ctx.sessions, ctx.world.space
     assert s.n > 300
     pu, do, hour = s.col("pu_cell"), s.col("do_cell"), s.col("hour")
-    np.testing.assert_array_equal(s.col("quoted_fare_vnd"), base_fare_vnd(cfg, space.T[pu, do, hour]))
+    t_min = space.T[pu, do, hour]
+    np.testing.assert_array_equal(s.col("quoted_fare_vnd"),
+                                  base_fare_vnd(cfg, t_min, t_min.astype(np.float64) / 60.0 * space.speed_kmh[hour]))
     # Every driver is a stub (offline): no supply anywhere, quoted ETA = max_pickup_eta_min (spec §4.1).
     assert s.col("no_supply").all() and (s.col("quoted_eta_min") == cfg.matching.max_pickup_eta_min).all()
     assert (s.col("arm") == 0).all() and (s.col("voucher_dong") == 0).all() and (s.col("voucher_value_vnd") == 0).all()
@@ -399,7 +410,7 @@ def test_quote_all_on_grants_vouchers_and_counts_offers(default_yaml, quoted_on)
 def test_quote_applies_budget_in_session_id_order_and_marks_blocked(tiny_cfg):
     # No driver is online (stubs), so the quoted ETA is 30 min and few riders book: only committed
     # vouchers stay on the books, hence a small B is needed to see blocking within two hours.
-    ctx, ranges = quote_ticks(tiny_cfg, range(60, 180), on=True, budget_vnd=300.0, enforce_budget=True)
+    ctx, ranges = quote_ticks(tiny_cfg, range(60, 180), on=True, budget_vnd=30000.0, enforce_budget=True)
     s = ctx.sessions
     blocked, granted = s.col("budget_blocked"), s.col("arm") == 1
     assert blocked.any() and granted.any() and not (blocked & granted).any()
@@ -413,7 +424,7 @@ def test_quote_applies_budget_in_session_id_order_and_marks_blocked(tiny_cfg):
             assert (want[start:stop][later] < want[start:stop][j]).all()
     ctx.ledger.check_invariant()
     period = ctx.ledger.period_of(float(s.col("open_time_s")[-1]))
-    assert ctx.ledger.used_dong(period) <= ctx.ledger.limit_dong(period) == 300
+    assert ctx.ledger.used_dong(period) <= ctx.ledger.limit_dong(period) == 30000
 
 
 def test_quote_keeps_session_randomness_identical_across_policies(quoted_off, quoted_on):

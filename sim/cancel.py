@@ -9,6 +9,12 @@ voucher, and update ``ctx.cells`` / ``ctx.slot_counters``.
 Both rules are deterministic given the session: ``max_wait_min`` belongs to the
 rider and ``e_cancel`` was pre-drawn with the session, so the same session has
 the same patience and the same cancellation threshold under every policy (CRN).
+
+With ``cancel.exact_time`` (decisions H-38, KN 2.2) the rider cancels at the exact
+crossing time ``t_cancel = matched_time + 60 * e_cancel / h``: step 1
+(``trips.advance``) cancels instead of picking up when ``t_cancel < pickup_at``
+(the last minute before pickup used to be skipped), and both steps place the
+driver and set ``idle_since`` at ``t_cancel``. No extra random number is drawn.
 """
 
 from __future__ import annotations
@@ -47,6 +53,16 @@ def expire_waiting(ctx: SimContext, t: float) -> None:
     MarketMonitor.on_abandoned(ctx.slot_counters, pu_cell)
 
 
+def cancel_time_s(ctx: SimContext, o_idx: np.ndarray) -> np.ndarray:
+    """``t_cancel = matched_time + 60 * e_cancel / h`` per order (inf when ``h = 0``; decisions H-38)."""
+    orders = ctx.orders
+    h = cancel_hazard_per_min(ctx.cfg, orders.pickup_eta_min[o_idx].astype(np.float64))
+    e = ctx.sessions.e_cancel[orders.session_idx[o_idx]].astype(np.float64)
+    with np.errstate(divide="ignore"):
+        wait_s = np.where(h > 0, 60.0 * e / np.where(h > 0, h, 1.0), np.inf)
+    return orders.matched_time_s[o_idx] + wait_s
+
+
 def en_route(ctx: SimContext, t: float) -> None:
     """Engine step 8: the rider cancels while the driver is on the way (cumulative hazard >= e_cancel)."""
     drivers, orders = ctx.drivers, ctx.orders
@@ -60,7 +76,26 @@ def en_route(ctx: SimContext, t: float) -> None:
     hit = cumulative >= ctx.sessions.e_cancel[orders.session_idx[o_idx]]
     if not hit.any():
         return
-    d_idx, o_idx, eta_min, elapsed_s = d_idx[hit], o_idx[hit], eta_min[hit], elapsed_s[hit]
+    d_idx, o_idx = d_idx[hit], o_idx[hit]
+    if ctx.cfg.cancel.exact_time:
+        cancel_drivers(ctx, d_idx, np.minimum(cancel_time_s(ctx, o_idx), t))   # <= t up to float rounding
+    else:
+        cancel_drivers(ctx, d_idx, np.full(len(d_idx), float(t)))
+
+
+def cancel_drivers(ctx: SimContext, d_idx: np.ndarray, t_event: np.ndarray) -> None:
+    """Cancel the orders of en-route drivers ``d_idx`` at times ``t_event`` (used by steps 1 and 8).
+
+    The driver becomes idle where they stand at ``t_event``: still at the origin cell before half
+    the pickup ETA, at the rider's cell after (spec §4.7), with ``idle_since = t_event``.
+    """
+    if len(d_idx) == 0:
+        return
+    drivers, orders = ctx.drivers, ctx.orders
+    o_idx = drivers.order[d_idx]
+    eta_min = orders.pickup_eta_min[o_idx].astype(np.float64)
+    t_event = np.asarray(t_event, dtype=np.float64)
+    elapsed_s = t_event - orders.matched_time_s[o_idx]
 
     orders.status[o_idx] = int(OrderStatus.CANCELLED)
     orders.cancel_reason[o_idx] = int(CancelReason.RIDER_EN_ROUTE)
@@ -71,7 +106,7 @@ def en_route(ctx: SimContext, t: float) -> None:
     stop_cell = np.where(elapsed_s < eta_min * 60.0 / 2.0, orders.driver_origin_cell[o_idx], pu_cell)
     drivers.status[d_idx] = _IDLE
     drivers.cell[d_idx] = stop_cell
-    drivers.idle_since[d_idx] = t
+    drivers.idle_since[d_idx] = t_event
     drivers.busy_until[d_idx] = np.inf
     drivers.order[d_idx] = -1
 

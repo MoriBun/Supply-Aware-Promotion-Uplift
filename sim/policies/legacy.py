@@ -34,6 +34,7 @@ class LegacyPolicy:
 
     def __init__(self, cfg: Config, hidden: LegacyHiddenView, rng: Rng, n_cells: int) -> None:
         self.p = cfg.policy.legacy
+        self.slack_cap = float(cfg.monitor.slack_cap)
         self.hidden = hidden
         self.rng = rng
         self.n_cells = int(n_cells)
@@ -51,7 +52,7 @@ class LegacyPolicy:
         cell_prop = ((1.0 - p.epsilon_cell) * rule_on + p.epsilon_cell * p.epsilon_p_on).astype(np.float32)
         return CellDecision(
             slot=int(slot), promo_on=promo_on, cell_propensity=cell_prop, mechanism=mechanism,
-            s_hat=np.full(self.n_cells, NAN, dtype=np.float32),
+            s_hat=np.minimum(lag, self.slack_cap).astype(np.float32),   # slot k-1, capped (H-40)
             cluster_id=np.full(self.n_cells, -1, dtype=np.int16),
         )
 

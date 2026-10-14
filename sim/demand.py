@@ -39,6 +39,8 @@ def spawn(ctx: SimContext, t: float) -> None:
 
     # Session counts: one DEMAND generator per (day, tick_of_day, cell). A zero rate needs no draw.
     lam = session_rate(cfg, world.cell_weight, hour)
+    if ctx.shocks is not None:
+        lam = lam * ctx.shocks.demand_factor(t)     # day factor, rain, events (H7.4); same for every policy
     counts = np.zeros(n_cells, dtype=np.int64)
     for cell in np.flatnonzero(lam > 0):
         counts[cell] = rng.rng_for(Stream.DEMAND, day, tick_of_day, int(cell)).poisson(lam[cell])

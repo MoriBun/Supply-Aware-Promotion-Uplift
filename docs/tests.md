@@ -42,13 +42,27 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [U] Không ghép nếu ETA > `max_pickup_eta_min`; order chờ tick sau.
 - [U] Chỉ ghép xe `idle` và còn trong ca.
 - [U] Hòa ETA thì chọn xe có `idle_since` nhỏ nhất (tiêu chí phá hòa).
+- [U] Vành ngoài hòa T: `most_idle` lấy ô nhiều xe rảnh nhất, hòa tiếp thì id nhỏ; `lowest_id` lấy id nhỏ; báo giá và ghép dùng cùng luật (`test_space.py`, H-37).
+- [I] Thế giới đối xứng (`cell_weight_sigma = 0`, 6 giờ): tương quan giữa `cell_id` và số lần ô cho mượn xe ≤ −0,5 với `lowest_id`, |·| < 0,3 với `most_idle` (`test_integration.py`, KN 2.1).
 
 ### M6 / M7 Trip và hủy (`tests/test_trips_cancel.py`)
 - [U] Thời điểm đón = ghép + ETA; thời điểm trả = đón + trip_time.
-- [U] Tiền: `driver_pay = 0,76*gross`; `profit = net − driver_pay`.
+- [U] Tiền (H-42): `driver_pay = 0,75 × (gross − phí nền tảng)`; `profit = net − driver_pay` = phí + 0,25 × (gross − phí) − voucher.
+- [U] Giá GrabCar Hà Nội: chuyến 6 km, 20 phút ≈ 83.638đ; trong 2 km đầu chỉ giá mở cửa + phí; giá trị B9 cho lại giá cũ; voucher 25% chạm trần 20.000đ (`test_pricing.py`).
 - [U] Order Waiting quá `max_wait` thì Abandoned.
 - [U] Hủy khi đi đón: xe rảnh ở ô xuất phát nếu hủy trước nửa ETA, ở ô khách nếu sau; `idle_since = t`; không ghép lại trong cùng tick.
-- [U] Hazard hủy tăng theo ETA: với 10.000 order giả lập, tỷ lệ hủy ở ETA 10 phút > ở ETA 3 phút.
+- [U] Hazard hủy tăng theo ETA: với 10.000 order giả lập, tỷ lệ hủy ở ETA 10 phút > ở ETA 3 phút; với `exact_time` tỷ lệ khớp hazard chính xác `1 − exp(−h·ETA)`, không có thì khớp `1 − exp(−h·(ETA − 1))` (H-38).
+- [U] `exact_time`: `t_cancel` rơi giữa tick cuối và lúc đón thì bước 1 hủy thay vì đón, xe rảnh ở ô khách, `idle_since = t_cancel`, voucher nhả, đếm `n_cancelled`; không có `exact_time` thì đón.
+
+### Biến động W1 (`tests/test_shocks.py`, H7.5)
+- [I] Bật biến động nhưng mọi hiệu ứng trung tính thì từng số trùng với tắt biến động; tắt thì không dựng lịch, `T` giữ 24 giờ.
+- [I] Mọi chính sách của một seed gặp cùng lịch biến động và cùng session; lịch đổi theo `run_seed`, ô địa điểm chỉ theo `world_seed`.
+- [U] Không module chính sách nào import `sim.shocks`; `SessionBatch` không có trường biến động.
+- [U] Tần suất và độ lớn theo tham số trên 28 ngày: tỷ lệ ngày mưa, giờ bắt đầu và độ dài trong khoảng, trung bình và độ lệch log của hệ số ngày, tỷ lệ đi làm và nghỉ khi mưa, độ lệch chuẩn giờ vào ca, tần suất sự kiện theo loại, ô địa điểm phân biệt.
+- [U] Hệ số cầu kết hợp ngày × mưa × sự kiện; mưa làm mọi thời gian đi chia `speed_mult`; `travel_hour` trả `h + 24` khi mưa.
+- [U] Tài xế nghỉ bỏ ngày đó, ca bắt đầu ngày đi làm đầu tiên cộng độ lệch; tài xế được đánh dấu dừng khi mưa và quay lại đúng ô sau mưa.
+- [I] `test_driver_state_consistency` chạy thêm trên W1 (ca theo lịch, có mưa và sự kiện trong cửa sổ).
+- [I] Lượt chạy log đầy đủ ghi `meta/shocks` khớp lịch đã rút (W1) và bảng rỗng đúng cột (W0) (H7.7).
 
 ### M8 / M9 Cung (`tests/test_supply.py`)
 - [U] `early_exit_enabled = false` thì không xe nào rời trước `shift_end`.
@@ -75,6 +89,7 @@ Ký hiệu: **[U]** unit, **[I]** tích hợp, **[A]** nghiệm thu của [repor
 - [U] π_θ: θ = 0 thì không ô nào bị tắt; θ rất lớn thì mọi ô tắt.
 - [U] π_θ: ŝ không bao giờ là inf: với `scope = cell`, `forecast = persistence`, ô có xe rảnh mà không xe đi đón cho ŝ = `monitor.slack_cap`; `score_fn` chỉ nhận giá trị hữu hạn; chưa công bố thì NaN (T-39).
 - [U] Hysteresis: với chuỗi ŝ dao động quanh θ, số lần đổi trạng thái khi h > 0 ít hơn khi h = 0.
+- [U] Thí nghiệm và luật cũ ghi `s_hat` = slack đã công bố của slot k−1, chặn ở `slack_cap`, không đổi quyết định; `lag_same_block` sai ở slot đầu khối và slot 0, đúng trong khối và với A/B theo khách; cột session khớp (H7.6, H-40).
 - [U] Chính sách cũ: `cell_propensity = (1−ε)·rule + ε·0,5`; `propensity` NaN với session nhắm theo rider, bằng `explore_p` với session explore.
 - [U] κ auto: chi tiêu thực tế của lượt đánh giá nằm trong [0,85B; 1,0B].
 

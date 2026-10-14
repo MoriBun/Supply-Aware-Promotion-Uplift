@@ -39,8 +39,8 @@ def is_oracle(spec: str) -> bool:
 
 
 def make_oracle_score(cfg: Config, hidden: OracleHiddenView) -> ScoreFn:
-    """Oracle score (decisions T-40, KN 3.1): extra bookings per expected voucher đồng of each session,
-    ``(p1 - p0) / (v * p1)``, with ``p1``/``p0`` the booking probabilities of the choice model (spec §4.4) at
+    """Oracle score (decisions T-40, H-42, KN 3.1): extra bookings per 1.000đ of expected voucher,
+    ``1000 * (p1 - p0) / (v * p1)``, with ``p1``/``p0`` the booking probabilities of the choice model (spec §4.4) at
     the quoted fare and ETA with and without the voucher ``v = pricing.voucher_dong(cfg, fare) / DONG_PER_VND`` (the
     voucher the session would really get, H-06). ``v = 0`` gives NaN, so the session is not offered.
 
@@ -60,7 +60,7 @@ def make_oracle_score(cfg: Config, hidden: OracleHiddenView) -> ScoreFn:
         p1 = request_probability(alpha, beta_price, beta_eta, delta, fare, v, eta)
         p0 = request_probability(alpha, beta_price, beta_eta, delta, fare, 0.0, eta)
         with np.errstate(divide="ignore", invalid="ignore"):
-            score = np.where(v > 0, (p1 - p0) / (v * p1), np.nan)
+            score = np.where(v > 0, 1000.0 * (p1 - p0) / (v * p1), np.nan)   # per 1.000đ (H-42)
         return score.astype(np.float32)
 
     oracle.__name__ = ORACLE

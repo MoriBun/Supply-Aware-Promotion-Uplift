@@ -62,7 +62,7 @@ def test_calibrate_budget_on_the_real_engine(budget_day):
     n_periods = Clock.from_config(cfg).n_periods
     assert n_periods == 1
     assert budget == pytest.approx(cfg.budget.fraction * float(pilot.spent_by_period_vnd.mean()))
-    assert budget == pytest.approx(cfg.budget.fraction * pilot.voucher_spent_vnd, abs=0.05)
+    assert budget == pytest.approx(cfg.budget.fraction * pilot.voucher_spent_vnd, rel=1e-6)   # float32 sums
     assert 0 < budget < pilot.voucher_spent_vnd
 
 
@@ -73,7 +73,7 @@ def test_budget_invariant_holds_in_every_tick_of_a_day(budget_day):
     assert ctx.ledger.limit_dong(0) == vnd_to_dong(budget)
     assert ctx.ledger.used_dong(0) <= ctx.ledger.limit_dong(0)
     assert res.voucher_spent_vnd <= budget + 1e-6
-    assert res.spent_by_period_vnd[0] == pytest.approx(res.voucher_spent_vnd, abs=0.05)
+    assert res.spent_by_period_vnd[0] == pytest.approx(res.voucher_spent_vnd, rel=1e-6)
     s = res.sessions
     blocked, granted = s.col("budget_blocked"), s.col("arm") == 1
     assert blocked.any() and granted.any() and not (blocked & granted).any()
@@ -127,7 +127,7 @@ def test_every_budget_period_starts_with_a_fresh_budget():
     # Two days on the tiny world with a small B: both periods spend, both stay within B, both block.
     cfg = load_config(TINY, ["time.window_min=null", "time.days_per_run=2", "policy.name=all_on"])
     world = build_world(cfg, Rng.from_config(cfg))
-    budget = 1000.0
+    budget = 100000.0
     res = run(cfg, world, FixedPolicy(True, world.n_cells), Rng.from_config(cfg), budget_vnd=budget,
               enforce_budget=True, log_level="full")
     clock = Clock.from_config(cfg)
@@ -151,7 +151,7 @@ def policy_days():
     for name in POLICIES:
         c = with_policy(cfg, name)
         enforce = c.experiment.budget_enforce if name == "experiment" else c.budget.enforce
-        runs[name] = execute_job(DEFAULT_ENGINE, Job(cfg=c, seed=0, budget_vnd=2500.0 if enforce else None,
+        runs[name] = execute_job(DEFAULT_ENGINE, Job(cfg=c, seed=0, budget_vnd=250000.0 if enforce else None,
                                                      enforce_budget=enforce, log_level="full"))
     return cfg, runs
 
@@ -171,7 +171,7 @@ def test_smoke_day_every_policy(policy_days, policy):
     if policy == "experiment":
         assert np.isnan(res.budget_B_vnd) and res.voucher_spent_vnd > 0
     else:
-        assert res.budget_B_vnd == 2500.0 and 0 < res.voucher_spent_vnd <= 2500.0
+        assert res.budget_B_vnd == 250000.0 and 0 < res.voucher_spent_vnd <= 250000.0
 
 
 def test_legacy_mechanisms_and_propensities(policy_days):
@@ -229,7 +229,7 @@ def test_experiment_switchback_fields(policy_days):
 def test_a2a_same_seed_same_run(policy):
     cfg = load_config(TINY, [f"policy.name={policy}", "budget.mode=fixed", "budget.fixed_vnd=2000"])
     enforce = cfg.experiment.budget_enforce if policy == "experiment" else True
-    job = Job(cfg=cfg, seed=3, budget_vnd=20.0 if enforce else None, enforce_budget=enforce, log_level="full")
+    job = Job(cfg=cfg, seed=3, budget_vnd=20000.0 if enforce else None, enforce_budget=enforce, log_level="full")
     a, b = execute_job(DEFAULT_ENGINE, job), execute_job(DEFAULT_ENGINE, job)
     assert (a.N_completed, a.V_profit_vnd, a.voucher_spent_vnd) == (b.N_completed, b.V_profit_vnd, b.voucher_spent_vnd)
     for name in ("status", "driver_id", "pickup_time_s", "dropoff_time_s", "voucher_dong"):

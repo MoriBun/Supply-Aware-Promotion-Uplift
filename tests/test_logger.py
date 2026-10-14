@@ -21,6 +21,7 @@ SCHEMA_TITLES = {
     "slot_snapshots": "market/slot_snapshots (một dòng mỗi (ô, slot))",
     "riders_hidden": "hidden/riders_hidden",
     "sessions_hidden": "hidden/sessions_hidden",
+    "shocks": "meta/shocks (một dòng mỗi biến động; rỗng khi `shocks.enabled = false`, H-30)",
 }
 ARROW_TO_SCHEMA = {"string": "string", "large_string": "string", "bool": "bool", "int8": "int8", "int16": "int16",
                    "int32": "int32", "int64": "int64", "float": "float32", "double": "float64"}

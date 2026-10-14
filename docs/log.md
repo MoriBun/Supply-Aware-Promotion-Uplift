@@ -411,7 +411,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S7 (Hoàng làm, Tình review). Xong: B9 (đã push), H7.1. Tiếp: H7.2 → H7.8, rồi G7 và B10.
+**Đang làm:** S7. Xong: B9, H7.1–H7.8. G7 dở (chờ kết quả `pytest -q -m slow`), chưa PR S7, chưa giao B10. Hết quota phiên 14/10; việc tiếp: đọc kết quả test chậm, ghi gate G7, PR `develop2` → `develop`, giao B10.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -800,3 +800,68 @@ Mẫu:
 - Lệch spec / quyết định mới: H-36 (cụm 7 ô trên lưới 61 ô có kích thước 7–12, tối đa 2 vành; spec D6, D11).
 - Bàn giao: không (thuộc B10).
 - Còn lại / bước tiếp: H7.2 luật chọn xe vành ngoài.
+
+### 2026-10-14 · H7.2 · phá hòa vành ngoài theo số xe rảnh · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `sim/space.py` (`ring_tiebreak` trong `SpaceTime`, luật `most_idle` trong `find_pickup`); bỏ chặn H7.2 ở `engine._NOT_YET`; `default.yaml` mặc định `most_idle`; test `test_space.py` (luật chọn, báo giá = ghép), `test_integration.py` (thế giới đối xứng), sửa `test_engine.py`, `test_config.py`; spec §4.5; tests.md M5.
+- Test: thế giới đối xứng 6 giờ: tương quan `cell_id` – số lần cho mượn xe −0,66 (`lowest_id`) → −0,05 (`most_idle`); 1 ngày −0,75 → −0,16. `pytest -q` → xem cuối S7; G7 pass (file ghim giữ `lowest_id`).
+- Lệch spec / quyết định mới: H-37.
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.3 hủy đúng thời điểm.
+
+### 2026-10-14 · H7.3 · hủy đúng thời điểm vượt ngưỡng · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `sim/cancel.py` (`cancel_time_s`, `cancel_drivers` dùng chung bước 1 và 8), `sim/trips.py` (bước 1 hủy thay vì đón khi `t_cancel < pickup_at`); bỏ chặn H7.3; `default.yaml` `exact_time: true`; test tỷ lệ hủy hai chế độ so với hazard chính xác, test hủy ở bước 1 (vị trí xe, `idle_since`, nhả voucher, bộ đếm); spec §4.7, tests.md M7.
+- Test: tỷ lệ hủy 10.000 order khớp `1 − exp(−h·ETA)` (exact) và `1 − exp(−h·(ETA − 1))` (cũ); 1 ngày all_off lưới Hà Nội: 330 → 387 lượt hủy. G7 pass (file ghim giữ `exact_time: false`).
+- Lệch spec / quyết định mới: H-38.
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.4 biến động tự nhiên.
+
+### 2026-10-14 · H7.4 · biến động tự nhiên (`sim/shocks.py`) · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `sim/shocks.py` mới (lịch, hệ số cầu, `travel_hour`, bảng `meta/shocks`); `space.py` (lớp giờ mưa), `state.py` (`SimContext.shocks`), `engine.py` (dựng lịch; bỏ chặn H7.4), `demand.py`, `matching.py`, `pricing.py`, `reposition.py` (giờ mưa), `supply.py` (đi làm, lệch giờ vào ca, dừng khi mưa); spec §4.14, bảng luồng §5.
+- Test: 1 ngày W1 `default.yaml`, all_off, seed 0–3: 15,2 / 19,5 / 21,8 / 18,0 giây/ngày; lịch dựng 0,07–0,24 giây. Test của H7.5 ở mục dưới.
+- Lệch spec / quyết định mới: H-39.
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.5.
+
+### 2026-10-14 · H7.5 · test biến động · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `tests/test_shocks.py` (11 test: trung tính = tắt từng số; cùng lịch và cùng session dưới mọi chính sách; lịch theo `run_seed`, địa điểm theo `world_seed`; chính sách không import `sim.shocks`; tần suất và độ lớn theo tham số trên 28 ngày; hệ số cầu; lớp giờ mưa; đi làm và lệch giờ vào ca; dừng và quay lại khi mưa; một ngày mưa chạy đủ); `test_integration.py` chạy kiểm toàn vẹn mỗi tick trên W1; tests.md mục "Biến động W1".
+- Test: `pytest -q tests/test_shocks.py` → 11 passed; kiểm toàn vẹn W0 + W1 → 4 passed. Toàn bộ: xem cuối S7.
+- Lệch spec / quyết định mới: không (H-39).
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.6 độ căng trễ cho thí nghiệm và luật cũ.
+
+### 2026-10-14 · H7.6 (cũ T7.4) · độ căng trễ cho thí nghiệm và luật cũ · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `policies/base.py` (`CellDecision.lag_same_block`), `policies/experiment.py`, `policies/legacy.py` (`s_hat` = slack slot k−1 chặn ở `slack_cap`), `pricing.py` (ghi `lag_slot_same_block`); test chính sách (giá trị, cờ khối, không nhìn trước, cột session trong một lượt chạy); bộ kiểm G7 chuẩn hóa hai cột chỉ-để-ghi; schema, tests.md.
+- Test: `pytest -q tests/test_policies.py` → 35 passed; G7 → 4 passed.
+- Lệch spec / quyết định mới: H-40.
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.7 ghi `meta/shocks`.
+
+### 2026-10-14 · H7.7 (cũ T7.5) · ghi `meta/shocks` · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `engine.py` (`RunResult.shocks`), `logger.py` (`SHOCKS_COLUMNS`, `shocks_frame`, `RUN_TABLES` thêm `shocks`); test ghi bảng W1 khớp lịch, W0 rỗng; `test_logger` nhận bảng mới; tests.md.
+- Test: `pytest -q tests/test_shocks.py` → 12 passed; logger/schema/runner/dashboard → 55 passed.
+- Lệch spec / quyết định mới: H-41.
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.8 giá cước Hà Nội.
+
+### 2026-10-14 · H7.8 (cũ T7.6) · giá cước GrabCar Hà Nội · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `pricing.py` (giá theo km + phút + phí nền tảng), `trips.py` (lợi nhuận có phí nền tảng), `scores.py` (oracle theo 1.000đ), `engine.py` (`_NOT_YET` rỗng), `default.yaml` (giá, voucher, hoa hồng, β, reservation wage); test giá 83.638đ, trần voucher, chia tiền, ngân sách theo thang mới; spec §4.3, §4.6; schema; tests.md.
+- Test: `pytest -q` → 602 passed + 2 test smoke sửa mức B → toàn bộ ở mục G7; G7 → 4 passed.
+- Lệch spec / quyết định mới: H-42.
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: kiểm tra cuối sprint G7.
+
+### 2026-10-14 · G7 · kiểm tra cuối S7 · dở (3 test chậm không đạt, xem dưới)
+- Nhánh/PR: `develop2`; chưa PR S7.
+- Đã đạt: `pytest -q` → 602 passed + 2 test smoke sửa mức B (`test_acceptance.py` chạy lại 15 passed); hồi quy G7 (`pytest -q -m slow tests/test_regression_s7.py`) → 4 passed; không rò biến ẩn, không nhìn trước, bất biến ngân sách, cùng biến động dưới mọi chính sách (test của H7.5, H7.6, `test_integration.py` W0 + W1).
+- A5-HN (1 tiến trình, trung vị 3 lần, đo khi bộ test chậm chạy song song): `all_on` 22,9 giây, `threshold` 8,0 giây, W1 `all_on` 22,4 giây; ≤ 60 giây đạt.
+- Kiểm giá và thị trường, 1 ngày `all_on` không ngân sách, W0 / W1: giá TB 67.223 / 67.003đ; voucher TB 16.267đ, 54% chạm trần 20.000đ; quãng đường TB 4,42 / 4,41 km, thời gian chuyến 14,9 / 14,7 phút; ETA đón TB 8,2 / 8,9 phút; tỷ lệ hủy 21,6% / 24,1%; bỏ chờ 4,3% / 4,8%; xe điều chuyển 8,2% / 8,3% giờ-xe (dưới ngưỡng 15%); lợi nhuận TB 9.606đ/chuyến. Giá TB thấp hơn mức 84.000đ của ĐX vì chuyến ngắn hơn (4,4 km so với 6 km), S8 chỉnh `dest_decay_rings`.
+- Test chậm `pytest -q -m slow` (19 phút): 9 passed, 3 failed. (1) CAL: chưa hiệu chỉnh (P(đặt) 0,219; xe bận 7h 0,396, 8h 0,405; quãng đường 4,24 km; …), đúng dự kiến H-31, việc của S8. (2) A1: tiêu chí 1–3 đạt (có đỉnh, giảm xuống dưới 95% đỉnh, slack < 0,45 ở đoạn giảm), tiêu chí 4 không đạt (ETA nhảy > 3 phút giữa hai mức cầu liền nhau) trên cấu hình chưa hiệu chỉnh; báo, không nới, S8 đo lại sau hiệu chỉnh. (3) A4 (`test_estimate.py`) lỗi `riders: unknown key(s) ['beta_price_per_usd']`: test đọc config của bộ dữ liệu cũ trong `runs/` (USD); dữ liệu cũ không còn dùng được sau B9, sinh lại ở S8 thì hết. Còn lại: ghi gate G7 khi Tình xác nhận; PR S7; giao B10.
+- Lệch spec / quyết định mới: không thêm (H-36…H-42 ở các mục trên).
+- Bàn giao: B10 chưa giao.

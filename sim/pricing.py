@@ -21,16 +21,24 @@ from sim import experiment
 from sim.budget import BudgetLedger, DONG_PER_VND
 from sim.config import Config
 from sim.policies.base import CellDecision, OfferDecision, Policy, SessionBatch, SnapshotView
+from sim.shocks import travel_hour
 
 
-def base_fare_vnd(cfg: Config, trip_min) -> np.ndarray:
-    """``p_s = open_fare_vnd + per_min_vnd * T[pu, do, h]`` (spec §4.3), vectorized, float32.
+def base_fare_vnd(cfg: Config, trip_min, trip_km) -> np.ndarray:
+    """Quoted fare ``p_s`` (spec §4.3, decisions H-42), vectorized, float32.
 
-    The distance part (``open_km``, ``per_km_vnd``) and ``platform_fee_vnd`` of the Hanoi tariff
-    are task H7.8; until then they must be 0 (``engine.build_context`` refuses other values).
+    ``p_s = open_fare_vnd + per_km_vnd * max(0, km - open_km) + per_min_vnd * T_after + platform_fee_vnd``
+    with ``T_after = T * max(0, km - open_km) / km`` the minutes driven after the opening ``open_km``
+    (GrabCar Hanoi: 28.473đ for 2 km, 9.818đ/km and 442đ/min after, 10.000đ platform fee). With
+    ``open_km = per_km_vnd = platform_fee_vnd = 0`` this is ``open_fare_vnd + per_min_vnd * T``, the
+    tariff before S7.
     """
+    p = cfg.pricing
     trip_min = np.asarray(trip_min, dtype=np.float64)
-    fare = cfg.pricing.open_fare_vnd + cfg.pricing.per_min_vnd * trip_min
+    km = np.asarray(trip_km, dtype=np.float64)
+    beyond = np.maximum(0.0, km - p.open_km)
+    share = np.divide(beyond, km, out=np.zeros_like(km), where=km > 0)
+    fare = p.open_fare_vnd + p.per_km_vnd * beyond + p.per_min_vnd * trip_min * share + p.platform_fee_vnd
     return fare.astype(np.float32)
 
 
@@ -55,6 +63,7 @@ class VoucherOutcome:
     promo_on_cell: np.ndarray      # bool [n]
     cell_propensity: np.ndarray    # float32 [n]
     slack_hat: np.ndarray          # float32 [n]
+    lag_slot_same_block: np.ndarray  # bool [n]: slot k-1 in the same switchback block, False in slot 0 (H-40)
 
     def __len__(self) -> int:
         return len(self.arm)
@@ -110,6 +119,7 @@ class VoucherLayer:
             promo_on_cell=cd.promo_on[batch.pu_cell],
             cell_propensity=cd.cell_propensity[batch.pu_cell],
             slack_hat=cd.s_hat[batch.pu_cell],
+            lag_slot_same_block=np.full(n, bool(cd.lag_same_block and cd.slot > 0)),
         )
 
     def quote(self, ctx, t: float) -> None:
@@ -123,8 +133,11 @@ class VoucherLayer:
         rows = slice(start, stop)
         pu, do, hour = s.pu_cell[rows], s.do_cell[rows], s.hour[rows]
 
-        fare = base_fare_vnd(self.cfg, space.T[pu, do, hour])
-        eta, no_supply = quote_eta_by_cell(space, pu, int(hour[0]), ctx.cells.idle)
+        t_hour = travel_hour(ctx, t, hour)                   # + 24 while it rains (H7.4)
+        trip_min = space.T[pu, do, t_hour]
+        trip_km = trip_min.astype(np.float64) / 60.0 * space.speed_kmh[t_hour]   # road km, as orders.trip_km
+        fare = base_fare_vnd(self.cfg, trip_min, trip_km)
+        eta, no_supply = quote_eta_by_cell(space, pu, int(t_hour[0]), ctx.cells.idle)
         s.quoted_fare_vnd[rows] = fare
         s.quoted_eta_min[rows] = eta
         s.no_supply[rows] = no_supply
@@ -150,6 +163,7 @@ class VoucherLayer:
         s.promo_on_cell[rows] = out.promo_on_cell
         s.cell_propensity[rows] = out.cell_propensity
         s.slack_hat[rows] = out.slack_hat
+        s.lag_slot_same_block[rows] = out.lag_slot_same_block
         s.assign_mechanism[rows] = dec.mechanism
         s.propensity[rows] = dec.propensity
         s.score[rows] = dec.score

@@ -15,6 +15,7 @@ from __future__ import annotations
 import numpy as np
 
 from sim.rng import Stream
+from sim.shocks import travel_hour
 from sim.state import DriverStatus, SimContext
 
 _IDLE, _REPOSITIONING = int(DriverStatus.IDLE), int(DriverStatus.REPOSITIONING)
@@ -30,7 +31,7 @@ def step(ctx: SimContext, t: float) -> None:
     if len(moving) == 0:
         return
 
-    hour = ctx.clock.hour_of(t)
+    hour = travel_hour(ctx, t, ctx.clock.hour_of(t))   # + 24 while it rains (H7.4)
     origin = drivers.cell[moving]
     target = np.empty(len(moving), dtype=drivers.cell.dtype)
     for j, d in enumerate(moving.tolist()):

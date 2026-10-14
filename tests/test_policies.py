@@ -360,7 +360,9 @@ def test_legacy_cell_rule_on_lagged_slack_with_epsilon_coin(tiny_layers):
     np.testing.assert_array_equal(cd.promo_on, np.where(is_eps, coin, rule_on))
     np.testing.assert_array_equal(cd.mechanism, np.where(is_eps, int(Mechanism.LEGACY_EPS), int(Mechanism.LEGACY_RULE)))
     np.testing.assert_allclose(cd.cell_propensity, 0.9 * rule_on + 0.05, atol=1e-6)
-    assert np.isnan(cd.s_hat).all() and (cd.cluster_id == -1).all() and cd.block == -1 and not cd.in_burnin
+    # H7.6 (KN 3.3, H-40): s_hat carries the published slack of slot k-1, capped; it does not decide anything.
+    np.testing.assert_allclose(cd.s_hat, np.minimum(slack, cfg.monitor.slack_cap), rtol=1e-6)
+    assert (cd.cluster_id == -1).all() and cd.block == -1 and not cd.in_burnin and cd.lag_same_block
     first = pol.cell_state(0, SnapshotView(SnapshotStore(7, 96), 0))       # no snapshot yet: rule is off
     np.testing.assert_allclose(first.cell_propensity, 0.05)
     assert not first.promo_on[~(np.array([Rng.from_config(cfg).rng_for(Stream.CELLSLOT, CellSlotKind.LEGACY_EPS, 0, c, 0).random(2)[0] < p.epsilon_cell for c in range(7)]))].any()
@@ -430,13 +432,13 @@ def test_experiment_policy_cluster_switchback(default_yaml):
     pol = ExperimentPolicy(cfg, world, rng)
     assert pol.name == "experiment" and pol.level == 7
     np.testing.assert_array_equal(pol.clusters, experiment.cluster_ids(world.space, 7))
-    cd = pol.cell_state(4, SnapshotView(SnapshotStore(37, 96), 4))             # slot 4 starts at 3600 s = block 1
+    cd = pol.cell_state(4, SnapshotView(SnapshotStore(world.n_cells, 96), 4))             # slot 4 starts at 3600 s = block 1
     assert cd.block == 1 and cd.in_burnin is True
     np.testing.assert_array_equal(cd.promo_on, experiment.cluster_on(Rng.from_config(cfg), cfg, pol.clusters, 7, 1))
     assert (cd.cell_propensity == np.float32(cfg.experiment.p_on)).all()
     assert (cd.mechanism == int(Mechanism.EXPERIMENT)).all() and np.isnan(cd.s_hat).all()
     np.testing.assert_array_equal(cd.cluster_id, pol.clusters)
-    assert pol.cell_state(5, SnapshotView(SnapshotStore(37, 96), 5)).in_burnin is False   # 4500 s: 15 min into block 1
+    assert pol.cell_state(5, SnapshotView(SnapshotStore(world.n_cells, 96), 5)).in_burnin is False   # 4500 s: 15 min into block 1
     batch = make_batch(10, 37)
     dec = pol.offer(batch, cd, make_ledger())
     np.testing.assert_array_equal(dec.offer, cd.promo_on[batch.pu_cell])
@@ -449,12 +451,12 @@ def test_experiment_policy_global_switchback_and_rider_ab(default_yaml):
     world = stub_world(glob)
     pol = ExperimentPolicy(glob, world, Rng.from_config(glob))
     assert pol.level == "all" and (pol.clusters == 0).all()
-    states = [pol.cell_state(k, SnapshotView(SnapshotStore(37, 96), k)).promo_on for k in range(0, 40, 4)]
+    states = [pol.cell_state(k, SnapshotView(SnapshotStore(world.n_cells, 96), k)).promo_on for k in range(0, 40, 4)]
     assert all(len(set(s.tolist())) == 1 for s in states) and len({bool(s[0]) for s in states}) == 2
 
     ab = load_config(default_yaml, ["policy.name=experiment", "experiment.design=rider_ab"])
     pol = ExperimentPolicy(ab, world, Rng.from_config(ab))
-    cd = pol.cell_state(8, SnapshotView(SnapshotStore(37, 96), 8))
+    cd = pol.cell_state(8, SnapshotView(SnapshotStore(world.n_cells, 96), 8))
     assert cd.promo_on.all() and (cd.cell_propensity == 1.0).all() and (cd.cluster_id == -1).all() and cd.block == 2
     batch = make_batch(12, 37)
     dec = pol.offer(batch, cd, make_ledger())
@@ -561,7 +563,7 @@ def test_oracle_score_is_extra_bookings_per_expected_vnd(default_yaml):
     coef = (r.alpha[rid], r.beta_price[rid], r.beta_eta[rid], r.delta_promo[rid])
     p1 = request_probability(*coef, fare, v, eta)
     p0 = request_probability(*coef, fare, 0.0, eta)
-    np.testing.assert_allclose(score, (p1 - p0) / (v * p1), rtol=1e-5)
+    np.testing.assert_allclose(score, 1000.0 * (p1 - p0) / (v * p1), rtol=1e-5)    # per 1.000đ (H-42)
     assert np.isfinite(score).all() and (score > 0).all()                          # delta > 0, beta_price < 0
     cd = pol.cell_state(0, SnapshotView(SnapshotStore(37, 96), 0))
     assert pol.offer(batch, cd, make_ledger()).offer.all()                          # kappa = -inf: everyone
@@ -590,3 +592,41 @@ def test_oracle_is_gated_to_the_threshold_policy(default_yaml, monkeypatch):
     assert hidden_view(oracle_cfg) == "oracle" and hidden_view(load_config(default_yaml, ["policy.name=legacy"])) == "legacy"
     assert hidden_view(load_config(default_yaml)) == "none"
     assert FORBIDDEN_IN_BATCH & {"alpha", "beta_price", "beta_eta", "delta_promo"}  # still hidden from SessionBatch
+
+
+# --- lagged slack for every policy (H7.6, KN 3.3, decisions H-40) ------------------------------------
+
+
+def test_experiment_and_legacy_record_the_capped_slack_of_the_previous_slot(default_yaml, tiny_layers):
+    cfg = load_config(tiny_layers, ["policy.name=experiment"])
+    world = stub_world(cfg)
+    pol = ExperimentPolicy(cfg, world, Rng.from_config(cfg))
+    slack = [[0.2, 0.7, math.inf, 0.6, 0.59, 0.61, 5.0]] * 5
+    store = store_with_slack(7, slack)
+    for k in (1, 4, 5):                                    # SnapshotView(store, k) refuses any slot >= k
+        cd = pol.cell_state(k, SnapshotView(store, k))
+        np.testing.assert_allclose(cd.s_hat, np.minimum(slack[k - 1], cfg.monitor.slack_cap), rtol=1e-6)
+        assert (cd.promo_on == pol.cell_state(k, SnapshotView(SnapshotStore(7, 96), k)).promo_on).all()  # unused
+    # Block = 60 min = 4 slots: slot 4 opens block 1 (slot 3 is block 0), slot 5 is inside block 1.
+    assert not pol.cell_state(4, SnapshotView(store, 4)).lag_same_block
+    assert pol.cell_state(5, SnapshotView(store, 5)).lag_same_block
+    assert not pol.cell_state(0, SnapshotView(SnapshotStore(7, 96), 0)).lag_same_block
+    ab = load_config(tiny_layers, ["policy.name=experiment", "experiment.design=rider_ab"])
+    assert ExperimentPolicy(ab, world, Rng.from_config(ab)).cell_state(4, SnapshotView(store, 4)).lag_same_block
+
+
+def test_sessions_carry_lagged_slack_and_the_same_block_flag(tiny_layers):
+    from sim.engine import run
+    cfg = load_config(tiny_layers, ["policy.name=experiment"])
+    world = stub_world(cfg)
+    res = run(cfg, world, ExperimentPolicy(cfg, world, Rng.from_config(cfg)), Rng.from_config(cfg), log_level="full",
+              enforce_budget=False)
+    s = res.sessions
+    slot, block, flag, s_hat = s.col("slot"), s.col("block"), s.col("lag_slot_same_block"), s.col("slack_hat")
+    assert np.isnan(s_hat[slot == 0]).all() and not flag[slot == 0].any()
+    later = slot > 0
+    assert not np.isnan(s_hat[later]).any() and (s_hat[later] <= cfg.monitor.slack_cap).all()
+    slot_s = cfg.time.slot_min * 60
+    prev_block = np.floor((slot - 1) * slot_s / (cfg.experiment.block_min * 60))
+    np.testing.assert_array_equal(flag[later], (prev_block == block)[later])
+

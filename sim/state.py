@@ -464,6 +464,7 @@ class SimContext:
     tick_sessions: tuple[int, int] = (0, 0)   # [start, stop) rows of sessions spawned this tick
     current_slot: int = -1
     profile: dict[str, float] = field(default_factory=dict)
+    shocks: Any = None                         # sim.shocks.ShockSchedule when shocks.enabled (H7.4), else None
 
     @property
     def n_cells(self) -> int:

@@ -106,8 +106,8 @@ Lịch biến động của lượt chạy, rút trước theo ngày (luồng SH
 | budget_blocked | bool | muốn phát nhưng hết ngân sách |
 | budget_period | int16 | kỳ ngân sách của session (T-03); −1 = warm-up |
 | score | float32 | điểm tầng rider; NaN nếu không dùng |
-| slack_hat | float32 | ŝ của ô đón: với `threshold` là dự báo dùng ra quyết định; với `experiment` và `legacy` (từ T7.4) là slack đã công bố của slot k−1, chặn ở `monitor.slack_cap`; NaN nếu chưa công bố hoặc chính sách cố định (T-41, KN 3.3, Q8) |
-| lag_slot_same_block | bool | slot k−1 cùng khối switchback với slot k; `true` với chính sách không có khối (T-40). Điền ở T7.4; trước đó `true` |
+| slack_hat | float32 | ŝ của ô đón: với `threshold` là dự báo dùng ra quyết định; với `experiment` và `legacy` (từ H7.6, H-40) là slack đã công bố của slot k−1, chặn ở `monitor.slack_cap`; NaN nếu chưa công bố hoặc chính sách cố định (T-41, KN 3.3, Q8) |
+| lag_slot_same_block | bool | slot k−1 cùng khối switchback với slot k; `true` với chính sách không có khối; `false` ở slot 0 (T-40, H-40; điền từ H7.6) |
 | requested | bool | kết quả M4 |
 | in_window | bool | open_time trong cửa sổ đánh giá |
 
@@ -131,8 +131,8 @@ Lịch biến động của lượt chạy, rút trước theo ngày (luồng SH
 | gross_fare_vnd | float32 | |
 | voucher_value_vnd | float32 | |
 | net_fare_vnd | float32 | gross − voucher |
-| driver_pay_vnd | float32 | (1 − commission) × gross |
-| platform_profit_vnd | float32 | net − driver_pay; 0 nếu không hoàn thành |
+| driver_pay_vnd | float32 | (1 − commission) × (gross − phí nền tảng) (H-42) |
+| platform_profit_vnd | float32 | net − driver_pay = phí nền tảng + commission × (gross − phí) − voucher; 0 nếu không hoàn thành |
 | status | string | Completed / Abandoned / Cancelled / Truncated |
 | cancel_reason | string | "" / rider_en_route |
 | in_window | bool | request_time trong cửa sổ đánh giá |

@@ -17,7 +17,6 @@ from sim.policies.base import CellDecision, OfferDecision, SessionBatch, Snapsho
 from sim.rng import Rng
 from sim.state import Mechanism
 
-NAN = float("nan")
 
 
 class ExperimentPolicy:
@@ -42,14 +41,18 @@ class ExperimentPolicy:
         if self.design == "rider_ab":
             on = np.ones(self.n_cells, dtype=bool)
             cell_prop = np.ones(self.n_cells, dtype=np.float32)
+            same_block = True                                 # no blocks: slot k-1 saw the same design
         else:
             on = experiment.cluster_on(self.rng, self.cfg, self.clusters, self.level, block)
             cell_prop = np.full(self.n_cells, self.p_on, dtype=np.float32)
+            same_block = slot > 0 and experiment.block_of(self.cfg, t0 - self.slot_s) == block
+        # Published slack of slot k-1, capped like every s_hat (KN 3.3, H-40); not used to decide.
+        lag = np.minimum(snapshots.lag("slack", 1), self.cfg.monitor.slack_cap).astype(np.float32)
         return CellDecision(
             slot=int(slot), promo_on=on, cell_propensity=cell_prop,
             mechanism=np.full(self.n_cells, int(Mechanism.EXPERIMENT), dtype=np.int8),
-            s_hat=np.full(self.n_cells, NAN, dtype=np.float32), cluster_id=self.clusters.copy(),
-            block=int(block), in_burnin=bool(experiment.in_burnin(self.cfg, t0)),
+            s_hat=lag, cluster_id=self.clusters.copy(),
+            block=int(block), in_burnin=bool(experiment.in_burnin(self.cfg, t0)), lag_same_block=bool(same_block),
         )
 
     def offer(self, batch: SessionBatch, cell_dec: CellDecision, ledger: BudgetLedger) -> OfferDecision:
