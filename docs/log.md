@@ -411,7 +411,7 @@ Mẫu:
 
 ## 2. Hoàng
 
-**Đang làm:** S7 (Hoàng làm, Tình review; `docs/phan_cong_v3.md`). B9 xong trên `develop2`, chờ PR và Tình duyệt (cần Tình đồng ý sinh lại mốc G7, H-33 c). Tiếp: H7.1 quy mô Hà Nội và đo A5-HN, rồi H7.2–H7.8.
+**Đang làm:** S7 (Hoàng làm, Tình review). Xong: B9 (đã push), H7.1. Tiếp: H7.2 → H7.8, rồi G7 và B10.
 
 ### 2026-09-30 · S0 · kiểm tra config và hàm cửa sổ/kỳ ngân sách · xong
 - Nhánh/PR: `hoang/config-checks → develop1` (#1), merge `1ae4dc9`, review: Tình
@@ -791,3 +791,12 @@ Mẫu:
 - Lệch spec / quyết định mới: H-29, H-30, H-31, H-33 (đính chính T-39 b), H-34 (sửa quy tắc 7), H-35. Số H-32 bỏ trống (phần cột schema đã có ở T-40, T-41).
 - Bàn giao: giao B9; người nhận kiểm tra: `pytest -q`, bảng tương đương đơn vị ở trên, G7 pass.
 - Còn lại / bước tiếp: H7.1 (quy mô Hà Nội, đo A5-HN ngay).
+
+### 2026-10-14 · H7.1 · quy mô Hà Nội trong `default.yaml`, đo A5-HN · xong
+- Nhánh/PR: `develop2` → `develop` (PR S7), review: Tình.
+- Đã làm: `config/default.yaml` theo ĐX B1–B3 (61 ô H3 độ phân giải 7, 315 km², tốc độ TomTom, ca 11,2 giờ, 1.300 xe, 124 session/ô/giờ, 120.000 khách, `dest_decay_rings` 1,2); `tiny.yaml` giữ thế giới nhỏ; test kích thước cụm, số ô, ô với tới được, giờ 18 sửa theo lưới mới; unit test M5, M6/M7 ghim lưới cũ; test dashboard cho phép slot cuối chưa công bố khi cool-down dừng giữa slot; `test_pricing` kiểm đúng luật phát theo thứ tự session; spec D6, D11.
+- Test: `pytest -q` → 584 passed, 12 deselected (209 s; py3.12, `.venv`); hồi quy G7 → 4 passed (26 s). A5-HN: `all_on` trung vị 11,1 giây/ngày (12,9 / 11,1 / 7,3), `threshold` 14,3 giây (14,3 / 14,3 / 14,9); 1 tiến trình; ≤ 60 giây đạt.
+- CAL ở điểm xuất phát (all_off, 3 seed; chưa hiệu chỉnh, để S8): P(đặt) 0,113 (ngoài), uplift 0,548, căng 2,8% (ngoài), dư 92,8% (ngoài), xe bận 6/7/8h 0,444 / 0,701 / 0,898, quãng đường TB 3,11 km (ngoài; `dest_decay_rings` 1,2 cho 3,1 km chứ không phải 6 km như ước tính ở ĐX B3), 12,5 chuyến/tài xế/ngày.
+- Lệch spec / quyết định mới: H-36 (cụm 7 ô trên lưới 61 ô có kích thước 7–12, tối đa 2 vành; spec D6, D11).
+- Bàn giao: không (thuộc B10).
+- Còn lại / bước tiếp: H7.2 luật chọn xe vành ngoài.

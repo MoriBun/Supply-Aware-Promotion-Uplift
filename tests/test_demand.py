@@ -68,7 +68,7 @@ def test_cell_weights(cfg, world):
     w = world.cell_weight
     assert w.shape == (world.n_cells,) and (w > 0).all()
     assert w.mean() == pytest.approx(1.0)
-    assert np.log(w).std() == pytest.approx(cfg.demand.cell_weight_sigma, rel=0.35)   # 37 draws only
+    assert np.log(w).std() == pytest.approx(cfg.demand.cell_weight_sigma, rel=0.35)   # 61 draws only
     assert world.eval_cell_mask.all()
 
 

@@ -40,12 +40,12 @@ Simulator agent-based, ride-hailing solo, trên lưới ô lục giác. Nó dùn
 | D3 | π_θ hai tầng: cắt ô theo chỉ số căng cung, phát voucher cho rider theo điểm τ̂ trong ngân sách | Accepted (T-17); đổi được qua config | [report M3] |
 | D4 | Chỉ số căng cung mặc định là slack = I/E (xe rảnh / xe đang đi đón) | Accepted (T-10, T-17); đổi qua `policy.threshold.indicator` | Castillo et al. 2025 |
 | D5 | `max_pickup_eta` = 30 phút; tìm xe theo vành mở rộng dần | Accepted (T-17); đổi qua `matching.max_pickup_eta_min` | Giới hạn thấp làm mất WGC [report M5] |
-| D6 | Lưới mặc định bán kính 3 (37 ô), torus | Accepted | [report Bảng 2]. thời gian đón tối đa (qua 3 vành) ≈ 17 phút giờ thường, ≈ 23 phút giờ cao điểm; 19 ô chỉ ≈ 11–15 phút, có thể không đủ cho WGC |
+| D6 | Lưới mặc định bán kính 3 (37 ô), torus. **Từ H7.1 (H-36): bán kính 4 (61 ô), ô H3 độ phân giải 7 cạnh 1,41 km, 315 km²** | Accepted | [report Bảng 2]. thời gian đón tối đa (qua 3 vành) ≈ 17 phút giờ thường, ≈ 23 phút giờ cao điểm; 19 ô chỉ ≈ 11–15 phút, có thể không đủ cho WGC |
 | D7 | Cung độc lập với chính sách: rời sớm theo thu nhập tắt; repositioning theo quy tắc tĩnh | Accepted | [report M8, M9] |
 | D8 | Code dạng struct-of-arrays (numpy); không tạo object Python cho mỗi xe/khách trong vòng lặp nóng | Accepted | Mục tiêu ≤ 30 giây / ngày mô phỏng |
 | D9 | CRN: mọi phép ngẫu nhiên lấy từ luồng được khóa theo định danh ổn định (session, order, driver, cell-slot) | Accepted | [report M13] |
 | D10 | Thí nghiệm (switchback, A/B) và lượt GTE không áp ngân sách | Accepted | [report M3, M13] |
-| D11 | Cụm cho switchback: cụm "7 ô" xây theo quy tắc hoa lục giác; trên torus 37 ô cụm có kích thước 3–7 | Accepted | Không chia đều được vì 37 là số nguyên tố |
+| D11 | Cụm cho switchback: cụm "7 ô" xây theo quy tắc hoa lục giác; trên torus 37 ô cụm có kích thước 3–7; **trên torus 61 ô (H7.1, H-36): 7 cụm, kích thước 7–12, ô xa tâm tối đa 2 vành** | Accepted | Không chia đều được vì 37 là số nguyên tố |
 | D12 | κ (ngưỡng điểm tầng rider) hiệu chỉnh bằng pilot lặp đến điểm bất động để chi tiêu của pilot ≤ B, chung seed pilot cho mọi θ; kèm dừng cứng khi chạm B | Accepted | [report M3]; H-21 |
 
 ---

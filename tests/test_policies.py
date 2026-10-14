@@ -490,25 +490,26 @@ def test_threshold_ring1_sums_idle_and_enroute_over_the_cell_and_its_neighbours(
     assert np.isnan(first.s_hat).all() and first.promo_on.all()
 
 
-def test_threshold_ring1_on_a_radius_3_torus_and_scope_cell_is_unchanged(default_yaml):
+def test_threshold_ring1_on_the_default_torus_and_scope_cell_is_unchanged(default_yaml):
     cfg = load_config(default_yaml, ["policy.threshold.scope=ring1"])
     world = stub_world(cfg)
+    n = world.n_cells
     pol = make_policy(cfg, world, theta=0.5)
     nb = world.space.neighbors
-    gen = np.arange(37, dtype=np.float64)
+    gen = np.arange(n, dtype=np.float64)
     idle, enroute = (gen % 5) * 0.3, (gen % 3) * 0.4
-    store = SnapshotStore(37, 96)
-    store.publish(0, blank_record(37, 0, idle_avg=idle, enroute_avg=enroute))
+    store = SnapshotStore(n, 96)
+    store.publish(0, blank_record(n, 0, idle_avg=idle, enroute_avg=enroute))
     s_hat = pol.forecast_slack(SnapshotView(store, 1))
-    for c in (0, 11, 36):
+    for c in (0, 11, n - 1):
         cells = [c, *nb[c]]
         i, e = idle[cells].sum(), enroute[cells].sum()
         assert s_hat[c] == pytest.approx(min(i / e, pol.slack_cap) if e > 0 else (pol.slack_cap if i > 0 else 0.0))
     cell = make_policy(load_config(default_yaml), world, theta=0.5)    # default scope: the cell's own slack
     assert cell.scope == "cell"
-    np.testing.assert_array_equal(cell.forecast_slack(SnapshotView(store, 1)), blank_record(37, 0)["slack"])
+    np.testing.assert_array_equal(cell.forecast_slack(SnapshotView(store, 1)), blank_record(n, 0)["slack"])
     with pytest.raises(ValueError):
-        ThresholdPolicy(cfg, 37)                                       # ring1 needs the neighbour table
+        ThresholdPolicy(cfg, n)                                       # ring1 needs the neighbour table
 
 
 # --- scope city (T7.2, decisions T-40; KN 3.2) ---------------------------------------------------
@@ -517,27 +518,28 @@ def test_threshold_ring1_on_a_radius_3_torus_and_scope_cell_is_unchanged(default
 def test_threshold_city_scope_gives_every_cell_the_system_slack_and_one_decision(default_yaml):
     cfg = load_config(default_yaml, ["policy.threshold.scope=city"])
     world = stub_world(cfg)
+    n = world.n_cells
     pol = make_policy(cfg, world, theta=0.5)
     assert pol.scope == "city"
-    gen = np.arange(37, dtype=np.float64)
+    gen = np.arange(n, dtype=np.float64)
     idle, enroute = (gen % 5) * 0.3, (gen % 3) * 0.4
-    store = SnapshotStore(37, 96)
-    store.publish(0, blank_record(37, 0, idle_avg=idle, enroute_avg=enroute))
+    store = SnapshotStore(n, 96)
+    store.publish(0, blank_record(n, 0, idle_avg=idle, enroute_avg=enroute))
     system = idle.sum() / enroute.sum()
-    np.testing.assert_allclose(pol.forecast_slack(SnapshotView(store, 1)), np.full(37, system))
+    np.testing.assert_allclose(pol.forecast_slack(SnapshotView(store, 1)), np.full(n, system))
     on = pol.cell_state(1, SnapshotView(store, 1))
     assert on.promo_on.all()                                                        # system slack 1.5 >= 0.5
     off = make_policy(cfg, world, theta=system + 0.1).cell_state(1, SnapshotView(store, 1))
     assert not off.promo_on.any()                                                   # one decision for the whole city
     # H-14 and the cap apply to the city-wide ratio; no neighbour table is needed.
-    bare = ThresholdPolicy(cfg, 37, theta=0.5)
-    store2 = SnapshotStore(37, 96)
-    store2.publish(0, blank_record(37, 0, idle_avg=np.ones(37), enroute_avg=np.zeros(37)))
+    bare = ThresholdPolicy(cfg, n, theta=0.5)
+    store2 = SnapshotStore(n, 96)
+    store2.publish(0, blank_record(n, 0, idle_avg=np.ones(n), enroute_avg=np.zeros(n)))
     assert (bare.forecast_slack(SnapshotView(store2, 1)) == bare.slack_cap).all()
-    store3 = SnapshotStore(37, 96)
-    store3.publish(0, blank_record(37, 0, idle_avg=np.zeros(37), enroute_avg=np.ones(37)))
+    store3 = SnapshotStore(n, 96)
+    store3.publish(0, blank_record(n, 0, idle_avg=np.zeros(n), enroute_avg=np.ones(n)))
     assert (bare.forecast_slack(SnapshotView(store3, 1)) == 0.0).all()
-    first = bare.cell_state(0, SnapshotView(SnapshotStore(37, 96), 0))
+    first = bare.cell_state(0, SnapshotView(SnapshotStore(n, 96), 0))
     assert np.isnan(first.s_hat).all() and first.promo_on.all()                   # nothing published: on
 
 

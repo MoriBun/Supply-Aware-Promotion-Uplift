@@ -73,7 +73,8 @@ def counters_ok(ctx):
 
 @pytest.fixture
 def cfg():
-    return load_config(DEFAULT)
+    # M6/M7 unit tests on the pre-H7.1 grid (37 cells, 0.75 km): the hand-built pickups stay within reach.
+    return load_config(DEFAULT, ["space.grid_radius=3", "space.edge_km=0.75"])
 
 
 @pytest.fixture

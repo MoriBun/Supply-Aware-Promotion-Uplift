@@ -51,7 +51,11 @@ def test_traced_run_matches_engine(tiny_cfg: Config) -> None:
     for col in expected.orders.names():
         x, y = expected.orders.col(col), result.orders.col(col)
         assert np.array_equal(x, y, equal_nan=x.dtype.kind == "f"), col
-    assert len(expected.snapshots) == len(result.snapshots) == len(trace.slots)
+    # Every published slot has a snapshot; a run may end in cool-down inside a slot that started but was
+    # never published (longer trips on the Hanoi grid, H7.1), so the trace can hold one more slot.
+    published = sum(rec["published"] for rec in trace.slots)
+    assert len(expected.snapshots) == len(result.snapshots) == published
+    assert len(trace.slots) - published in (0, 1) and all(rec["published"] for rec in trace.slots[:published])
     assert trace.n_frames == int(result.sim_end_s // tiny_cfg.time.tick_s)
 
 

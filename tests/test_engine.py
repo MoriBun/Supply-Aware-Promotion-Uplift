@@ -118,7 +118,7 @@ def test_default_config_skeleton_is_fast(default_yaml):
     from sim.config import load_config
     cfg = load_config(default_yaml)
     res = _run(cfg)
-    assert res.sim_end_s == 90000 and res.promo_on.shape == (96, 37)
+    assert res.sim_end_s == 90000 and res.promo_on.shape == (96, 61)    # H7.1: 61 cells
     assert res.runtime_s < 5.0
 
 

@@ -24,9 +24,10 @@ meta:
 # ---------------------------------------------------------------------
 space:
   variant: synthetic          # synthetic | nyc   (nyc: xem spec §10, làm sau)
-  grid_radius: 3              # 3 -> 37 ô; 2 -> 19 ô [report]
+  grid_radius: 4              # 4 -> 61 ô, 315 km², cỡ nội thành Hà Nội [assume; H7.1, ĐX B1; trước 3 -> 37 ô]
   torus: true                 # nối biên kiểu torus [report]
-  edge_km: 0.75               # cạnh ô lục giác, trong khoảng 0,5–1 km [report]
+  edge_km: 1.41               # ô H3 độ phân giải 7: diện tích TB 5,161 km² -> cạnh √(5,161/2,598)
+                              # [data: bảng diện tích ô H3; H7.1, ĐX B1; trước 0,75]
   detour_factor: 1.3          # quãng đường thực / đường chim bay [assume]
   nn_const: 0.5               # E[khoảng cách tới điểm gần nhất] = nn_const*sqrt(A/I)
                               # cho điểm Poisson trên mặt phẳng [paper: xấp xỉ chuẩn]
@@ -34,11 +35,13 @@ space:
   eta_floor_min: 1.0          # ETA đón tối thiểu [assume]
   intra_cell_dist_factor: 0.5 # quãng đường chuyến trong cùng ô = f*sqrt(A)*detour [assume]
   nyc_near_rings: 2           # bản NYC: cặp ô cách ≤ số vành này dùng khoảng cách/tốc độ [report]
-  base_speed_kmh: 18.0        # ~11,4 mph Manhattan [data]
-  # hệ số tốc độ theo giờ 0..23 (nhân với base_speed_kmh) [assume]
-  speed_factor_by_hour: [1.20, 1.25, 1.25, 1.25, 1.20, 1.10, 0.95, 0.80,
-                         0.75, 0.80, 0.90, 0.90, 0.90, 0.90, 0.90, 0.85,
-                         0.80, 0.75, 0.75, 0.85, 0.95, 1.00, 1.10, 1.15]
+  base_speed_kmh: 18.0        # Hà Nội: 10 km mất 33 phút 20 giây [data: TomTom Traffic Index 2025; ĐX B1]
+  # hệ số tốc độ theo giờ 0..23 (nhân với base_speed_kmh) [data: TomTom Hà Nội: cao điểm sáng
+  # 15,3 km/h (×0,85), tối 13,6 km/h (×0,76); đêm ≈ 27 km/h (×1,45) suy từ độ tắc TB 49,2%;
+  # các giờ giữa nội suy: assume; H7.1, ĐX B1]
+  speed_factor_by_hour: [1.45, 1.45, 1.45, 1.45, 1.40, 1.25, 1.00, 0.85,
+                         0.85, 0.95, 1.00, 1.00, 1.00, 1.00, 1.00, 0.95,
+                         0.85, 0.76, 0.76, 0.85, 1.00, 1.10, 1.25, 1.35]
 
 # ---------------------------------------------------------------------
 # Thời gian
@@ -57,15 +60,18 @@ time:
 # M2 DemandGenerator — cầu
 # ---------------------------------------------------------------------
 demand:
-  base_sessions_per_cell_h: 35.0  # λ trung bình mỗi ô mỗi giờ [assume]
+  base_sessions_per_cell_h: 124.0 # λ trung bình mỗi ô mỗi giờ; giữ mật độ cũ: 35 × 5,161/1,461
+                                  # [hiệu chỉnh S8; H7.1, ĐX B3; trước 35]
   demand_scale: 0.85              # núm hiệu chỉnh tổng cầu (A1 quét núm này) [hiệu chỉnh P3, H-17; trước 1,0]
   cell_weight_sigma: 0.5          # trọng số ô ~ LogNormal(0, σ), chuẩn hóa trung bình 1 [assume]
   # hệ số cầu theo giờ 0..23 (trung bình ≈ 1) [assume]
   hour_profile: [0.35, 0.25, 0.20, 0.20, 0.25, 0.45, 0.80, 1.40,
                  1.70, 1.30, 1.00, 1.00, 1.10, 1.05, 1.00, 1.10,
                  1.35, 1.75, 1.85, 1.50, 1.20, 1.05, 0.85, 0.60]
-  dest_decay_rings: 3.0           # P(đích d | gốc o) ∝ w_d * exp(-dist(o,d)/L) [assume]
-  n_riders: 20000                 # quần thể rider cố định [assume]
+  dest_decay_rings: 1.2           # P(đích d | gốc o) ∝ w_d * exp(-dist(o,d)/L); 1,2 cho quãng đường TB ≈ 6 km
+                                  # trên lưới mới [hiệu chỉnh S8 theo mean_trip_km; H7.1, ĐX B3; trước 3,0]
+  n_riders: 120000                # quần thể rider cố định; giữ ~1,3 session/khách/ngày như mô hình cũ
+                                  # [suy; H7.1, ĐX B3; trước 20.000]
   home_cell_share: 0.8            # xác suất session do rider sống ở ô đó mở [assume]
   trip_time_noise_sigma: 0.15     # thời gian chuyến thực = T * LogNormal(0, σ) [assume]
 
@@ -181,7 +187,8 @@ cancel:
 # M8 SupplyModel
 # ---------------------------------------------------------------------
 supply:
-  fleet_size: 240                 # núm hiệu chỉnh chính [hiệu chỉnh P3, H-17: 27,9% (ô, slot) căng, 63,3% dư; trước 120]
+  fleet_size: 1300                # núm hiệu chỉnh chính; điểm xuất phát cho ~17,7 chuyến/xe/ngày
+                                  # [hiệu chỉnh S8; H7.1, ĐX B2; trước 240 (H-17)]
   shift_mode: schedule            # schedule | always_on (mọi xe online suốt lượt; chỉ cho
                                   # throughput_curve) [decisions T-02, T-08]
   # ca làm tuần hoàn theo ngày: (giờ bắt đầu từ, đến, trọng số) — bắt đầu đều trong khoảng [assume]
@@ -190,9 +197,9 @@ supply:
     - [10.0, 14.0, 0.20]
     - [15.0, 19.0, 0.35]
     - [19.0, 23.0, 0.15]
-  shift_len_mean_h: 8.0
-  shift_len_sd_h: 1.5
-  shift_len_clip_h: [4.0, 11.0]
+  shift_len_mean_h: 11.2          # [data: khảo sát tài xế ô tô công nghệ 11,2 giờ/ngày; H7.1, ĐX B2; trước 8,0]
+  shift_len_sd_h: 2.0             # [assume; trước 1,5]
+  shift_len_clip_h: [4.0, 14.0]   # [assume; trước [4, 11]]
   early_exit_enabled: false       # rời sớm theo thu nhập — MẶC ĐỊNH TẮT [report]
   reservation_wage_vnd_h: 2000.0  # chỉ dùng khi bật [assume; B9: 20 USD/giờ theo đơn vị mới]
 

@@ -106,7 +106,7 @@ def test_throughput_config_transforms(default_yaml):
     assert t.demand.demand_scale == 2.5 and t.policy.name == "all_off" and t.supply.shift_mode == "always_on"
     assert t.demand.hour_profile == (cfg.demand.hour_profile[h],) * 24
     assert t.space.speed_factor_by_hour == (cfg.space.speed_factor_by_hour[h],) * 24
-    assert t.demand.hour_profile[0] == 1.85 and t.space.speed_factor_by_hour[0] == 0.75     # hour 18 in default.yaml
+    assert t.demand.hour_profile[0] == 1.85 and t.space.speed_factor_by_hour[0] == 0.76     # hour 18 in default.yaml (TomTom, H7.1)
     assert cfg.demand.demand_scale == load_config(default_yaml).demand.demand_scale            # original untouched
     assert cfg.policy.name == "threshold" and cfg.supply.shift_mode == "schedule"
 

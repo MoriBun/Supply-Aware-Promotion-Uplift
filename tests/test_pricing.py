@@ -405,11 +405,12 @@ def test_quote_applies_budget_in_session_id_order_and_marks_blocked(tiny_cfg):
     assert blocked.any() and granted.any() and not (blocked & granted).any()
     assert (s.col("voucher_dong")[blocked] == 0).all() and (s.col("voucher_dong")[granted] > 0).all()
     assert (s.col("promo_on_cell")).all()                           # blocked sessions were still in an on cell
-    ids = s.col("session_id")
-    for start, stop in ranges:                                       # within a tick: smallest ids win (spec §4.3, L12)
-        g, b = granted[start:stop], blocked[start:stop]
-        if g.any() and b.any():
-            assert ids[start:stop][g].max() < ids[start:stop][b].min()
+    ids, want = s.col("session_id"), voucher_dong(tiny_cfg, s.col("quoted_fare_vnd"))
+    for start, stop in ranges:                                       # within a tick, in session_id order (spec §4.3, L12):
+        g, b = granted[start:stop], blocked[start:stop]              # a session granted after a blocked one must have
+        for j in np.flatnonzero(b):                                  # asked for less than the blocked one did
+            later = g & (ids[start:stop] > ids[start:stop][j])
+            assert (want[start:stop][later] < want[start:stop][j]).all()
     ctx.ledger.check_invariant()
     period = ctx.ledger.period_of(float(s.col("open_time_s")[-1]))
     assert ctx.ledger.used_dong(period) <= ctx.ledger.limit_dong(period) == 300

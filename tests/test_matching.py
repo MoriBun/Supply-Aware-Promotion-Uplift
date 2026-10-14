@@ -42,7 +42,9 @@ def status(ctx):
 
 @pytest.fixture
 def ctx():
-    return make_context(load_config(DEFAULT))
+    # M5 unit tests on the pre-H7.1 grid (37 cells, 0.75 km), where every cell reaches every cell within
+    # max_pickup_eta_min; the Hanoi grid of default.yaml is covered by the integration tests.
+    return make_context(load_config(DEFAULT, ["space.grid_radius=3", "space.edge_km=0.75"]))
 
 
 @pytest.fixture
