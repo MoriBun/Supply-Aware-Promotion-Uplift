@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S6: T6.1–T6.3 xong (chưa commit, chờ PR S6 và Hoàng review). Ngoài sprint: dashboard quản trị `dashboard/` xong (T-38, nhánh `dashbroad`, chưa commit, chưa PR). Giao diện dashboard đã nâng cấp ngày 07/10 (xem mục rà soát đề tài và docs/dashboard_review.md), chưa commit/PR. Báo cáo phương pháp bản 1 chưa commit. Gate P6 (T-31) vẫn chờ mentor xác nhận. Để sau S6 (H-27): chương báo cáo, slides, bảng ba nguồn sai số.
+**Đang làm:** S7 (phân công v3, `docs/phan_cong_v3.md`). Xong: mốc hồi quy G7 và T7.1 (chưa commit). Tiếp: PR hợp đồng B9 cùng Hoàng (bản nháp phần Tình đã soạn), rồi T7.2–T7.5. Việc cũ còn treo: PR S6 (T6.1–T6.3) và dashboard `dashbroad` đã gộp qua PR #20, #22; gate P6 (T-31) vẫn chờ mentor xác nhận.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -360,6 +360,22 @@ Mẫu:
 - Lệch spec / quyết định mới: không.
 - Bàn giao: không.
 - Còn lại / bước tiếp: review và commit/PR các thay đổi dashboard.
+
+### 2026-10-14 · S7 chuẩn bị · mốc hồi quy G7 (T-39 b) · xong (chưa commit)
+- Nhánh/PR: `develop1` (= `origin/develop` tại 1c2eb85); chưa commit, sẽ vào PR S7.
+- Đã làm: `tests/test_regression_s7.py` (4 lượt 1 ngày: generate legacy, generate experiment, evaluate threshold κ auto, evaluate all_on; băm từng cột mọi bảng parquet; `python -m tests.test_regression_s7 --write` để sinh mốc); `tests/fixtures/regression_s7_pinned.yaml` (default.yaml ghim tại 1c2eb85, chỗ ghi giá trị cũ của khóa mới S7); `tests/fixtures/regression_s7.json` sinh tại 1c2eb85 trước khi sửa code (63 s). N_completed của 4 lượt: 3944 / 4222 / 3993 / 3759.
+- Test: `pytest -q -m slow tests/test_regression_s7.py` → 4 passed (62,2 s) sau khi đã áp T7.1; mục `tests.md` 2b.
+- Lệch spec / quyết định mới: T-39 (b).
+- Bàn giao: không. Hoàng cần: khi thêm khóa mới trong B9, bỏ comment dòng tương ứng ở đầu `regression_s7_pinned.yaml` với giá trị cũ.
+- Còn lại / bước tiếp: B9.
+
+### 2026-10-14 · T7.1 · chặn ŝ ở `slack_cap` cho mọi nhánh (`threshold.py`) · xong (chưa commit)
+- Nhánh/PR: `develop1`; chưa commit, PR S7 → `develop`, review: Hoàng.
+- Đã làm: `sim/policies/threshold.py` `forecast_slack` chặn lag slot và lag ngày ở `monitor.slack_cap` ở mọi nhánh (trước đây nhánh `cell` + `persistence` trả inf); `tests/test_policies.py` sửa test θ rất lớn (nay mọi ô tắt vì không còn inf) và thêm `test_threshold_persistence_caps_inf_at_slack_cap_in_every_scope`; `docs/spec.md` §6 tầng ô; `docs/tests.md` mục Chính sách.
+- Test: `pytest -q` → 557 passed, 12 deselected (133,2 s; py3.11); hồi quy G7 4 passed: ngoài `slack_hat` (inf → 10) không số nào đổi.
+- Lệch spec / quyết định mới: T-39 (a); spec §6 đã sửa theo.
+- Bàn giao: phần đầu của B11 (việc 1.3).
+- Còn lại / bước tiếp: B9 (hợp đồng), T7.2 city, T7.3 oracle, T7.4 slack trễ, T7.5 runner/logger.
 
 ## 2. Hoàng
 

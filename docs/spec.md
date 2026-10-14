@@ -406,7 +406,7 @@ Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này 
 
 **ThresholdPolicy π_θ** [report M3]:
 - **Tầng ô:**
-  - dự báo ŝ: `persistence` dùng `slack_lag_slot`; `ar` dùng `ar_weights · [slack_lag_slot, slack_lag_day]`, trong đó inf được thay bằng `slack_cap`.
+  - dự báo ŝ: `persistence` dùng `slack_lag_slot`; `ar` dùng `ar_weights · [slack_lag_slot, slack_lag_day]`. Ở **mọi** nhánh và mọi phạm vi, inf được thay bằng `monitor.slack_cap` trước khi so với θ và trước khi đưa vào `score_fn` (T-39, KN 2.3); NaN (chưa công bố) giữ NaN. Cột `slack` trong `market/` vẫn giữ inf.
   - phạm vi đo (H-25): `cell` dùng slack của chính ô; `ring1` dùng (tổng `idle`) / (tổng `enroute`) của ô và các ô kề trong slot k−1 (quy tắc H-14 khi mẫu số 0, inf thay bằng `slack_cap`). Khóa `policy.threshold.scope: cell | ring1`, mặc định `cell` (T-35).
   - `promo_on = not (ŝ < θ)`.
   - Nếu `hysteresis_h > 0`: ô đang off chỉ bật lại khi `ŝ > θ + h`.
