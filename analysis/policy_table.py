@@ -31,7 +31,7 @@ import pandas as pd
 from sim.config import Config, load_config
 from sim.logger import write_metadata, write_results
 from sim.runner import (
-    DEFAULT_ENGINE, Job, KappaAuto, budget_for, metadata_table, policy_results_table, resolve_kappas, run_jobs,
+    DEFAULT_ENGINE, Job, KappaAuto, budget_and_pilot, metadata_table, policy_results_table, resolve_kappas, run_jobs,
     run_id, seeds_for, with_policy,
 )
 
@@ -122,7 +122,8 @@ def run_policy_table(cfg: Config, specs, out_dir: Path, *, n_seeds: int | None =
         raise ValueError(f"labels must be unique: {labels}")
     if reference not in labels:
         raise ValueError(f"reference {reference!r} is not one of the labels {labels}")
-    budget = budget_for(cfg, engine=engine)
+    bp = budget_and_pilot(cfg, engine=engine)
+    budget = bp.budget_usd
     seeds = seeds_for(cfg, cfg.sweep.n_seeds if n_seeds is None else int(n_seeds))
     jobs: list[Job] = []
     job_labels: list[str] = []
@@ -135,7 +136,8 @@ def run_policy_table(cfg: Config, specs, out_dir: Path, *, n_seeds: int | None =
         ka = KappaAuto(kappa=NAN) if found is None else found[0]
         for s in seeds:
             jobs.append(Job(cfg=c, seed=s, theta=theta, kappa=None if found is None else ka.kappa, budget_usd=b,
-                            enforce_budget=b is not None, kappa_pilots=ka.n_pilots))
+                            enforce_budget=b is not None, kappa_pilots=ka.n_pilots,
+                            **(bp.job_fields if spec.budget else {})))
             job_labels.append(spec.label)
     results = run_jobs(jobs, engine=engine)
     runs = policy_results_table(MODE, jobs, results)

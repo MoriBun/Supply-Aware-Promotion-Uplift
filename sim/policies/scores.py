@@ -16,7 +16,8 @@ from collections.abc import Callable
 
 import numpy as np
 
-from sim.policies.base import SessionBatch
+from sim.config import Config
+from sim.policies.base import OracleHiddenView, SessionBatch
 
 ScoreFn = Callable[[SessionBatch, np.ndarray], np.ndarray]
 
@@ -30,6 +31,40 @@ def heuristic_low_freq(batch: SessionBatch, s_hat: np.ndarray) -> np.ndarray:
 
 
 BUILTIN_SCORES: dict[str, ScoreFn] = {"random": random_score, "heuristic_low_freq": heuristic_low_freq}
+ORACLE = "oracle"
+
+
+def is_oracle(spec: str) -> bool:
+    return spec.strip() == ORACLE
+
+
+def make_oracle_score(cfg: Config, hidden: OracleHiddenView) -> ScoreFn:
+    """Oracle score (decisions T-40, KN 3.1): extra bookings per expected voucher USD of each session,
+    ``(p1 - p0) / (v * p1)``, with ``p1``/``p0`` the booking probabilities of the choice model (spec §4.4) at
+    the quoted fare and ETA with and without the voucher ``v = pricing.voucher_cents(cfg, fare) / 100`` (the
+    voucher the session would really get, H-06). ``v = 0`` gives NaN, so the session is not offered.
+
+    Fixed-market oracle: it knows every rider's coefficients but not the externality on other riders, and it
+    uses the booking probability in place of the completion probability. Upper bound of policies that rank
+    by individual tau only. Only ``make_policy`` builds it (needs the hidden view); ``load_score_fn`` refuses it.
+    """
+    from sim.budget import CENTS_PER_USD        # local imports: sim.choice -> sim.pricing -> sim.policies.base
+    from sim.choice import request_probability
+    from sim.pricing import voucher_cents
+
+    def oracle(batch: SessionBatch, s_hat: np.ndarray) -> np.ndarray:
+        fare = batch.quoted_fare_usd.astype(np.float64)
+        eta = batch.quoted_eta_min.astype(np.float64)
+        v = voucher_cents(cfg, fare) / CENTS_PER_USD
+        alpha, beta_price, beta_eta, delta = hidden.coefficients_of(batch.rider_id)
+        p1 = request_probability(alpha, beta_price, beta_eta, delta, fare, v, eta)
+        p0 = request_probability(alpha, beta_price, beta_eta, delta, fare, 0.0, eta)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            score = np.where(v > 0, (p1 - p0) / (v * p1), np.nan)
+        return score.astype(np.float32)
+
+    oracle.__name__ = ORACLE
+    return oracle
 
 
 def import_callable(spec: str) -> Callable:
@@ -55,6 +90,9 @@ def load_score_fn(spec: str) -> ScoreFn:
     name = spec.strip()
     if name in BUILTIN_SCORES:
         return BUILTIN_SCORES[name]
+    if is_oracle(name):
+        raise ValueError("score_fn 'oracle' reads hidden coefficients: it is built only by sim.policies.make_policy "
+                         "for policy.name = threshold (decisions T-40)")
     if ":" in name:
         return import_callable(name)
     raise ValueError(f"unknown score_fn {spec!r}: use {sorted(BUILTIN_SCORES)} or 'module:function'")

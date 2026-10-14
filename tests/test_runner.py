@@ -332,12 +332,17 @@ def test_evaluate_mode(th_cfg, tmp_path):
     assert np.isfinite(meta["kappa"]).all() and (meta["budget_B_usd"] == budget).all()
     assert (meta["kappa_pilots"] >= 2).all()                                    # pilot at -inf, then rerun(s) (H-21)
     assert (meta["policy"] == "threshold").all() and meta["run_id"].is_unique
+    from sim.runner import pilot_seed
+    assert (meta["budget_pilot_seed"] == pilot_seed(th_cfg)).all() and (meta["budget_pilot_spent_usd"] > 0).all()   # T-40
+    assert not meta["uses_hidden"].any() and (disk["world_seed"] == th_cfg.meta.world_seed).all()
 
 
 def test_evaluate_without_budget_enforcement(tiny_layers, tmp_path):
     cfg = load_config(tiny_layers, SMALL + ["budget.enforce=false", "policy.name=all_on"])
     table = evaluate(cfg, tmp_path, engine=FAKE)
     assert np.isnan(table["budget_B_usd"]).all() and (table["policy"] == "all_on").all()
+    meta = pd.read_parquet(tmp_path / "meta" / "run_metadata.parquet")
+    assert (meta["budget_pilot_seed"] == -1).all() and np.isnan(meta["budget_pilot_spent_usd"]).all()        # no pilot
 
 
 def test_gte_mode_and_summary(tiny_layers, tmp_path):

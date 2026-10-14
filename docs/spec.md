@@ -392,7 +392,7 @@ class Policy(Protocol):
 
 `SnapshotView` chỉ trả về snapshot đã công bố. `SessionBatch` chỉ chứa **cột quan sát được**: `session_id`, `rider_id`, `x_freq`, `x_tenure`, `x_segment`, ô, giờ, giá, ETA báo, cùng các số rút sẵn dành cho chính sách `u_target`, `u_explore`, `u_explore_arm`, `u_score` (T-07). **Không** có `u_latent`, alpha, beta, delta, hay max_wait. Chính sách không được gọi `rng_for(SESSION, …)`.
 
-Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này gọi `cell_state` khi đổi slot, gọi `offer`, rồi giữ ngân sách theo thứ tự `session_id` cho mọi chính sách; `offer` vẫn nhận `ledger` chỉ để đọc số dư. Riêng `LegacyPolicy` được dùng `u_latent` để tạo confounding, qua một view riêng `LegacyHiddenView`, và kết quả propensity thật chỉ ghi vào bảng ẩn.
+Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này gọi `cell_state` khi đổi slot, gọi `offer`, rồi giữ ngân sách theo thứ tự `session_id` cho mọi chính sách; `offer` vẫn nhận `ledger` chỉ để đọc số dư. Riêng `LegacyPolicy` được dùng `u_latent` để tạo confounding, qua một view riêng `LegacyHiddenView`, và kết quả propensity thật chỉ ghi vào bảng ẩn. Cánh cửa thứ hai là `OracleHiddenView` (T-40, KN 3.1): hệ số `alpha, beta_price, beta_eta, delta_promo` theo rider, chỉ được tạo trong `make_policy` khi `policy.name = threshold` và `score_fn = oracle`; điểm oracle = (p1 − p0)/(v·p1) với p1, p0 từ mô hình M4 tại giá và ETA báo, v là voucher session sẽ nhận; `load_score_fn("oracle")` raise để `analysis/` không nạp được; lượt chạy ghi `uses_hidden = true` trong `run_metadata`. Oracle là mốc trên của chính sách theo τ cá nhân trong chợ cố định, không phải của mọi chính sách.
 
 **LegacyPolicy** [report M3]:
 - **Cấp ô:** `rule_on = slack_lag_slot ≥ slack_on`. Với xác suất ε (luồng CELLSLOT), thay bằng coin(`epsilon_p_on`).
@@ -407,7 +407,7 @@ Ngân sách được áp ở lớp voucher trong `pricing.py` (L12): lớp này 
 **ThresholdPolicy π_θ** [report M3]:
 - **Tầng ô:**
   - dự báo ŝ: `persistence` dùng `slack_lag_slot`; `ar` dùng `ar_weights · [slack_lag_slot, slack_lag_day]`. Ở **mọi** nhánh và mọi phạm vi, inf được thay bằng `monitor.slack_cap` trước khi so với θ và trước khi đưa vào `score_fn` (T-39, KN 2.3); NaN (chưa công bố) giữ NaN. Cột `slack` trong `market/` vẫn giữ inf.
-  - phạm vi đo (H-25): `cell` dùng slack của chính ô; `ring1` dùng (tổng `idle`) / (tổng `enroute`) của ô và các ô kề trong slot k−1 (quy tắc H-14 khi mẫu số 0, inf thay bằng `slack_cap`). Khóa `policy.threshold.scope: cell | ring1`, mặc định `cell` (T-35).
+  - phạm vi đo (H-25, T-40): `cell` dùng slack của chính ô; `ring1` dùng (tổng `idle`) / (tổng `enroute`) của ô và các ô kề trong slot k−1; `city` dùng cùng tỷ số trên toàn thành phố, nên mọi ô cùng một ŝ và một quyết định (chỉ số `system` của báo cáo, KN 3.2). Quy tắc H-14 khi mẫu số 0, inf thay bằng `slack_cap`. Khóa `policy.threshold.scope: cell | ring1 | city`, mặc định `cell` (T-35).
   - `promo_on = not (ŝ < θ)`.
   - Nếu `hysteresis_h > 0`: ô đang off chỉ bật lại khi `ŝ > θ + h`.
   - θ = 0 nghĩa là không cắt ô nào.
