@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S7 (phân công v3, `docs/phan_cong_v3.md`). Xong: mốc hồi quy G7 và T7.1 (chưa commit). Tiếp: PR hợp đồng B9 cùng Hoàng (bản nháp phần Tình đã soạn), rồi T7.2–T7.5. Việc cũ còn treo: PR S6 (T6.1–T6.3) và dashboard `dashbroad` đã gộp qua PR #20, #22; gate P6 (T-31) vẫn chờ mentor xác nhận.
+**Đang làm:** S7 (phân công v3, `docs/phan_cong_v3.md`). PR B9 `develop1 → develop` đang mở, chờ Hoàng thêm phần lõi và duyệt. Xong trên nhánh: mốc hồi quy G7, T7.1, B9 phần Tình (T-40), T7.2 city, T7.3 oracle, T7.5 phần cột `budget_pilot_*`/`world_seed`/`uses_hidden`. Chờ Hoàng: định nghĩa `slack_lag_cell` (T7.4), bảng `meta/shocks` (phần còn lại của T7.5). Gate P6 (T-31) vẫn chờ mentor.
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -376,6 +376,30 @@ Mẫu:
 - Lệch spec / quyết định mới: T-39 (a); spec §6 đã sửa theo.
 - Bàn giao: phần đầu của B11 (việc 1.3).
 - Còn lại / bước tiếp: B9 (hợp đồng), T7.2 city, T7.3 oracle, T7.4 slack trễ, T7.5 runner/logger.
+
+### 2026-10-14 · B9 phần Tình · hợp đồng S7 trong file chung · xong (chưa commit)
+- Nhánh/PR: `develop1` → `develop`, PR B9 đang mở; review: Hoàng (file chung, cần cả hai duyệt).
+- Đã làm: `config.py` + `default.yaml` (`scope` nhận `city`; chú thích `oracle`); `schema.md` + `state.py` (session `slack_lag_cell`, `lag_slot_same_block` với giá trị mặc định; tên `slack_lag_cell` thay cho `slack_lag_slot` của phân công vì trùng cột `slot_snapshots`, T-40 c); `schema.md` + `logger.py` + `runner.py` (`run_metadata`: `uses_hidden`, `budget_pilot_seed`, `budget_pilot_spent_usd`; `policy_results`: `world_seed`); `spec.md` §6; `tests.md`; `decisions.md` T-40. Phần Hoàng (ring_tiebreak, exact_time, shocks, SHOCK = 8, meta/shocks, chỉ tiêu xe bận, H1/H2) chưa có, theo bản nháp đã gửi.
+- Test: `pytest -q` → xem mục T7.3 bên dưới (chạy chung).
+- Lệch spec / quyết định mới: T-40 (c), (d).
+- Bàn giao: B9 (chờ Hoàng bổ sung và duyệt). Người nhận kiểm tra: `pytest -q`, `test_schema_contract`, `load_config` nhận `scope=city`.
+- Còn lại / bước tiếp: Hoàng trả lời 5 câu trong bản nháp; T7.4 sau khi chốt câu 4.
+
+### 2026-10-14 · T7.2 · phạm vi `city` cho tầng vùng (`threshold.py`) · xong (chưa commit)
+- Nhánh/PR: `develop1`, cùng PR B9.
+- Đã làm: `ThresholdPolicy` với `scope = city` dùng ma trận vành toàn 1, mọi ô cùng ŝ và cùng quyết định; không cần bảng ô kề. Test `test_threshold_city_scope_*` trong `tests/test_policies.py`.
+- Test: xem mục T7.3.
+- Lệch spec / quyết định mới: T-40 (a); spec §6 đã sửa.
+- Bàn giao: thuộc B11 (việc 1.5).
+- Còn lại / bước tiếp: chạy bảng chính sách với `city` ở T10.1.
+
+### 2026-10-14 · T7.3 + T7.5 (phần cột) · oracle qua `OracleHiddenView`; `budget_pilot_*`, `world_seed`, `uses_hidden` · xong (chưa commit)
+- Nhánh/PR: `develop1`, cùng PR B9.
+- Đã làm: `policies/base.py` `OracleHiddenView`; `policies/scores.py` `make_oracle_score`, `is_oracle`, `load_score_fn` từ chối `oracle`; `policies/__init__.py` mở cổng chỉ ở nhánh `threshold`, hàm `uses_hidden(cfg)`; `runner.py` `BudgetPilot`, `budget_and_pilot`, hai trường mới của `Job`, cột mới trong `metadata_table` và `policy_results_table`; `analysis/policy_table.py` điền `budget_pilot_*`. Test: `test_oracle_*` (test_policies), `test_evaluate_mode` mở rộng (test_runner).
+- Test: `pytest -q` → 560 passed, 12 deselected (139,7 s; py3.11), gồm 3 test mới của T7.2/T7.3 và 2 assert mới trong test_runner; hồi quy G7 → 4 passed (64,2 s): cột mới được bỏ qua, mọi cột cũ trùng từng số.
+- Lệch spec / quyết định mới: T-40 (b), (d).
+- Bàn giao: thuộc B11 (việc 1.5). `meta/shocks` của T7.5 chờ Hoàng chốt cột.
+- Còn lại / bước tiếp: T7.4 (`slack_lag_cell`, `lag_slot_same_block`), `logger` ghi `meta/shocks`.
 
 ## 2. Hoàng
 
