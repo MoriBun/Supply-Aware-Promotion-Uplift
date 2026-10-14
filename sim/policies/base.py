@@ -252,6 +252,31 @@ class LegacyHiddenView:
         return self._zf[np.asarray(rider_id)]
 
 
+class OracleHiddenView:
+    """Booking-model coefficients (``alpha``, ``beta_price``, ``beta_eta``, ``delta_promo``) by rider id.
+
+    Second gate to hidden variables after :class:`LegacyHiddenView` (hard rule 3, decisions T-40, KN 3.1).
+    Built only by ``make_policy`` for ``policy.name = threshold`` with ``score_fn = oracle``; the run is
+    flagged ``uses_hidden`` in ``meta/run_metadata``. Never reaches ``SessionBatch`` or the logs.
+    """
+
+    def __init__(self, alpha: np.ndarray, beta_price: np.ndarray, beta_eta: np.ndarray, delta_promo: np.ndarray) -> None:
+        arrays = [np.asarray(a, dtype=np.float64) for a in (alpha, beta_price, beta_eta, delta_promo)]
+        if len({len(a) for a in arrays}) != 1:
+            raise ValueError("coefficient arrays must have the same length")
+        self._alpha, self._beta_price, self._beta_eta, self._delta_promo = arrays
+
+    @classmethod
+    def from_world(cls, world) -> OracleHiddenView:
+        r = world.riders
+        return cls(r.alpha, r.beta_price, r.beta_eta, r.delta_promo)
+
+    def coefficients_of(self, rider_id: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """``(alpha, beta_price, beta_eta, delta_promo)`` of the given riders, float64."""
+        idx = np.asarray(rider_id)
+        return self._alpha[idx], self._beta_price[idx], self._beta_eta[idx], self._delta_promo[idx]
+
+
 # ---------------------------------------------------------------------------
 # Policy protocol
 # ---------------------------------------------------------------------------

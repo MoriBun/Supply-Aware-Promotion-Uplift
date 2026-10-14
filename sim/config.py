@@ -137,7 +137,7 @@ class LegacyPolicyConfig:
 @dataclass(frozen=True)
 class ThresholdPolicyConfig:
     indicator: Literal["slack", "utilization", "eta"]
-    scope: Literal["cell", "ring1"]
+    scope: Literal["cell", "ring1", "city"]
     theta: float
     forecast: Literal["persistence", "ar"]
     ar_weights: tuple[float, float]

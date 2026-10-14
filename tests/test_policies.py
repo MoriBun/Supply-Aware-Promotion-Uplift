@@ -8,9 +8,10 @@ import pytest
 
 from sim import experiment
 from sim.config import load_config
-from sim.policies import make_policy
+from sim.policies import make_policy, uses_hidden
 from sim.policies.base import (
-    FORBIDDEN_IN_BATCH, SNAPSHOT_FIELDS, CellDecision, LegacyHiddenView, LookAheadError, OfferDecision, Policy,
+    FORBIDDEN_IN_BATCH, SNAPSHOT_FIELDS, CellDecision, LegacyHiddenView, LookAheadError, OfferDecision,
+    OracleHiddenView, Policy,
     SessionBatch, SnapshotStore, SnapshotView,
 )
 from sim.policies.experiment import ExperimentPolicy
@@ -507,3 +508,82 @@ def test_threshold_ring1_on_a_radius_3_torus_and_scope_cell_is_unchanged(default
     np.testing.assert_array_equal(cell.forecast_slack(SnapshotView(store, 1)), blank_record(37, 0)["slack"])
     with pytest.raises(ValueError):
         ThresholdPolicy(cfg, 37)                                       # ring1 needs the neighbour table
+
+
+# --- scope city (T7.2, decisions T-40; KN 3.2) ---------------------------------------------------
+
+
+def test_threshold_city_scope_gives_every_cell_the_system_slack_and_one_decision(default_yaml):
+    cfg = load_config(default_yaml, ["policy.threshold.scope=city"])
+    world = stub_world(cfg)
+    pol = make_policy(cfg, world, theta=0.5)
+    assert pol.scope == "city"
+    gen = np.arange(37, dtype=np.float64)
+    idle, enroute = (gen % 5) * 0.3, (gen % 3) * 0.4
+    store = SnapshotStore(37, 96)
+    store.publish(0, blank_record(37, 0, idle_avg=idle, enroute_avg=enroute))
+    system = idle.sum() / enroute.sum()
+    np.testing.assert_allclose(pol.forecast_slack(SnapshotView(store, 1)), np.full(37, system))
+    on = pol.cell_state(1, SnapshotView(store, 1))
+    assert on.promo_on.all()                                                        # system slack 1.5 >= 0.5
+    off = make_policy(cfg, world, theta=system + 0.1).cell_state(1, SnapshotView(store, 1))
+    assert not off.promo_on.any()                                                   # one decision for the whole city
+    # H-14 and the cap apply to the city-wide ratio; no neighbour table is needed.
+    bare = ThresholdPolicy(cfg, 37, theta=0.5)
+    store2 = SnapshotStore(37, 96)
+    store2.publish(0, blank_record(37, 0, idle_avg=np.ones(37), enroute_avg=np.zeros(37)))
+    assert (bare.forecast_slack(SnapshotView(store2, 1)) == bare.slack_cap).all()
+    store3 = SnapshotStore(37, 96)
+    store3.publish(0, blank_record(37, 0, idle_avg=np.zeros(37), enroute_avg=np.ones(37)))
+    assert (bare.forecast_slack(SnapshotView(store3, 1)) == 0.0).all()
+    first = bare.cell_state(0, SnapshotView(SnapshotStore(37, 96), 0))
+    assert np.isnan(first.s_hat).all() and first.promo_on.all()                   # nothing published: on
+
+
+# --- oracle score (T7.3, decisions T-40; KN 3.1) -------------------------------------------------
+
+
+def test_oracle_score_is_extra_bookings_per_expected_usd(default_yaml):
+    from sim.choice import request_probability
+    from sim.pricing import voucher_cents
+    cfg = load_config(default_yaml, ["policy.threshold.score_fn=oracle"])
+    world = stub_world(cfg)
+    pol = make_policy(cfg, world, theta=0.0, kappa=-math.inf)
+    assert isinstance(pol, ThresholdPolicy) and pol.score_fn.__name__ == "oracle"
+    batch = make_batch(6, 37, fare_usd=18.0)
+    score = score_batch(pol.score_fn, batch, np.full(6, np.nan))
+    r, rid = world.riders, batch.rider_id
+    fare, eta = batch.quoted_fare_usd.astype(np.float64), batch.quoted_eta_min.astype(np.float64)
+    v = voucher_cents(cfg, fare) / 100.0
+    coef = (r.alpha[rid], r.beta_price[rid], r.beta_eta[rid], r.delta_promo[rid])
+    p1 = request_probability(*coef, fare, v, eta)
+    p0 = request_probability(*coef, fare, 0.0, eta)
+    np.testing.assert_allclose(score, (p1 - p0) / (v * p1), rtol=1e-5)
+    assert np.isfinite(score).all() and (score > 0).all()                          # delta > 0, beta_price < 0
+    cd = pol.cell_state(0, SnapshotView(SnapshotStore(37, 96), 0))
+    assert pol.offer(batch, cd, make_ledger()).offer.all()                          # kappa = -inf: everyone
+    zero = make_batch(3, 37, fare_usd=0.0)                                          # v = 0: NaN score, no offer
+    assert np.isnan(score_batch(pol.score_fn, zero, np.full(3, np.nan))).all()
+    assert not pol.offer(zero, cd, make_ledger()).offer.any()
+
+
+def test_oracle_is_gated_to_the_threshold_policy(default_yaml, monkeypatch):
+    with pytest.raises(ValueError, match="oracle"):
+        load_score_fn("oracle")                                                     # analysis/ cannot load it
+    oracle_cfg = load_config(default_yaml, ["policy.threshold.score_fn=oracle"])
+    with pytest.raises(ValueError, match="oracle"):
+        ThresholdPolicy(oracle_cfg, 7)                                              # no view: refused
+    world = stub_world(oracle_cfg)
+    built = []
+    orig = OracleHiddenView.from_world.__func__
+    monkeypatch.setattr(OracleHiddenView, "from_world", classmethod(lambda cls, w: built.append(1) or orig(cls, w)))
+    for name in ("all_on", "all_off", "legacy", "experiment"):
+        other = load_config(default_yaml, ["policy.threshold.score_fn=oracle", f"policy.name={name}"])
+        make_policy(other, world)
+        assert not uses_hidden(other) or name == "legacy"
+    assert built == []                                                              # gate opened for threshold only
+    make_policy(oracle_cfg, world)
+    assert built == [1]
+    assert uses_hidden(oracle_cfg) and uses_hidden(load_config(default_yaml, ["policy.name=legacy"]))
+    assert not uses_hidden(load_config(default_yaml))
+    assert FORBIDDEN_IN_BATCH & {"alpha", "beta_price", "beta_eta", "delta_promo"}  # still hidden from SessionBatch

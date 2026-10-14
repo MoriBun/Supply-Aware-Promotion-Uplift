@@ -14,10 +14,12 @@ session is offered when its cell is on and ``score >= kappa``; the budget is
 applied afterwards by the voucher layer (L12). ``kappa = -inf`` is the pilot
 setting of kappa-auto (spec §6). Only ``indicator = slack`` is implemented (Q19).
 
-Scope (decisions H-25, T-35): ``cell`` reads the cell's own slack; ``ring1`` reads
-idle / en-route summed over the cell and its neighbours in the same slot, with the
-rule of decisions H-14 (no idle driver: 0; idle but none en route: inf) and inf
-capped at ``monitor.slack_cap``. A slot not yet published stays NaN (cell on).
+Scope (decisions H-25, T-35, T-40): ``cell`` reads the cell's own slack; ``ring1`` reads
+idle / en-route summed over the cell and its neighbours in the same slot; ``city``
+sums over every cell, so all cells share one forecast and one decision (the ``system``
+indicator of the report, KN 3.2). Both sums follow the rule of decisions H-14 (no idle
+driver: 0; idle but none en route: inf) with inf capped at ``monitor.slack_cap``. A slot
+not yet published stays NaN (cell on).
 """
 
 from __future__ import annotations
@@ -65,6 +67,8 @@ class ThresholdPolicy:
             rows, cols = np.nonzero(nb >= 0)
             ring[rows, nb[rows, cols]] = 1.0
             self._ring = ring
+        elif self.scope == "city":
+            self._ring = np.ones((self.n_cells, self.n_cells))    # every cell sees the city-wide ratio (T-40)
 
     def _slack(self, read) -> np.ndarray:
         """Slack of every cell in one published slot; ``read(field)`` returns that slot's field (NaN if unknown)."""

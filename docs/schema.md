@@ -41,10 +41,13 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | config_yaml | string | toàn văn config đã áp override |
 | git_sha | string | commit của code |
 | policy | string | |
+| uses_hidden | bool | chính sách của lượt chạy đọc biến ẩn: `legacy` (`u_latent`) hoặc `threshold` với `score_fn = oracle` (hệ số đặt xe); false với mọi lượt khác (T-40, KN 3.1) |
 | theta | float64 | NaN nếu không áp dụng |
 | seed | int32 | |
 | world_seed | int64 | |
 | budget_B_usd | float64 | NaN nếu không áp ngân sách |
+| budget_pilot_seed | int64 | seed của lượt pilot all_on dùng tính B (= `run_seed + budget.pilot_seed_offset`); −1 nếu không có pilot (T-40, Q23) |
+| budget_pilot_spent_usd | float64 | chi tiêu voucher của lượt pilot trên cửa sổ gốc, B = `fraction` × số này / số kỳ; NaN nếu không có pilot (T-40, Q23) |
 | kappa | float64 | NaN nếu không áp dụng |
 | kappa_pilots | int32 | số lượt pilot κ auto đã chạy để ra `kappa`, gồm lượt κ = −∞ (H-21); 0 nếu không dùng κ auto. Thêm ngày 05/10: bộ dữ liệu sinh trước đó không có cột này |
 | window_start_s, window_end_s | float64 | cửa sổ đánh giá |
@@ -88,6 +91,8 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | budget_period | int16 | kỳ ngân sách của session (T-03); −1 = warm-up |
 | score | float32 | điểm tầng rider; NaN nếu không dùng |
 | slack_hat | float32 | ŝ dùng ra quyết định; NaN nếu không dùng |
+| slack_lag_cell | float64 | slack của **ô đón** ở slot k−1 đã công bố (= `slot_snapshots.slack_lag_slot` của (ô đón, slot)), chặn ở `monitor.slack_cap`; NaN nếu chưa công bố. Ghi cho **mọi** chính sách để chia hiệu ứng theo độ căng trễ (T-40, KN 3.3, Q8). Tên khác `slack_lag_slot` để không trùng cột của `slot_snapshots` khi join. Điền ở T7.4; trước đó NaN |
+| lag_slot_same_block | bool | slot k−1 cùng khối switchback với slot k; `true` với chính sách không có khối (T-40). Điền ở T7.4; trước đó `true` |
 | requested | bool | kết quả M4 |
 | in_window | bool | open_time trong cửa sổ đánh giá |
 
@@ -167,6 +172,7 @@ Kiểu ở đây là kiểu **trên đĩa**. Trong bộ nhớ (`sim/state.py`), 
 | run_id, policy | string | |
 | theta | float64 | |
 | seed | int32 | |
+| world_seed | int64 | để gộp nhiều thế giới (T-40, Q18) |
 | N_completed | int64 | **N(π)**, đơn tạo trong cửa sổ |
 | V_profit_usd | float64 | **V(π)** |
 | voucher_spent_usd | float64 | |
