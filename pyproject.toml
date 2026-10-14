@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "supply-aware-sim"
+version = "0.1.0"
+description = "Agent-based ride-hailing simulator for the Supply-Aware Promotion Impact Framework"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "pyarrow>=14",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+analysis = ["matplotlib>=3.8", "lightgbm>=4.0", "ipykernel>=6"]   # gate plots, DR-learner, notebooks (decisions T-13, H-27); sim/ never imports them
+dashboard = ["fastapi>=0.110", "uvicorn[standard]>=0.27", "httpx>=0.27"]   # management dashboard (dashboard/, decisions T-38); sim/ never imports them
+
+[tool.setuptools.packages.find]
+include = ["sim*", "analysis*"]   # analysis: importable from notebooks/ (decisions H-27)
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-m 'not slow'"
+markers = ["slow: acceptance tests, run with: pytest -q -m slow"]

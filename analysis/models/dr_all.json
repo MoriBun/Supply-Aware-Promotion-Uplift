@@ -1,0 +1,51 @@
+{
+  "name": "dr_all",
+  "outcome": "completed",
+  "learner": "DR-learner (Kennedy 2023), cross-fitted by rider",
+  "run_id": "generate-56fe64fb463b-legacy-nan-0",
+  "slack_cap": 10.0,
+  "x_cols": [
+    "x_freq",
+    "x_tenure",
+    "x_segment"
+  ],
+  "s_cols": [
+    "slack_lag_slot"
+  ],
+  "params": {
+    "k_folds": 5,
+    "e_clip": 0.02,
+    "nuisance": {
+      "objective": "binary",
+      "learning_rate": 0.05,
+      "num_leaves": 31,
+      "min_data_in_leaf": 200,
+      "num_boost_round": 200
+    },
+    "final": {
+      "objective": "regression",
+      "learning_rate": 0.05,
+      "num_leaves": 15,
+      "min_data_in_leaf": 2000,
+      "lambda_l2": 10.0,
+      "num_boost_round": 150
+    },
+    "cost": {
+      "objective": "regression",
+      "learning_rate": 0.05,
+      "num_leaves": 15,
+      "min_data_in_leaf": 500,
+      "num_boost_round": 150
+    },
+    "cost_floor_frac": 0.05,
+    "seed": 0
+  },
+  "sample": "all",
+  "n": 717914,
+  "n_treated": 166616,
+  "ate_dr": 0.10096630223090108,
+  "ate_dr_se": 0.0008724706207201342,
+  "ate_naive": 0.1018608123833066,
+  "mean_paid_per_offer_usd": 0.91433295652427,
+  "share_e_clipped": 0.33469189902968877
+}

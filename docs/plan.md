@@ -1,11 +1,14 @@
 # Kế hoạch triển khai simulator
 
 Nguyên tắc:
-- Làm **theo mốc**. Mỗi mốc kết thúc bằng test pass và một lần review của người (Hoàng hoặc Tình). Agent không bắt đầu mốc sau khi mốc trước chưa được duyệt.
-- Mỗi mốc là một nhánh git và một PR nhỏ. Mỗi PR có mô tả: làm gì, test nào pass, lệch khỏi spec chỗ nào (nếu có).
+- Làm **theo mốc**. Mỗi mốc kết thúc bằng test pass và một lần review của người (Hoàng hoặc Tình).
+- Hai người làm **song song** theo `docs/phan_cong.md` (sprint, sở hữu file, điểm bàn giao).
+  - Các review gate (P2, P3, P6) chặn **tích hợp và sinh dữ liệu** của mốc sau.
+  - Module độc lập của mốc sau được viết trước trên nhánh riêng và test bằng đồ giả.
+- Mỗi sprint là một PR từ nhánh cá nhân (`develop1` của Tình, `develop2` của Hoàng) vào nhánh chung `develop`; mỗi task là một commit trong PR đó. Mỗi PR có mô tả: làm gì, test nào pass, lệch khỏi spec chỗ nào (nếu có).
 - Mọi lệch khỏi `docs/spec.md` hoặc thay đổi tham số đều phải ghi vào `docs/decisions.md` (ngày, nội dung, lý do, người duyệt).
 
-Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **tuần 4** gồm P5–P8, **tuần 5** dành cho phân tích và nghiệm thu (ngoài phạm vi file này).
+Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **tuần 4** gồm P5–P8, **tuần 5** dành cho phân tích và nghiệm thu (ngoài phạm vi file này). Lịch chi tiết theo sprint và theo người, gồm cả tuần 5, ở `docs/phan_cong.md`.
 
 ---
 
@@ -13,9 +16,9 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 
 | Việc | Ai | Chặn mốc nào |
 |---|---|---|
-| Mentor xác nhận D3 (π_θ hai tầng), D4 (slack), D5 (max_pickup_eta 30 phút) | Hoàng | P4 (code vẫn làm được nhờ config, nhưng cần chốt trước khi sinh dữ liệu) |
-| Mentor đồng ý mức ngân sách B (`fraction = 0,3`) và `explore_frac = 0,05` | Hoàng | P4 |
-| Thống nhất hợp đồng dữ liệu NYC (spec §10) | Tình | P7 |
+| D3 (π_θ hai tầng), D4 (slack), D5 (max_pickup_eta 30 phút): **đã chốt** theo YAML (`decisions.md` T-17) | Tình, Hoàng | — |
+| Mức ngân sách B (`fraction = 0,3`) và `explore_frac = 0,05`: **đã chốt** (T-17) | Tình, Hoàng | — |
+| Thống nhất hợp đồng dữ liệu NYC (spec §10, T-14) | Tình | P7 (làm sau P8 nếu còn thời gian) |
 
 ---
 
@@ -88,6 +91,8 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 
 ## P7. Bản NYC (song song với Tình, 1–2 ngày)
 
+> Hạ ưu tiên: làm sau P8 nếu còn thời gian (`docs/decisions.md` T-14).
+
 - **Làm:** nạp dữ liệu theo spec §10, luật T gần/xa, vùng đệm, lấy mẫu 5–10%.
 - **Xong khi:** chạy 1 ngày NYC không lỗi; A5 vẫn đạt với mức lấy mẫu đã chọn; so sánh vài chỉ số (số chuyến theo giờ, thời gian chuyến) với dữ liệu thật.
 
@@ -96,6 +101,7 @@ Thời gian dự kiến theo lịch thực tập: **tuần 3** gồm P0–P4, **
 - **Làm:**
   - `generate` 28 ngày với chính sách cũ (dữ liệu quan sát có confounding).
   - `generate` 28 ngày với `cluster_switchback` ở cụm cấp 1, 7 và all.
+  - `generate` 28 ngày với `rider_ab` (cần để đo độ chệch A/B theo rider, RQ3; T-16).
   - `gte` và `sweep_theta` với chính sách tham chiếu.
 - **Xong khi:** thư mục `runs/` có đủ dữ liệu; `docs/datasets.md` mô tả từng bộ (config_hash, số ngày, chính sách, dung lượng).
 
