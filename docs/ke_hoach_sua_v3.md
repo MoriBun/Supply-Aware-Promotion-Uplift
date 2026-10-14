@@ -1,8 +1,15 @@
 # Kế hoạch sửa đề tài sau review bản 2
 
-Nguồn: `Report_version2_review.md` (Q = câu hỏi ở Phần I), `khuyen-nghi-code-simulator.md` (KN), `huong-dan-animation-chinh-sach.md`.
+Nguồn: `Report_version2_review.md` (Q = câu hỏi ở Phần I), `khuyen-nghi-code-simulator.md` (KN), `huong-dan-animation-chinh-sach.md` (ba tài liệu này do mentor gửi riêng, không lưu trong repo), và **`docs/de_xuat_tham_so_ha_noi.md` (ĐX)**: giá trị và nguồn của mọi tham số theo quy mô Hà Nội.
 
 Phân công theo sprint (S7–S11) cho Tình và Hoàng: xem `phan_cong_v3.md`.
+
+**Cập nhật 14/10:** mentor nhận xét thành phố và ô hơi nhỏ. Nhóm đổi sang:
+- ô H3 độ phân giải 7;
+- quy mô nội thành Hà Nội (315 km²);
+- tiền VND, giá cước theo bảng giá GrabCar Hà Nội (ĐX).
+
+Thay đổi này nằm ở việc 1.0 và việc mới 1.0b.
 
 Các việc sắp theo thứ tự thực hiện. Mỗi việc ghi: **Là gì · Vì sao · Ở đâu · Làm gì**.
 
@@ -11,8 +18,8 @@ Nguyên tắc sắp xếp: mọi thay đổi simulator làm đổi số liệu, 
 | Giai đoạn | Nội dung | Thời gian ước tính |
 |---|---|---|
 | 0 | Chốt hướng, sửa những gì không phụ thuộc số liệu | ~1 ngày |
-| 1 | Sửa simulator (một đợt) | ~3–4 ngày |
-| 2 | Sinh dữ liệu cho hai thế giới | ~1 ngày chạy máy |
+| 1 | Sửa simulator (một đợt), gồm đổi quy mô Hà Nội và tiền VND | ~5–6 ngày |
+| 2 | Sinh dữ liệu cho hai thế giới | ~1 ngày (máy chạy ~3–4 giờ) |
 | 3 | Phương pháp | ~2 ngày |
 | 4 | Thí nghiệm đánh giá | ~2–3 ngày |
 | 5 | Viết lại báo cáo, sản phẩm trình bày | ~3 ngày |
@@ -30,6 +37,8 @@ Nguyên tắc sắp xếp: mọi thay đổi simulator làm đổi số liệu, 
   - ghi các thay đổi simulator của Giai đoạn 1;
   - ghi hai giả thuyết: *thế giới không biến động thì chính sách supply-aware ngang luật tắt theo giờ; thế giới có biến động thì chính sách supply-aware thắng*;
   - ghi chỗ code lệch spec §8 (quét đội xe bằng mặt nạ numpy thay vì hàng đợi ưu tiên).
+
+  *Hai giả thuyết ghi chính thức vào `decisions.md` trong PR hợp đồng B9.*
 
 ### 0.2. Báo mentor hướng đi — ✅ đã xong
 
@@ -73,7 +82,7 @@ Nguyên tắc sắp xếp: mọi thay đổi simulator làm đổi số liệu, 
 ### 0.7. Trích H3 và ghi hạn chế, hướng phát triển — ✅ đã xong (bản `BaoCao_SupplyAwarePromotion_v1 (9) - H3 han che huong phat trien.zip`)
 
 - **Làm gì:**
-  - giải thích kích thước ô bằng lưới H3 của Uber (độ phân giải 8, khoảng 0,74 km²). *(Cập nhật: kích thước ô sẽ đổi theo đúng H3 độ phân giải 8 ở việc 1.0; câu trong Bảng 4.1 sửa lại ở 5.1.)*
+  - giải thích kích thước ô bằng lưới H3 của Uber (độ phân giải 8, khoảng 0,74 km²). *(Cập nhật 14/10: ô đổi sang H3 độ phân giải 7 ở việc 1.0; câu trong Bảng 4.1 và trích dẫn sửa lại ở 5.1.)*
   - ghi hạn chế: **khách không đặt lại** sau khi bỏ hoặc hủy, nên có thể phóng đại thiệt hại khi thiếu xe (KN 5.3).
   - ghi hướng phát triển: chạy simulator trên dữ liệu thành phố thật (NYC, TP.HCM), với nhịp cầu khác nhau theo loại khu vực.
 
@@ -81,18 +90,50 @@ Nguyên tắc sắp xếp: mọi thay đổi simulator làm đổi số liệu, 
 
 ## Giai đoạn 1. Sửa simulator (một đợt)
 
-Mọi thay đổi đặt sau **khóa config**. Tắt khóa thì chạy như cũ. Mỗi thay đổi đụng tới `sim/`, `config.py` hoặc `schema.md` cần một mục trong `docs/decisions.md`, mục log và PR có chủ file duyệt (theo `CLAUDE.md`).
+Thay đổi mô hình (1.1, 1.2, 1.4) đặt sau **khóa config**: tắt khóa thì chạy như cũ. Thay đổi giá trị (1.0, 1.0b) vẫn chạy lại được bằng giá trị cũ trong file ghim của bộ kiểm hồi quy G7. Mỗi thay đổi đụng tới `sim/`, `config.py` hoặc `schema.md` cần một mục trong `docs/decisions.md`, mục log và PR có chủ file duyệt (theo `CLAUDE.md`).
 
-### 1.0. Đổi kích thước ô theo H3 độ phân giải 8
+### 1.0. Đổi quy mô theo Hà Nội: ô H3 độ phân giải 7, thành phố 315 km² (ĐX mục B1–B3)
 
-- **Là gì:** ô hiện có cạnh 0,75 km, diện tích 1,46 km², nằm giữa H3 độ phân giải 8 (0,737 km²) và 7 (5,16 km²), không khớp mức nào.
-- **Vì sao:** kích thước ô cần có căn cứ; H3 là lưới các nền tảng gọi xe dùng để đo cung–cầu theo ô. Đằng nào cũng sinh lại toàn bộ dữ liệu, nên đổi lúc này không tốn thêm một lần chạy.
-- **Ở đâu:** `config/default.yaml` (file chung); `tests/test_engine.py` (đang kiểm cứng 37 ô).
+- **Là gì:** ô hiện có cạnh 0,75 km (1,46 km²), thành phố 37 ô (54 km²). Mentor nhận xét như vậy hơi nhỏ, gợi ý ô cỡ một phường trung tâm.
+- **Vì sao:**
+  - kích thước ô và thành phố cần có căn cứ. H3 là lưới các nền tảng gọi xe dùng để đo cung–cầu theo ô;
+  - quy mô và tốc độ lấy theo Hà Nội, thị trường mục tiêu;
+  - đằng nào cũng sinh lại toàn bộ dữ liệu, nên đổi lúc này không tốn thêm một lần chạy.
+- **Ở đâu:** các mục `space`, `supply`, `demand` của `config/default.yaml` (giá trị của Hoàng); `tests/test_engine.py` (đang kiểm cứng 37 ô); `tests/test_space.py` (kích thước cụm 7 ô).
+- **Làm gì** (giá trị và nguồn ở ĐX):
+  - **ô H3 độ phân giải 7:** `edge_km = 1.41` (diện tích 5,16 km²);
+  - **bán kính 4:** 61 ô, 315 km², cỡ nội thành Hà Nội. Mặt xuyến với R = 4 đã được kiểm trong spec;
+  - **tốc độ theo TomTom 2025, Hà Nội:** trung bình 18 km/h; `speed_factor_by_hour` mới (đêm ×1,45, cao điểm sáng ×0,85, cao điểm tối ×0,76);
+  - **ca tài xế 11,2 giờ** (khảo sát), sd 2,0, chặn [4, 14];
+  - **điểm xuất phát cho hiệu chỉnh 1.7:**
+    - `fleet_size = 1000` (giữ mật độ giờ-xe của mô hình cũ);
+    - `base_sessions_per_cell_h = 124` (giữ mật độ khách);
+    - `dest_decay_rings = 1.2` (quãng đường TB ≈ 6 km);
+  - giữ `max_pickup_eta_min = 30` (quy tắc cứng 6). Đi giữa hai ô kề mất ~11 phút, ~14 phút giờ cao điểm;
+  - sửa test đang giả định 37 ô và kích thước cụm;
+  - **đo A5 ngay** trên cấu hình mới, vì số khách và số xe tăng khoảng 4–6 lần. Nếu vượt 30 giây/ngày thì báo trước khi làm tiếp.
+
+### 1.0b. Đổi tiền sang VND và giá cước theo GrabCar Hà Nội (ĐX mục A2, B4)
+
+- **Là gì:** mô hình đang tính tiền bằng USD: giá = 3 USD + 1,70 USD/phút, voucher 20% không trần.
+- **Vì sao:**
+  - thị trường mục tiêu là Hà Nội; giá và voucher thật có công bố, nên dùng được trực tiếp;
+  - độ dài chuyến và giá quyết định chi phí voucher, tức quyết định ai đáng được phát.
+- **Ở đâu:** toàn repo (đổi tên); `sim/pricing.py`, `sim/budget.py`, các mục `pricing`, `voucher`, `budget` (Tình); `riders.beta_price` (Hoàng).
 - **Làm gì:**
-  - chọn **độ phân giải 8**: cạnh **0,533 km**, để diện tích ô bằng diện tích trung bình của ô H3 (0,737 km²). Cạnh trung bình H3 là 0,531 km, nên hai số khớp nhau;
-  - chọn **bán kính lưới R = 4**: 61 ô, khoảng 45 km², gần quy mô thành phố hiện tại (54 km²). Mặt xuyến với R = 4 đã được kiểm trong spec (mọi ô có đủ 6 ô kề);
-  - giữ **mật độ cầu theo diện tích**: nhân lượng khách mỗi ô theo tỷ lệ diện tích (khoảng 0,5 lần), rồi để bước hiệu chỉnh 1.7 chỉnh tiếp lượng khách và số xe;
-  - sửa test đang giả định 37 ô.
+  - **đổi tên** `_usd` → `_vnd`, `cents` → đồng nguyên trên toàn repo (~1.150 chỗ, 79 file), bằng một script tìm–thay chạy một lần trong PR hợp đồng;
+  - **công thức giá:** 28.473đ cho 2 km đầu + 9.818đ/km + 442đ/phút sau 2 km + phí nền tảng 10.000đ (thuộc nền tảng);
+    - khóa mới: `pricing.open_fare_vnd`, `open_km`, `per_km_vnd`, `per_min_vnd`, `platform_fee_vnd`;
+    - bỏ `target_mean_fare_usd`;
+  - **voucher 25%, tối đa 20.000đ** (`voucher.pct_of_fare`, `voucher.max_vnd`);
+  - **phí ứng dụng 25%** (`commission_rate`);
+  - **độ nhạy giá:** `riders.beta_price_per_kvnd = 0.022` (giữ β × giá TB như mô hình cũ). `alpha0`, `delta0` hiệu chỉnh lại ở 1.7;
+  - **kiểm tương đương đơn vị:**
+    - viết lại giá trị cũ theo đơn vị mới (1 USD = 100 đơn vị) rồi chạy;
+    - số chuyến, số request, số hủy phải trùng khớp với code cũ; cột tiền khớp ×100 trong sai số 1e-6;
+    - đạt thì sinh lại mốc hồi quy G7 **một lần** (đính chính T-39 b, cả hai đồng ý);
+  - **test:** chuyến 6 km, 20 phút có giá ≈ 83.638đ; voucher chạm trần 20.000đ; sổ ngân sách tính bằng đồng nguyên;
+  - từ PR hợp đồng tới khi hiệu chỉnh xong (1.7), test CAL chậm sẽ không đạt vì có chỉ tiêu mới chưa hiệu chỉnh. Ghi log, không nới dải.
 
 ### 1.1. Sửa luật chọn xe ở vành ngoài (KN 2.1)
 
@@ -108,22 +149,30 @@ Mọi thay đổi đặt sau **khóa config**. Tắt khóa thì chạy như cũ.
 - **Ở đâu:** `sim/cancel.py`, `sim/trips.py` (Hoàng).
 - **Làm gì:** tính chính xác thời điểm khách hủy; nếu trước lúc xe tới thì hủy thay vì đón. Không rút thêm số ngẫu nhiên. Bật làm mặc định.
 
-### 1.3. Chặn độ căng dự báo ở 10 (KN 2.3)
+### 1.3. Chặn độ căng dự báo ở 10 (KN 2.3) — ✅ đã xong (T7.1, PR #23)
 
 - **Là gì:** với phạm vi theo ô, độ căng có thể bằng vô cùng và được đưa thẳng vào hàm điểm, trong khi mô hình được học trên dữ liệu đã chặn ở 10.
 - **Ở đâu:** `sim/policies/threshold.py` (Tình).
-- **Làm gì:** chặn ở 10 cho mọi trường hợp; PR nhỏ cho Tình duyệt.
+- **Làm gì:** chặn ở 10 cho mọi trường hợp.
 
 ### 1.4. Thêm biến động tự nhiên và sửa lịch ca sáng (Q4, Q20, KN 5.1)
 
 - **Là gì:** hiện mỗi ngày lặp lại y hệt (cùng lịch ca, cùng hình dạng cầu, không có cú sốc), nên thiếu xe chỉ rơi vào 5–8h.
 - **Vì sao:** khi thiếu xe đoán được bằng giờ, không thể chứng minh việc đo độ căng theo vùng có giá trị. Lúc 7h, simulator chỉ có 25% số xe so với đỉnh, trong khi NYC là 70%.
-- **Ở đâu:** module mới `sim/shocks.py`; sửa `demand.py`, `supply.py` (Hoàng); mục mới `shocks:` trong `config/default.yaml` và luồng ngẫu nhiên mới trong `rng.py` (file chung).
-- **Làm gì:** dùng tham số tự đặt, chọn cho gần thực tế, ghi nhãn nguồn.
-  - **Bắt buộc:** sự kiện ở địa điểm cố định (tạo thiếu xe theo khu vực); cầu dao động giữa các ngày; sửa lịch ca sáng.
-  - **Tùy chọn:** mưa (cầu tăng, xe chậm), tài xế nghỉ độc lập, giờ vào ca lệch.
-  - Mọi chính sách gặp **cùng một cú sốc**; chính sách **không được đọc** lịch cú sốc.
-  - Chi tiết tham số chốt khi bắt đầu làm.
+- **Ở đâu:**
+  - module mới `sim/shocks.py`; sửa `demand.py`, `supply.py` và tốc độ khi mưa (Hoàng);
+  - file chung: mục mới `shocks:` trong `config/default.yaml`, luồng `SHOCK = 8` trong `rng.py`, `WorldPart.VENUES = 4`;
+  - W0 tắt, W1 bật (overlay `config/world_w1.yaml`).
+- **Làm gì** (giá trị và nguồn ở ĐX mục B5): làm đủ cả 5 loại.
+  - **Cầu dao động giữa các ngày:** hệ số ngày ~ LogNormal, σ = 0,12 (NYC TLC).
+  - **Sự kiện ở địa điểm cố định**, hai loại (`shocks.events.venues`); vị trí rút một lần theo `world_seed`:
+    - sân vận động: p = 0,03/ngày, tan 21h30–23h, cầu ô ×20, vành kề ×3, trong 60 phút;
+    - phố đi bộ: p = 0,43/ngày, tan 21–24h, cầu ô ×2, vành kề ×1,3, trong 60 phút.
+  - **Mưa:** p = 0,31/ngày (trung bình năm ở Hà Nội), bắt đầu 14–19h, dài 1–3 giờ; cầu ×1,25, tốc độ ×0,85, 10% tài xế nghỉ suốt cơn mưa.
+  - **Tài xế đi làm** 90% số ngày, độc lập với nhau.
+  - **Giờ vào ca lệch:** độ lệch chuẩn 20 phút.
+  - **Sửa lịch ca sáng:** làm ở 1.7, bằng hiệu chỉnh `shift_start_mixture`.
+  - Mọi chính sách gặp **cùng một cú sốc**; chính sách **không được đọc** lịch cú sốc. Lịch ghi ra `meta/shocks` để phân tích.
 
 ### 1.5. Thêm code không làm đổi số liệu (Q4–6, Q8, Q18, Q21, Q23; KN 3.1–3.3)
 
@@ -138,7 +187,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 ### 1.6. Kiểm thử
 
-- Tắt mọi khóa mới thì chạy như cũ.
+- Tắt mọi khóa mới (và đặt giá trị cũ theo đơn vị mới) thì chạy như cũ. Kiểm bằng mốc hồi quy G7 (`tests/test_regression_s7.py`), mốc này sinh lại một lần sau khi đổi đơn vị (1.0b).
 - Cùng ngày thì cùng cú sốc dưới mọi chính sách.
 - Không rò biến ẩn, không nhìn trước.
 - Bất biến ngân sách.
@@ -147,8 +196,18 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 ### 1.7. Hiệu chỉnh lại
 
-- **Là gì:** biến động và các bản sửa làm đổi mức trung bình của thị trường.
-- **Làm gì:** chạy lại 5 chỉ tiêu hiệu chỉnh cũ, thêm chỉ tiêu **"tỷ lệ xe bận theo giờ"** để lịch ca sáng gần thực tế. Chỉ chỉnh lượng khách, số xe và lịch ca.
+- **Là gì:** quy mô Hà Nội, giá VND, các bản sửa và biến động làm đổi mức trung bình của thị trường.
+- **Làm gì** (ĐX mục C, D): hiệu chỉnh trên W0.
+  - **Núm được chỉnh:** `fleet_size`, `demand_scale`, `shift_start_mixture`, `dest_decay_rings`, `alpha0`, `delta0`.
+  - **Chỉ tiêu:**
+    - P(đặt) 13–17%;
+    - mức tăng đặt xe khi có voucher +35–70%;
+    - (ô, slot) căng 10–35%, dư 30–80%;
+    - tỷ lệ xe bận lúc 6/7/8h theo NYC;
+    - **quãng đường TB 5–8 km** (mới, thay chỉ tiêu giá TB);
+    - **8–18 chuyến/tài xế/ngày** (mới).
+  - **Chỉ kiểm, không chỉnh theo:** thời gian chờ đón TB 3–8 phút; thời gian chuyến TB 15–25 phút; tỷ lệ hủy và bỏ chờ (chỉ báo cáo).
+  - W1 không hiệu chỉnh lại; chỉ báo các chỉ tiêu.
 
 ---
 
@@ -160,12 +219,14 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 - **Vì sao:** so hai thế giới là phép thử cho giả thuyết supply-aware. Dữ liệu cũ không dùng lại được vì code đã sửa lỗi.
 - **Làm gì:** mỗi thế giới sinh:
   - dữ liệu luật cũ 28 ngày;
+  - luật cũ với 4 mức nhắm theo `u` (độ nhạy gây nhiễu);
   - switchback 1 ô, 7 ô, toàn thành phố;
   - A/B theo khách;
   - GTE;
-  - GTE với đội xe rất lớn (để tách phần "công suất" ở 4.4).
+  - GTE với đội xe rất lớn (để tách phần "công suất" ở 4.4);
+  - bật/tắt toàn bộ 5 seed, ghi đầy đủ (cho 4.5).
 
-  Ghi lệnh vào `docs/datasets.md`.
+  Ghi lệnh vào `docs/datasets.md`. Thời gian máy chạy ước khoảng 3–4 giờ cho cả hai thế giới (gấp ~6 lần bản cũ).
 
 ---
 
@@ -173,7 +234,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 ### 3.1. Học lại mô hình chọn khách
 
-- **Làm gì:** chạy lại DR-learner (theo mỗi USD) trên dữ liệu luật cũ mới.
+- **Làm gì:** chạy lại DR-learner (theo mỗi 1.000đ) trên dữ liệu luật cũ mới.
 
 ### 3.2. Chọn lại chỉ số độ căng (Q5)
 
@@ -210,7 +271,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 ### 4.2. Quét ngưỡng và tính regret (Q2, Q18)
 
 - **Làm gì:**
-  - quét θ (16 mức × 30 seed);
+  - quét θ (16 mức × 30 seed; đặt `sweep.theta_grid` 16 mức, `sweep.n_seeds = 30`);
   - chọn ngưỡng tốt nhất trên **một nửa** số seed, đo regret trên **nửa còn lại**;
   - diễn đạt kết quả theo "lấy lại bao nhiêu % lợi ích tối đa của tầng vùng".
 
@@ -234,9 +295,9 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 ### 4.6. Phân tích lại Qini (Q3, Q11–13)
 
 - **Làm gì:**
-  - tính tương quan Qini–số chuyến **trong nhóm hàm theo mỗi USD**;
+  - tính tương quan Qini–số chuyến **trong nhóm hàm theo mỗi 1.000đ**;
   - thử **Qini có tính chi phí** (trục hoành là tiền đã chi);
-  - giải thích vì sao "chuyến thêm trên 100 USD" vẫn khớp số chuyến dù dữ liệu A/B bị chệch;
+  - giải thích vì sao "chuyến thêm trên 100.000đ" vẫn khớp số chuyến dù dữ liệu A/B bị chệch;
   - **kiểm tra lại cơ chế phản ví dụ:** trên W1 có ví dụ Qini cao mà ít chuyến **do cung** không.
 
 ### 4.7. Hai kiểm tra nhỏ (Q16, KN 5.2)
@@ -248,10 +309,21 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 ### 4.8. Độ vững (Q18, Q19)
 
 - **Làm gì:**
-  - trên W1, quét ngân sách B (0,3 / 0,6 / 1,0 lần chi tiêu khi phát cho tất cả) và số xe (100% / 83% / 67% số xe sau hiệu chỉnh, tương ứng 240 / 200 / 160 của bản cũ) với chính sách khuyến nghị;
+  - trên W1, quét ngân sách B (0,3 / 0,6 / 1,0 lần chi tiêu khi phát cho tất cả) và số xe (100% / 83% / 67% số xe sau hiệu chỉnh) với chính sách khuyến nghị;
   - lặp bảng chính sách trên 3 `world_seed`.
 
-### 4.9. (Nếu còn thời gian) Thêm giá hoặc độ dài chuyến vào mô hình (Q22)
+### 4.8b. Độ nhạy theo các giả định thiếu số liệu Hà Nội (ĐX mục D3)
+
+- **Là gì:** cầu theo giờ, độ dài chuyến và tham số hủy không có số liệu Hà Nội, nên là giả định.
+- **Vì sao:** cần chứng minh kết luận không phụ thuộc vào các giả định này.
+- **Làm gì:** chạy chính sách khuyến nghị và các chính sách so sánh dưới:
+  - hình cầu theo giờ: cũ và NYC TLC;
+  - hazard hủy ×0,5, ×1, ×2;
+  - quãng đường TB ~5 km và ~8 km (`dest_decay_rings` 1,0 và 2,0).
+
+  Báo θ\* và chênh lệch giữa các chính sách có đổi không.
+
+### 4.9. (Chỉ làm nếu mentor yêu cầu) Thêm giá hoặc độ dài chuyến vào mô hình (Q22)
 
 - **Làm gì:** đưa vào cả mô hình hiệu ứng lẫn mô hình chi phí, so số chuyến.
 
@@ -261,14 +333,27 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 ### 5.1. Viết lại Chương 3 và Chương 4
 
-- **Làm gì:** Chương 3 thêm biến động, lưới H3 độ phân giải 8 và phương pháp ngưỡng theo độ căng; Chương 4 thay toàn bộ số, báo W0 và W1 cạnh nhau. Sửa luôn hai lỗi nhỏ còn tồn:
-  - Bảng 4.1, dòng "Lưới": đổi "cùng bậc với ô H3" thành "theo ô H3 độ phân giải 8";
+- **Làm gì:**
+  - Chương 3 thêm:
+    - quy mô Hà Nội (ô H3 độ phân giải 7, 315 km², tốc độ TomTom);
+    - giá cước VND theo GrabCar;
+    - biến động;
+    - phương pháp ngưỡng theo độ căng.
+  - Chương 4 thay toàn bộ số (tiền VND), báo W0 và W1 cạnh nhau.
+  - Phụ lục A ghi nguồn từng tham số theo ĐX.
+
+  Sửa luôn các lỗi nhỏ còn tồn:
+  - Bảng 4.1:
+    - dòng "Lưới" đổi thành "ô H3 độ phân giải 7 (5,16 km²), 61 ô, 315 km², quy mô nội thành Hà Nội";
+    - các dòng giá, voucher, ngân sách đổi sang VND;
   - `phuluc.tex` dòng 165: thêm `\\` cuối dòng "Thư viện & …" (lỗi biên dịch `Misplaced \noalign` có từ bản gốc);
-  - thêm số trang cho trích dẫn Castillo 2017 (con số 0,25–0,5, Q25).
+  - thêm số trang cho trích dẫn Castillo 2017 (con số 0,25–0,5, Q25);
+  - thêm trích dẫn cho các nguồn mới trong ĐX (Grab, TomTom, Brodeur & Nield, …), mỗi nguồn trích **một lần**;
+  - hướng phát triển (đã viết ở 0.7): thêm bản đồ thật của **Hà Nội** cạnh NYC, TP.HCM.
 
 ### 5.2. Áp nguyên tắc viết số (Phần II mục 5)
 
-- Tách rõ lợi ích **xếp theo mỗi USD** và **tầng vùng**.
+- Tách rõ lợi ích **xếp theo mỗi 1.000đ** và **tầng vùng**.
 - Regret diễn đạt theo **% lợi ích tối đa** của tầng vùng.
 - Không phân biệt được về thống kê thì viết **"ngang nhóm dẫn đầu"**, không viết "cao nhất".
 - Khoảng "phóng đại" tính đúng từ số, và **ghi rõ mốc so sánh của từng ước lượng**. Ở bản cũ, 45–60% là đúng: phép điều chỉnh theo đặc trưng so với mốc 7,4 (chỉ các ô đang bật), không phải 6,9; con số 70% của mentor là do báo cáo chưa ghi mốc này.
@@ -284,7 +369,13 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 ### 5.4. Ghi hạn chế
 
-- **Làm gì:** kênh bỏ chờ (nếu vẫn yếu); khách không đặt lại; số thế giới mô phỏng đã thử; ETA báo không tính hàng đợi đơn đang chờ.
+- **Làm gì:** ghi các hạn chế sau:
+  - kênh bỏ chờ (nếu vẫn yếu);
+  - khách không đặt lại;
+  - số thế giới mô phỏng đã thử;
+  - ETA báo không tính hàng đợi đơn đang chờ;
+  - lưới là thành phố giả quy mô Hà Nội, không phải bản đồ thật;
+  - cầu theo giờ, độ dài chuyến, tỷ lệ xe bận và tham số hủy là giả định hoặc lấy theo NYC (kèm kết quả độ nhạy 4.8b).
 
 ### 5.4b. Bản trả lời 27 câu hỏi của mentor (Phần I của review)
 
@@ -314,7 +405,7 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
   - slide ghi "trong mô phỏng này", cặp chính sách, số seed và B;
   - có test (ma trận đúng kích thước theo số ô của lưới mới, tổng chênh lệch khớp bảng gốc) và log.
 
-### 5.6. (Tùy chọn) Trang so sánh chính sách trên dashboard
+### 5.6. (Chỉ làm nếu mentor yêu cầu) Trang so sánh chính sách trên dashboard
 
 - **Làm gì:** chỉ làm sau 5.5. `dashboard/` là phần của Tình; Hoàng duyệt.
 
@@ -324,19 +415,8 @@ Làm cùng đợt để chỉ sinh dữ liệu một lần.
 
 - **Ghép xe tối ưu theo lô (Hungarian):** nó chữa đúng hiện tượng cần đo.
 - **Cho tài xế phản ứng theo voucher hoặc thu nhập:** ngoài phạm vi; giữ cung độc lập với chính sách.
-- **Tối ưu hiệu năng:** đã đủ nhanh.
+- **Tối ưu hiệu năng:** đã đủ nhanh; chỉ xem lại nếu A5 đo ở 1.0 vượt 30 giây/ngày.
 - **Học mô hình uplift trong `sim/`.**
-- **Bản đồ thành phố thật (TP.HCM, NYC):** để hướng phát triển. Lưới vẫn là thành phố giả, nhưng kích thước ô theo H3 (việc 1.0).
+- **Bản đồ thành phố thật (Hà Nội, TP.HCM, NYC):** để hướng phát triển. Lưới vẫn là thành phố giả, nhưng kích thước ô theo H3, còn quy mô, tốc độ và giá theo Hà Nội (việc 1.0, 1.0b).
+- **Mô phỏng xe máy:** chỉ mô phỏng ô tô 4 chỗ (ĐX mục A1).
 - **Chạy thêm cặp `all_off`–`all_on` trong animation:** hướng dẫn ghi là tùy chọn; không cần.
-
----
-
-## Phương án tối thiểu (nếu thiếu thời gian)
-
-- Giai đoạn 0.
-- 1.0–1.3, 1.5–1.7; ở 1.4 chỉ làm phần bắt buộc.
-- Giai đoạn 2 và 3.
-- Giai đoạn 4: chỉ 4.1, 4.2, 4.4.
-- Giai đoạn 5, gồm cả 5.4b (trả lời mentor) và 5.5 (animation).
-
-Phương án này vẫn trả lời được các câu hỏi nặng nhất của mentor, và đạt tiêu chí 1 và 4.
