@@ -29,7 +29,7 @@ Lượt chạy từ dashboard ghi vào `runs/dashboard/<id>/` (không commit, nh
 | 4 | **Bản đồ động** | *animation*: xe rảnh / đi đón / chở khách / dịch chuyển, khách đang chờ, ô bật/tắt voucher (gạch chéo = bị cắt), hiệu ứng phát voucher, chặn ngân sách, ghép xe, hoàn thành, hủy; đồng hồ, tốc độ ×1…×120, thanh thời gian, theo dõi trực tiếp khi đang chạy; sổ ngân sách kỳ hiện tại; bấm ô để xem ŝ so với θ | `/frames` (từng chunk), `/slots` |
 | 5 | **Vùng & ngưỡng θ** | ô nào bị cắt lúc nào: bản đồ nhiệt ô × slot (bật/tắt, ŝ dự báo, slack thực), chi tiết một ô, **cắt theo giờ trong ngày** (tỷ lệ ô tắt theo giờ), **cắt theo vùng** (bản đồ số slot tắt từng ô), nhật ký bật/tắt | `/slots`, `/summary`, hình học lưới |
 | 6 | **Phân phát voucher** | ai nhận voucher: theo giờ (phát / bị chặn), phân khúc rider, cơ chế gán, phân bố điểm τ̂ và κ; ngân sách theo thời gian (chi + đặt + giữ ≤ B) | `/summary` |
-| 7 | **Kết quả thực nghiệm** | đường N(π<sub>θ</sub>) ± SE của mọi sweep trong `runs/` kể cả sweep từ dashboard (chọn tối đa 4, chấm = θ\*), bảng N(π) dưới cùng B (`analysis.policy_table`), throughput A1, GTE, hình của notebook `docs/figures/` | `/api/results/*` |
+| 7 | **Kết quả thực nghiệm** | đường N(π<sub>θ</sub>) ± SE của mọi sweep trong `runs/` kể cả sweep từ dashboard (chọn tối đa 4, chấm = θ\*), bảng N(π) dưới cùng B (`analysis.policy_table`, 18 dòng S10), throughput A1, GTE | `/api/results/*` |
 
 Link thẳng một lượt: `#/map?run=<id>`, `#/sweep?run=<id>`; mở form một θ với θ điền sẵn: `#/run?theta=0.5&scope=ring1`.
 
@@ -37,7 +37,7 @@ Link thẳng một lượt: `#/map?run=<id>`, `#/sweep?run=<id>`; mở form mộ
 
 ```
 dashboard/
-  trace.py      vòng lặp 10 bước giống sim.engine.run + ghi frame mỗi tick (xe, bộ đếm ô, sổ cái, sự kiện) và CellDecision/snapshot mỗi slot
+  trace.py      vòng lặp 10 bước giống sim.engine.run + ghi frame mỗi tick (xe, bộ đếm ô, sổ cái bằng đồng, sự kiện) và CellDecision/snapshot mỗi slot
   sweep.py      quét θ: cùng job với runner.sweep_theta (budget_for, resolve_kappas, seeds_for) chạy qua Pool spawn có báo tiến độ từng seed;
                 tổng hợp theo θ, tập θ* (analysis.metrics.theta_star_set); ghi results/{policy_results,theta_sweep}, meta/run_metadata (mode sweep_theta)
   jobs.py       hàng đợi một luồng nền cho cả hai loại lượt: load_config → B → κ → mô phỏng → ghi bảng; nạp lại lượt đã xong từ đĩa
@@ -64,14 +64,14 @@ Frame (mỗi tick): `status`, `cell` (ô hiện tại hoặc ô đích khi đang
 |---|---|---|
 | GET | `/api/config/defaults` | `config/default.yaml`, danh sách hàm điểm, preset |
 | POST | `/api/config/validate` | `{overrides:[...], layers:[...]}` → hash, số ô, cửa sổ hoặc lỗi `--set` |
-| GET/POST | `/api/runs` | danh sách / xếp hàng một lượt một θ (`name, overrides, layers, budget_vnd?, kappa?`) |
+| GET/POST | `/api/runs` | danh sách / xếp hàng một lượt một θ (`name, overrides, layers, budget_vnd?, kappa?`; `layers` = lớp config như `config/world_w1.yaml`) |
 | POST | `/api/sweeps` | xếp hàng một lượt quét θ (`name, overrides, layers, theta_grid, n_seeds, n_procs?`) |
 | GET | `/api/runs/{id}` | trạng thái, tiến độ, log, cấu hình, hình học lưới, KPI (hoặc tóm tắt θ\* với lượt quét) |
 | GET | `/api/runs/{id}/sweep` | từng (θ, seed) đã xong, tổng hợp theo θ, θ\*, tập θ\*, κ từng θ (cập nhật khi đang chạy) |
 | GET | `/api/runs/{id}/frames?start=&count=` | frame theo chunk (tối đa 2000) |
 | GET | `/api/runs/{id}/slots` | ma trận ô × slot: `promo_on, s_hat, slack, idle_avg, …` |
 | GET | `/api/runs/{id}/summary` | KPI, chuỗi theo slot, sự kiện bật/tắt, phân phát |
-| GET | `/api/results/{sweeps,policy_tables,throughput,gte,evaluations,figures}` | kết quả đã lưu trong `runs/`, hình `docs/figures/` |
+| GET | `/api/results/{sweeps,policy_tables,throughput,gte,evaluations}` | kết quả đã lưu trong `runs/` |
 
 ## Test
 
@@ -83,16 +83,23 @@ pytest -q tests/test_dashboard.py
 
 ## Giới hạn và việc có thể làm tiếp
 
-- Mô phỏng chạy trong một luồng nền của tiến trình server (GIL): trong lúc chạy, API phản hồi chậm hơn một chút; các lượt xếp hàng chạy tuần tự. Mặc định 1 ngày × 240 xe mất ≈ 1–2 phút gồm pilot B và κ auto.
-- Frame giữ trong bộ nhớ của server trong phiên; lượt dài nhiều ngày sẽ nặng (≈ 5 MB/ngày với 240 xe).
+- Mô phỏng chạy trong một luồng nền của tiến trình server (GIL): trong lúc chạy, API phản hồi chậm hơn một chút; các lượt xếp hàng chạy tuần tự. W0 (1.150 xe, 61 ô): 1 ngày ≈ 16 giây mô phỏng có trace (engine 15 giây), cộng pilot B và κ auto ≈ 1–2 phút.
+- Frame giữ trong bộ nhớ của server trong phiên; lượt dài nhiều ngày sẽ nặng (≈ 27 MB/ngày với 1.150 xe).
 - Giao diện viết bằng htm (template literal) để không cần Node. Muốn JSX/TypeScript: tạo dự án Vite trong `dashboard/web/`, chuyển từng file trong `static/js/` (mỗi file đã là một module ES), build ra `static/`.
 
 ## Giao diện nghiên cứu (07/10/2026)
 
 - Điều hướng theo ba nhóm: nghiên cứu, thiết kế thực nghiệm, phân tích vận hành.
 - Tổng quan: N(π), tỷ lệ hoàn thành/đặt, chi voucher, ETA; phễu session → request → completed; diễn biến theo slot; tìm kiếm và lọc lượt chạy.
-- Kết quả: liên kết RQ1–RQ3 với bảng và hình đã lưu; bộ lọc hình theo 5 notebook, chú thích tiếng Việt. Nhãn “Có dữ liệu” chỉ xác nhận có artifact, không xác nhận đạt tiêu chí nghiên cứu.
+- Kết quả: liên kết RQ1–RQ3 với các bảng đã lưu trong `runs/`. Nhãn “Có dữ liệu” chỉ xác nhận có artifact, không xác nhận đạt tiêu chí nghiên cứu.
 - Bảng có thể chọn bằng Enter hoặc Space, chế độ sáng/tối/tự động và bố cục responsive; lỗi API có nút thử lại.
 - GTE chỉ dùng all_on/all_off không ngân sách, ghép seed chung; bỏ bảng có trùng (policy, seed) vì không đủ khóa xác định một đối chiếu.
 - Giao diện tải lại tài nguyên bằng HTTP revalidation. Nếu đang mở bản cũ, dùng Ctrl+F5 một lần.
 - Rà soát nội dung và các phần nghiên cứu cần bổ sung: `docs/dashboard_review.md`.
+
+## Cập nhật 15/10/2026 (S10, quyết định T-49)
+
+- Simulator quy mô Hà Nội (S7–S8): preset **W0** (61 ô bán kính 4, 1.150 xe, VND) và **W1** (`config/world_w1.yaml`: 1.278 xe, mưa, sự kiện, cầu theo ngày, tài xế nghỉ). Ô "Thế giới" trong hai form chọn lớp config (`layers` của API); biến động của W1 tác động lên động lực (tốc độ, cầu, xe nghỉ) và được ghi ở `meta/shocks` của lượt chạy, chưa vẽ riêng trên bản đồ.
+- Phạm vi đo ŝ thêm `city` (T-40); hàm điểm thêm các mô hình S9 theo 1.000đ (`analysis.uplift:*_per_kvnd`, bản `_w1`) và luật tắt theo giờ (`analysis.hour_rule`). Trang Kết quả chọn sẵn hai sweep `runs/s10/<w>/sweep_ring1_dr`; θ̂ mặc định để đánh dấu là θ̂_B = 2,3 (S9).
+- **Bỏ phần lưu và hiển thị ảnh thí nghiệm** (`/api/results/figures`, mount `/figures`, thư viện hình): hình nghiên cứu nằm ở `docs/figures/` và notebook 01–06, không phải việc của dashboard.
+- `trace.py` vẫn trùng `engine.run` sau S7 (kiểm trên cấu hình tiny + W1 có biến động: cùng mọi trường kết quả, cùng bảng shocks).

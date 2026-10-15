@@ -242,13 +242,6 @@ table.tbl tr.sel td, table.tbl tr.click:hover td { background: var(--accent-soft
 .research-card p { color: var(--ink-2); font-size: 12px; line-height: 1.75; margin-bottom: 16px; }
 .research-card-footer { border-top: 1px solid var(--border); padding-top: 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; color: var(--muted); font-size: 10px; margin-top: auto; }
 .research-card-footer .ui-icon { color: var(--accent); }
-.figure-tabs { margin-bottom: 20px; }
-.figure-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 20px; }
-.figure-grid figure { margin: 0; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; }
-.figure-grid img { border: 0; border-radius: 0; display: block; }
-.figure-grid figcaption { padding: 14px; font-size: 12px; }
-.figure-grid figcaption p { font-size: 11px; color: var(--ink-2); margin: 5px 0; }
-.figure-grid figcaption span { font-size: 9px; color: var(--muted); overflow-wrap: anywhere; }
 [id^="evidence-"] { scroll-margin-top: 20px; }
 .err .btn { margin-left: 12px; }
 .grid.run-layout { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); }

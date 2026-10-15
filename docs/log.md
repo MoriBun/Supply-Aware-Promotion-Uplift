@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** **S10 xong** (T10.1–T10.10, gate G10 đạt, B13 giao, T-47; H2 chỉ đúng vế một); **T11.1 xong** (T-48: Tình làm animation bản cuối, Hoàng viết báo cáo T11.2–T11.5); kiểm tra cuối xong (`pytest -q` 651 passed; `-m slow` 12/12 sau khi sửa A4). Tiếp: commit T11.1, pull `develop`, push, PR S10 → `develop` (B13). S8, S9 đã commit (`cc3e106`, PR S8+S9 → `develop` chờ Hoàng review; T-43, T-44 chờ xác nhận). Chưa commit trên `develop1`: S10 (`analysis/s10_eval.py` + test, `policy_table.py --log-level`, `qini_vs_value.py` bỏ oracle, `figures.py` nhãn S10, notebook 01–05, `docs/figures`, `datasets.md` S10, T-47, log). Tiếp: commit, PR S10 → `develop` (B13), nhắn Hoàng; S11 (Hoàng) có thể bắt đầu từ `runs/s10` + notebook. Gate P6 (T-31) vẫn chờ mentor; `nbformat`/`nbclient` chưa có trong `.venv` (notebook chạy bằng script hoặc "Restart & Run All" trong VS Code).
+**Đang làm:** **S10 xong** (T10.1–T10.10, gate G10 đạt, B13 giao, T-47; H2 chỉ đúng vế một); **T11.1 xong** (T-48: Tình làm animation bản cuối, Hoàng viết báo cáo T11.2–T11.5); kiểm tra cuối xong (`pytest -q` 651 passed; `-m slow` 12/12 sau khi sửa A4). T11.1 đã commit (`7a4ae6d`), `develop1` đã push. Dashboard cập nhật (T-49, chưa commit). Tiếp: commit dashboard, push, PR S10 → `develop` (B13). S8, S9 đã commit (`cc3e106`, PR S8+S9 → `develop` chờ Hoàng review; T-43, T-44 chờ xác nhận). Chưa commit trên `develop1`: S10 (`analysis/s10_eval.py` + test, `policy_table.py --log-level`, `qini_vs_value.py` bỏ oracle, `figures.py` nhãn S10, notebook 01–05, `docs/figures`, `datasets.md` S10, T-47, log). Tiếp: commit, PR S10 → `develop` (B13), nhắn Hoàng; S11 (Hoàng) có thể bắt đầu từ `runs/s10` + notebook. Gate P6 (T-31) vẫn chờ mentor; `nbformat`/`nbclient` chưa có trong `.venv` (notebook chạy bằng script hoặc "Restart & Run All" trong VS Code).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -654,6 +654,14 @@ Mẫu:
 - Notebook 01–06 chạy sạch bằng script (01: 40 s, 02: 10 s, 03: 532 s, 04: 23 s, 05: 499 s, 06: 6 s); output chưa nhúng (README notebooks yêu cầu commit kèm output → chạy "Restart & Run All" trong VS Code trước khi PR nếu muốn xem trên GitHub).
 - Lệch spec / quyết định mới: không.
 - Còn lại / bước tiếp: commit, `git pull origin develop`, push, PR S10 (B13); Hoàng: review PR, ghi gate G7 đạt (test chậm 12/12), S11 báo cáo T11.2–T11.5.
+
+### 2026-10-15 · dashboard (nối tiếp T-38; T-49) · tương thích simulator quy mô Hà Nội, bỏ phần lưu ảnh thí nghiệm · xong
+- Nhánh/PR: `develop1`; chưa commit. Chỉ sửa `dashboard/` và `tests/test_dashboard.py`; không đụng `sim/`, `analysis/`.
+- Kiểm tương thích: `trace.py` vẫn trùng `engine.run` sau S7 (S7 chỉ đổi `build_context` và bảng `meta/shocks`); chạy thử tiny + `world_w1.yaml` (biến động bật): mọi trường kết quả trùng, bảng shocks cùng 9 dòng. W0 1 ngày: engine 15,2 s, có trace 16,2 s, trace 27 MB (1.537 frame). Các bảng `runs/s10` đọc được qua `/api/results/*` (cột VND từ B9).
+- Đã sửa: bỏ `/api/results/figures`, mount `/figures`, `results.figures`, `FigureGallery` + CSS (không lưu / hiển thị ảnh thí nghiệm nữa); preset W0 (61 ô, 1.150 xe) / W1 (`config/world_w1.yaml`, 1.278 xe) / demo 4 giờ / tiny, ô "Thế giới" trong form chạy và form quét gửi `layers` (trước đây `layers` luôn rỗng nên preset tiny không áp lớp); phạm vi ŝ thêm `city`; hàm điểm thêm `analysis.uplift:*_per_kvnd` (W0, W1) và `analysis.hour_rule:*`; trang Kết quả chọn sẵn `s10/<w>/sweep_ring1_dr`, θ̂ đánh dấu mặc định 2,3; ước tính thời gian quét theo 1.150 xe; `README.md`, `huongdan.md` cập nhật số (61 ô, cạnh 1,41 km, ca 11,2 giờ, voucher 25 % trần 20.000 đ, nhãn bảng S10, lưới A1 0,25…2,5, θ̂_B của S9).
+- Test: `pytest -q tests/test_dashboard.py` → 7 passed (+1: preset hai thế giới, lớp config tồn tại, `scope=city` qua validate, `/api/results/figures` 404). Máy không có Node nên JS chỉ kiểm cân bằng ngoặc; cần mở `python -m dashboard` một lần và xem console trình duyệt.
+- Lệch spec / quyết định mới: T-49.
+- Còn lại / bước tiếp: commit cùng PR S10. Chưa làm (không bắt buộc): vẽ biến động W1 trên bản đồ; trang "So sánh chính sách" (hướng dẫn animation mục 7).
 
 ## 2. Hoàng
 

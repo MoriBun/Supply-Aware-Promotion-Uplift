@@ -2,12 +2,12 @@
 import { html, useState, useEffect, useMemo, api, useApi, useLocalStorage, cssVar, fmtInt, fmtNum, fmtVND, fmtPct,
   fmtSigned, fmtDur } from "./lib.js";
 import { LineChart, BarChart, StatTile, Table } from "./charts.js";
-import { isRunning, S, StatusPill, STATUS_VI, gridIndex, parseNumbers } from "./common.js";
+import { isRunning, S, StatusPill, STATUS_VI, gridIndex, parseNumbers, WORLDS, worldLayers } from "./common.js";
 
 const SWEEP_PRESETS = [
   { key: "fast", label: "Nhanh (demo): 6 θ × 2 seed, cửa sổ 4 giờ", grid: "0, 0.25, 0.5, 1, 2, 5", n_seeds: 2, window_min: 240 },
   { key: "std", label: "Chuẩn: lưới config × 10 seed, 1 ngày", grid: null, n_seeds: 10, window_min: "" },
-  { key: "ref", label: "Tham chiếu B7b: 16 θ × 30 seed, 1 ngày", grid: "0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.25, 1.5, 2, 3, 5, 10, 30", n_seeds: 30, window_min: "" },
+  { key: "ref", label: "Tham chiếu S10: 16 θ × 30 seed, 1 ngày (sweep_reference.yaml)", grid: "0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.8, 1, 1.25, 1.5, 2, 3, 5, 10, 30", n_seeds: 30, window_min: "" },
 ];
 
 function initialForm(cfg, cpu) {
@@ -17,7 +17,7 @@ function initialForm(cfg, cpu) {
     scope: th.scope, forecast: th.forecast, hysteresis: th.hysteresis_h, score_fn: th.score_fn,
     enforce: cfg.budget.enforce, fraction: cfg.budget.fraction, pct: cfg.voucher.pct_of_fare,
     fleet: cfg.supply.fleet_size, demand_scale: cfg.demand.demand_scale, radius: cfg.space.grid_radius,
-    window_min: cfg.time.window_min ?? "", warmup: cfg.time.warmup_min, seed: cfg.meta.run_seed, extra: "",
+    window_min: cfg.time.window_min ?? "", warmup: cfg.time.warmup_min, seed: cfg.meta.run_seed, extra: "", world: "w0",
   };
 }
 
@@ -30,13 +30,13 @@ function buildRequest(f) {
   for (const line of (f.extra || "").split("\n")) { const l = line.trim(); if (l && !l.startsWith("#")) o.push(l); }
   const grid = parseNumbers(f.grid);
   const name = f.name || `quét θ · ${f.scope} · ${f.score_fn} · ${f.n_seeds} seed`;
-  return { name, overrides: o, layers: [], theta_grid: grid, n_seeds: Number(f.n_seeds), n_procs: Number(f.n_procs) || null };
+  return { name, overrides: o, layers: worldLayers(f.world), theta_grid: grid, n_seeds: Number(f.n_seeds), n_procs: Number(f.n_procs) || null };
 }
 
 function estimateSeconds(f) {
   const grid = parseNumbers(f.grid);
   const minutes = (f.window_min === "" || f.window_min == null ? 1440 : Number(f.window_min)) + Number(f.warmup || 0);
-  const perRun = 20 * (minutes / 1500) * (Number(f.fleet) / 240);
+  const perRun = 16 * (minutes / 1500) * (Number(f.fleet) / 1150);   // measured: 15–16 s per day at Hanoi scale (W0)
   const procs = Math.max(1, Number(f.n_procs) || 1);
   const jobs = grid.length * Number(f.n_seeds);
   const sim = Math.ceil(jobs / procs) * perRun;
@@ -50,7 +50,7 @@ export function SweepPage({ defaults, runs, run, onStarted, onSelect }) {
   const [form, setForm] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
-  const [marks, setMarks] = useLocalStorage("sweep.marks", "0.25");
+  const [marks, setMarks] = useLocalStorage("sweep.marks", "2.3");
   useEffect(() => { if (defaults && !form) setForm(initialForm(defaults.config, defaults.cpu_count)); }, [defaults, form]);
   const active = run && run.kind === "sweep" ? run
     : (runs || []).find((r) => r.kind === "sweep" && isRunning(r)) || (runs || []).find((r) => r.kind === "sweep") || null;
@@ -87,7 +87,8 @@ export function SweepPage({ defaults, runs, run, onStarted, onSelect }) {
             <div className="form-grid">
               <${Field} label="Seed mỗi θ" hint="báo cáo: 10; B7b: 30"><input type="number" min="1" max="100" value=${form.n_seeds} onChange=${num("n_seeds")} /><//>
               <${Field} label="Tiến trình song song" hint=${`máy có ${defaults.cpu_count} lõi`}><input type="number" min="1" max="64" value=${form.n_procs} onChange=${num("n_procs")} /><//>
-              <${Field} label="Phạm vi đo ŝ"><select value=${form.scope} onChange=${set("scope")}><option value="cell">cell</option><option value="ring1">ring1 (ô + 6 ô kề)</option></select><//>
+              <${Field} label="Thế giới" hint="lớp config"><select value=${form.world} onChange=${(e) => { const w = e.target.value; setForm((f) => ({ ...f, world: w, fleet: w === "w1" ? 1278 : w === "tiny" ? 10 : 1150, radius: w === "tiny" ? 1 : 4 })); }}>${WORLDS.map(([k, label]) => html`<option key=${k} value=${k}>${label}</option>`)}</select><//>
+              <${Field} label="Phạm vi đo ŝ"><select value=${form.scope} onChange=${set("scope")}><option value="cell">cell</option><option value="ring1">ring1 (ô + 6 ô kề)</option><option value="city">city (cả thành phố)</option></select><//>
               <${Field} label="Dự báo ŝ"><select value=${form.forecast} onChange=${set("forecast")}><option value="persistence">persistence</option><option value="ar">ar</option></select><//>
               <${Field} label="Trễ bật lại h"><input type="number" step="0.05" min="0" value=${form.hysteresis} onChange=${num("hysteresis")} /><//>
               <${Field} label="Hàm điểm rider τ̂"><select value=${form.score_fn} onChange=${set("score_fn")}>${defaults.score_functions.map((s) => html`<option key=${s} value=${s}>${s}</option>`)}</select><//>
@@ -168,7 +169,7 @@ export function SweepResult({ run, data, marksText = "", onMarks = null }) {
     <div className="card">
       <div className="card-head"><h2>Đường N(π<sub>θ</sub>) theo θ</h2><span className="hint">dải = ± 1 SE theo seed · vùng xanh = tập θ* · trục θ cách đều theo lưới</span></div>
       <${LineChart} x=${x} xLabels=${xLabels} height=${300} series=${[nSeries]} marks=${argMark} vlines=${vlines} bands=${bands} yFormat=${(v) => fmtInt(v)} yLabel="chuyến / cửa sổ" legend=${false} />
-      ${onMarks ? html`<div className="row small" style=${{ marginTop: 6 }}><span className="ink2">Đánh dấu θ̂ ước lượng từ dữ liệu (so với θ* của simulator):</span><input type="text" value=${marksText} onChange=${(e) => onMarks(e.target.value)} style=${{ width: 160 }} placeholder="0.25, 5" /></div>` : null}
+      ${onMarks ? html`<div className="row small" style=${{ marginTop: 6 }}><span className="ink2">Đánh dấu θ̂ ước lượng từ dữ liệu quan sát (S9, T-45: θ̂_B ring1 2,3 / city 1,6 trên W0; 2,15 / 2,1 trên W1) để so với θ* của simulator:</span><input type="text" value=${marksText} onChange=${(e) => onMarks(e.target.value)} style=${{ width: 160 }} placeholder="2.3, 1.6" /></div>` : null}
     </div>
     <div className="grid cols-2">
       <div className="card">

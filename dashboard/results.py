@@ -141,9 +141,3 @@ def evaluate_tables(runs_dir: Path, limit: int = 60) -> list[dict]:
             break
     return out
 
-
-def figures(root: Path) -> list[dict]:
-    fig_dir = root / "docs" / "figures"
-    if not fig_dir.exists():
-        return []
-    return [{"name": p.name, "url": f"/figures/{p.name}"} for p in sorted(fig_dir.glob("*.png"))]
