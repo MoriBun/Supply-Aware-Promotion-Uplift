@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** **S10 xong** (T10.1–T10.10, gate G10 đạt, B13 giao, T-47; H2 chỉ đúng vế một). S8, S9 đã commit (`cc3e106`, PR S8+S9 → `develop` chờ Hoàng review; T-43, T-44 chờ xác nhận). Chưa commit trên `develop1`: S10 (`analysis/s10_eval.py` + test, `policy_table.py --log-level`, `qini_vs_value.py` bỏ oracle, `figures.py` nhãn S10, notebook 01–05, `docs/figures`, `datasets.md` S10, T-47, log). Tiếp: commit, PR S10 → `develop` (B13), nhắn Hoàng; S11 (Hoàng) có thể bắt đầu từ `runs/s10` + notebook. Gate P6 (T-31) vẫn chờ mentor; `nbformat`/`nbclient` chưa có trong `.venv` (notebook chạy bằng script hoặc "Restart & Run All" trong VS Code).
+**Đang làm:** **S10 xong** (T10.1–T10.10, gate G10 đạt, B13 giao, T-47; H2 chỉ đúng vế một); **T11.1 xong** (T-48: Tình làm animation bản cuối, Hoàng viết báo cáo T11.2–T11.5); kiểm tra cuối xong (`pytest -q` 651 passed; `-m slow` 12/12 sau khi sửa A4). Tiếp: commit T11.1, pull `develop`, push, PR S10 → `develop` (B13). S8, S9 đã commit (`cc3e106`, PR S8+S9 → `develop` chờ Hoàng review; T-43, T-44 chờ xác nhận). Chưa commit trên `develop1`: S10 (`analysis/s10_eval.py` + test, `policy_table.py --log-level`, `qini_vs_value.py` bỏ oracle, `figures.py` nhãn S10, notebook 01–05, `docs/figures`, `datasets.md` S10, T-47, log). Tiếp: commit, PR S10 → `develop` (B13), nhắn Hoàng; S11 (Hoàng) có thể bắt đầu từ `runs/s10` + notebook. Gate P6 (T-31) vẫn chờ mentor; `nbformat`/`nbclient` chưa có trong `.venv` (notebook chạy bằng script hoặc "Restart & Run All" trong VS Code).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -639,6 +639,21 @@ Mẫu:
 - Kiểm G10: mọi bảng trong `runs/s10` có lệnh ở `datasets.md` (đạt); 5 notebook chạy sạch, hình vào `docs/figures/` (đạt); mọi chênh lệch ghép cặp có SE / CI (đạt); animation chạy trên dữ liệu nhỏ (`tests/test_animation.py`, đạt); H1/H2/P1–P3 và độ nhạy ghi `decisions.md` T-47 (đạt). Test: `pytest -q` → **651 passed**, 12 deselected (chậm), 330 s (py3.11, máy có 1 tiến trình notebook chạy song song).
 - Bàn giao: **giao B13** (bảng chính sách, quét θ, độ vững, độ nhạy, Qini, notebook 01–05, animation). Người nhận kiểm tra: số trong `runs/s10/*summary.md` khớp notebook 02; notebook "Restart & Run All" sạch; `pytest -q` pass.
 - Còn lại / bước tiếp: commit, PR S10 → `develop`; S11 của Hoàng dùng `runs/s10` và notebook 01–05; hạn chế để báo cáo: dao động 24 lần/ô/ngày chưa đo N dưới ràng buộc giữ trạng thái; H2 vế hai chỉ 10 seed × 1 ngày.
+
+### 2026-10-15 · T11.1 (T-48: Tình làm) · animation bản cuối: cặp `all_on` có B và chính sách khuyến nghị, W0 và W1 · xong
+- Nhánh/PR: `develop1`; chưa commit (cùng PR S10). Quyết định T-48: Tình nhận các việc ngoài báo cáo của S11 (T11.1), Hoàng viết báo cáo (T11.2–T11.5).
+- Đã làm: `sim/runner.py write_full_runs` ghi thêm `results/policy_results` và `meta/run_metadata` (1 dòng) vào từng thư mục seed để `animation` và `check_dataset` đọc được một lượt chạy (test `test_full_log_run_dirs_are_self_contained`); hai bảng đã chạy được bổ sung file bằng script; `analysis/animation.py` CLI thêm `--title` và chặn khi tổng Δ không khớp `policy_results`; `runs/s10/w0/anim_pair_full` (`all_on_B` + `city` θ̂_B 1,6, 10 seed log đầy đủ, 238 s); W1 dùng `runs/s10/w1/h2_slots_full`; `check_dataset` OK 20/20 và 30/30 thư mục seed; ba GIF `docs/figures/06_anim_{w0_5_9h,w1_5_9h,w1_su_kien_21_24h}.gif` (1,4 / 1,4 / 0,9 MB, 16 / 16 / 12 khung, 1 giây/khung, dừng 2 giây); `notebooks/06_animation.ipynb` (chạy sạch, 10 s).
+- Số đo: W0 ΔN cả cửa sổ **+1.478,5 ± 49,2** (95%, 10 seed), trong khung 5h–9h −33,7; W1 **+1.208,0 ± 59,1**, trong khung 5h–9h −62,1; W1 khung sự kiện 21h–24h trên 3 seed có sự kiện (1, 2, 5 theo `meta/shocks`, không ép sự kiện) +179,7 (cả cửa sổ +1.148,7 ± 123,3). Tổng Δ theo slot đặt xe bằng đúng N(mới) − N(cũ) ở mọi seed (kiểm 8 mục của hướng dẫn mục 8: đạt cả 8).
+- Đọc: buổi sáng chính sách mới tắt voucher ở ô căng (28–61/61 ô lúc 7–9h) nên request giảm, chuyến không đổi; phần lợi đến sau 9h khi `all_on_B` đã hết B. Câu kiểm tra của mentor ("voucher 7h có giúp tăng chuyến không?") trả lời được từ bản đồ: không.
+- Lệch spec / quyết định mới: T-48.
+- Còn lại / bước tiếp: kiểm tra cuối trước PR S10 (test chậm), commit, PR.
+
+### 2026-10-15 · kiểm tra cuối trước PR S10 (G7 nợ 3 test chậm, G10, T11.1) · xong
+- Nhánh/PR: `develop1`; commit `9f2a44e` (S10) + commit T11.1 (chưa), PR S10 → `develop` sau khi gộp `origin/develop` (hơn 1 merge commit #29).
+- Test: `pytest -q` → 651 passed (12 deselected); `pytest -q -m slow` (22 phút, máy rảnh) → 11 passed, 1 failed: A4 `test_estimate.py` đọc bộ B7a cũ (USD) — đúng lỗi (3) Hoàng ghi ở G7; sửa test đọc `runs/s8/w0/switchback_c7_28d` → 1 passed (6 s). Lỗi (1) CAL và (2) A1 của G7 đã đóng ở S8 (T8.1, T8.2). Sau sửa: 12/12 test chậm pass; test nhanh của các module sửa hôm nay (`test_estimate`, `test_runner`, `test_animation`, `test_s10_eval`) 61 passed.
+- Notebook 01–06 chạy sạch bằng script (01: 40 s, 02: 10 s, 03: 532 s, 04: 23 s, 05: 499 s, 06: 6 s); output chưa nhúng (README notebooks yêu cầu commit kèm output → chạy "Restart & Run All" trong VS Code trước khi PR nếu muốn xem trên GitHub).
+- Lệch spec / quyết định mới: không.
+- Còn lại / bước tiếp: commit, `git pull origin develop`, push, PR S10 (B13); Hoàng: review PR, ghi gate G7 đạt (test chậm 12/12), S11 báo cáo T11.2–T11.5.
 
 ## 2. Hoàng
 

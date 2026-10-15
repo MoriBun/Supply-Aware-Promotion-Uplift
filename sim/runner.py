@@ -230,6 +230,11 @@ def write_full_runs(out_dir: Path, mode: str, jobs: list[Job], results: list[Run
         rid = run_id(mode, job.cfg, res.policy, job.theta, job.seed)
         target = Path(out_dir) if len(jobs) == 1 else Path(out_dir) / "runs" / rid
         written += list(write_run(target, res, riders, rid, job.seed).values())
+        if target != Path(out_dir):
+            # One-row results and metadata so the run directory is self-contained: analysis.animation and
+            # analysis.check_dataset read one run at a time (T11.1); the table-level files keep every run.
+            written.append(write_results(target, "policy_results", policy_results_table(mode, [job], [res])))
+            written.append(write_metadata(target, metadata_table(mode, [job], [res])))
     return written
 
 

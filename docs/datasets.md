@@ -468,6 +468,17 @@ $PY -m analysis.policy_table $W1 --n-seeds 10 --log-level full --spec label=all_
    --spec label=pi_hourB_ring1,policy=threshold,theta=2.15,score_fn=$DR1,scope=ring1 \
    --spec label=hour_off_dr,policy=threshold,theta=0,score_fn=analysis.hour_rule:off_hours_dr_w1 --out runs/s10/w1/h2_slots_full
 $PY -m analysis.s10_eval shocks --table runs/s10/w1/h2_slots_full --a pi_hourB_ring1 --b hour_off_dr --out runs/s10/w1/eval_h2   # --kinds rain | event
+# T11.1 — animation bản cuối (T-48): cặp W0 log đầy đủ 10 seed (238 s); W1 dùng runs/s10/w1/h2_slots_full ở trên; GIF vào docs/figures
+$PY -m analysis.policy_table $W0 --n-seeds 10 --log-level full --spec label=all_on_B,policy=all_on \
+   --spec label=pi_hourB_city,policy=threshold,theta=1.6,score_fn=$DR0,scope=city --out runs/s10/w0/anim_pair_full
+$PY -m analysis.check_dataset runs/s10/w0/anim_pair_full/runs/* runs/s10/w1/h2_slots_full/runs/*
+$PY -m analysis.animation --old runs/s10/w0/anim_pair_full/runs/*-all_on-nan-* --new runs/s10/w0/anim_pair_full/runs/*-threshold-1.6-* \
+   --hours 5 9 --out docs/figures/06_anim_w0_5_9h.gif --title "W0 · tầng vùng city θ̂_B = 1,6 + τ̂(x)/1.000đ DR so với all_on có B = 113,76 triệu đ/kỳ · 10 seed, cùng seed · trong mô phỏng này"
+$PY -m analysis.animation --old runs/s10/w1/h2_slots_full/runs/*-all_on-nan-* --new runs/s10/w1/h2_slots_full/runs/*-threshold-2.15-* \
+   --hours 5 9 --out docs/figures/06_anim_w1_5_9h.gif --title "W1 · tầng vùng ring1 θ̂_B = 2,15 + τ̂(x)/1.000đ DR so với all_on có B = 116,13 triệu đ/kỳ · 10 seed, cùng seed · trong mô phỏng này"
+# khung sự kiện: 3 seed có sự kiện trong cửa sổ theo meta/shocks (seed 1, 2, 5), vẽ slack của seed 2 (--display-seed 1)
+$PY -m analysis.animation --old runs/s10/w1/h2_slots_full/runs/*-all_on-nan-{1,2,5} --new runs/s10/w1/h2_slots_full/runs/*-threshold-2.15-{1,2,5} \
+   --hours 21 24 --display-seed 1 --out docs/figures/06_anim_w1_su_kien_21_24h.gif --title "W1, 3 ngày có sự kiện (meta/shocks, 21–23h) · tầng vùng ring1 θ̂_B = 2,15 so với all_on có B = 116,13 triệu đ/kỳ · 3 seed · trong mô phỏng này"
 # A5-HN cho notebook 01 (máy rảnh, 1 tiến trình, 3 seed; 74 s cả pilot)
 $PY -m sim run --mode evaluate $W0 --set policy.name=all_on --set sweep.n_seeds=3 --set runner.n_procs=1 --out runs/s10/w0/a5_evaluate_1proc
 # Đọc kết quả (analysis/s10_eval.py): khoảng cách all_on → oracle đã lấp; regret chọn θ trên nửa seed; số lần bật/tắt; xếp chồng bảng độ vững / độ nhạy
@@ -490,3 +501,4 @@ $PY -m analysis.s10_eval switch --table runs/s10/w0/policy_table; $PY -m analysi
 | T10.8 độ nhạy (W0, 10 seed) | `w0/sens_*` | tầng vùng − tầng rider: gốc +159; hazard ×0,5 +259; ×2 +140; quãng 1,9 vành +226; 6,0 vành +152; hình cầu phẳng **−237**; luật giờ + DR cao nhất ở cả 6 |
 | G10 H2 vế hai | `w1/h2_slots_full`, `w1/eval_h2` | lợi ở slot mưa / sự kiện −24 ± 17, slot yên +165 ± 54; hiệu mỗi slot −5,9 ± 3,3 (CI [−14,9; +3,2]) → không dồn vào slot có biến động |
 | A5-HN (notebook 01) | `w0/a5_evaluate_1proc` | 18,5 / 18,0 / 16,8 s mỗi ngày mô phỏng, 1 tiến trình (ngưỡng 60) |
+| T11.1 animation (notebook 06) | `w0/anim_pair_full`, `w1/h2_slots_full`; `docs/figures/06_anim_*.gif` | ΔN cả cửa sổ W0 +1.478,5 ± 49,2, W1 +1.208,0 ± 59,1 (10 seed); trong khung 5h–9h −33,7 / −62,1; khung sự kiện W1 (3 seed) +179,7; tổng Δ theo slot = N(mới) − N(cũ) ở mọi seed |

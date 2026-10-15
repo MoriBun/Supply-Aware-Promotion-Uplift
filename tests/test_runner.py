@@ -409,3 +409,27 @@ def test_run_mode_dispatch(th_cfg, tiny_layers, tmp_path):
         run_mode("bogus", th_cfg, tmp_path, engine=FAKE)
     assert (tmp_path / "evaluate" / "results" / "policy_results.parquet").exists()
     assert (tmp_path / "sweep_theta" / "results" / "theta_sweep.parquet").exists()
+
+
+def test_full_log_run_dirs_are_self_contained(tmp_path):
+    """T11.1: every per-seed directory of a multi-seed full-log run carries its own one-row results and metadata,
+    matching the table-level files, so animation and check_dataset can read one run at a time."""
+    import pandas as pd
+
+    from analysis.check_dataset import check_run_dir
+    from sim.config import load_config
+    from sim.runner import evaluate
+    from tests.conftest import ROOT as REPO
+
+    cfg = load_config([REPO / "config" / "default.yaml", REPO / "tests" / "fixtures" / "tiny.yaml"],
+                      ["sweep.n_seeds=2", "policy.name=all_on", "budget.enforce=false"])
+    table = evaluate(cfg, tmp_path, log_level="full")
+    run_dirs = sorted((tmp_path / "runs").iterdir())
+    assert len(run_dirs) == 2 == len(table)
+    for d in run_dirs:
+        res = pd.read_parquet(d / "results" / "policy_results.parquet")
+        meta = pd.read_parquet(d / "meta" / "run_metadata.parquet")
+        assert len(res) == len(meta) == 1 and res["run_id"].iloc[0] == meta["run_id"].iloc[0] == d.name
+        assert res["N_completed"].iloc[0] == table.set_index("run_id").loc[d.name, "N_completed"]
+        problems, summary = check_run_dir(d)
+        assert problems == [] and summary["n_runs"] == 1

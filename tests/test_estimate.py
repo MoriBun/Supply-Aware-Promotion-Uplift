@@ -21,6 +21,7 @@ from tests.conftest import ROOT
 from tests.fakes import make_batch
 
 B7A = ROOT / "runs" / "b7a"
+S8_W0 = B7A.parent / "s8" / "w0"       # Hanoi-scale VND data (T8.4); the B7a sets use the old USD config
 
 
 def synthetic_frame(effect_of, *, n_units=600, per_unit=60, base=0.15, seed=1) -> pd.DataFrame:
@@ -300,9 +301,9 @@ def test_predict_cli_writes_parquet_without_hidden_columns(tiny_run, tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not (B7A / "switchback_c7_28d").exists(), reason="runs/b7a not generated (docs/datasets.md)")
+@pytest.mark.skipif(not (S8_W0 / "switchback_c7_28d").exists(), reason="runs/s8/w0 not generated (docs/datasets.md)")
 def test_a4_effect_by_slack_quartile_on_cluster_switchback():
-    frame = experiment_frame(B7A / "switchback_c7_28d")
+    frame = experiment_frame(S8_W0 / "switchback_c7_28d")
     table = effect_by_bin(frame, "cell_lag", quantiles=4)              # the moderator docs/tests.md names
     assert len(table) == 4 and (table["n_on"] > 10_000).all() and (table["n_off"] > 10_000).all()
     assert np.isfinite(table[["effect", "ci_lo", "ci_hi"]].to_numpy()).all()
