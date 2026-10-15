@@ -5,8 +5,8 @@ import { html, useState, useEffect, useRef, useMemo, api, useApi, useLocalStorag
   ORDER_STATUS } from "./lib.js";
 import { LineChart, BarChart, Heatmap, StatTile, Meter, Table, Legend } from "./charts.js";
 import { HexMap, HexStatic, MapLegend, useFrames, usePlayer } from "./hexmap.js";
-import { isRunning, S, STATUS_VI, StatusPill, NoRun, SweepOnlyNotice, kappaText, bandsOf } from "./common.js";
-import { ResearchEvidence, FigureGallery } from "./research.js";
+import { isRunning, S, STATUS_VI, StatusPill, NoRun, SweepOnlyNotice, kappaText, bandsOf, WORLDS, worldLayers } from "./common.js";
+import { ResearchEvidence } from "./research.js";
 
 export { OverviewPage } from "./overview.js";
 
@@ -24,7 +24,7 @@ function initialForm(cfg) {
     budget_manual: "", pct: cfg.voucher.pct_of_fare, fleet: cfg.supply.fleet_size, demand_scale: cfg.demand.demand_scale,
     radius: cfg.space.grid_radius, window_min: cfg.time.window_min ?? "", warmup: cfg.time.warmup_min, seed: cfg.meta.run_seed,
     design: cfg.experiment.design, cluster_level: String(cfg.experiment.cluster_level), p_on: cfg.experiment.p_on,
-    legacy_slack_on: cfg.policy.legacy.slack_on, explore_frac: cfg.policy.legacy.explore_frac, extra: "",
+    legacy_slack_on: cfg.policy.legacy.slack_on, explore_frac: cfg.policy.legacy.explore_frac, extra: "", world: "w0",
   };
 }
 
@@ -40,16 +40,18 @@ function buildRequest(f) {
     `time.warmup_min=${f.warmup}`, `meta.run_seed=${f.seed}`, `time.window_min=${f.window_min === "" || f.window_min == null ? "null" : f.window_min}`);
   for (const line of (f.extra || "").split("\n")) { const l = line.trim(); if (l && !l.startsWith("#")) o.push(l); }
   const name = f.name || `${f.policy}${f.policy === "threshold" ? ` θ=${f.theta}` : ""} seed ${f.seed}`;
-  const body = { name, overrides: o, layers: [] };
+  const body = { name, overrides: o, layers: worldLayers(f.world) };
   if (f.enforce && f.budget_manual !== "" && f.budget_manual != null) body.budget_vnd = Number(f.budget_manual);
   if (f.policy === "threshold" && f.kappaMode === "manual") body.kappa = Number(f.kappaValue);
   return body;
 }
 
+// Form fields of each server preset (/api/config/defaults); the world picks the config layers (common.js WORLDS).
 const PRESET_FIELDS = {
-  default: { radius: 3, fleet: 240, window_min: "" },
-  demo4h: { radius: 3, fleet: 240, window_min: 240 },
-  tiny: { radius: 1, fleet: 10, window_min: 120 },
+  default: { world: "w0", radius: 4, fleet: 1150, window_min: "" },
+  w1: { world: "w1", radius: 4, fleet: 1278, window_min: "" },
+  demo4h: { world: "w0", radius: 4, fleet: 1150, window_min: 240 },
+  tiny: { world: "tiny", radius: 1, fleet: 10, window_min: 120 },
 };
 
 // Defined at module level: a component created inside the page would remount its input on every keystroke.
@@ -98,7 +100,8 @@ export function RunPage({ defaults, runs, run, onStarted, onSelect, params = {} 
           </div>
           ${form.policy === "threshold" ? html`<fieldset><legend>Tầng ô và tầng rider của π<sub>θ</sub></legend><div className="form-grid">
             <${Field} label="θ: ngưỡng cắt ô" hint="ŝ < θ thì tắt"><input type="number" step="0.05" min="0" value=${form.theta} onChange=${num("theta")} /><//>
-            <${Field} label="Phạm vi đo ŝ"><select value=${form.scope} onChange=${set("scope")}><option value="cell">cell: slack của chính ô</option><option value="ring1">ring1: ô + 6 ô kề (H-25)</option></select><//>
+            <${Field} label="Thế giới" hint="lớp config"><select value=${form.world} onChange=${set("world")}>${WORLDS.map(([k, label]) => html`<option key=${k} value=${k}>${label}</option>`)}</select><//>
+            <${Field} label="Phạm vi đo ŝ"><select value=${form.scope} onChange=${set("scope")}><option value="cell">cell: slack của chính ô</option><option value="ring1">ring1: ô + 6 ô kề (H-25)</option><option value="city">city: cả thành phố (T-40)</option></select><//>
             <${Field} label="Dự báo ŝ"><select value=${form.forecast} onChange=${set("forecast")}><option value="persistence">persistence: slot trước</option><option value="ar">ar: 0,7 slot trước + 0,3 cùng slot hôm qua</option></select><//>
             <${Field} label="Trễ bật lại h" hint="bật lại khi ŝ > θ + h"><input type="number" step="0.05" min="0" value=${form.hysteresis} onChange=${num("hysteresis")} /><//>
             <${Field} label="Hàm điểm rider τ̂"><select value=${form.score_fn} onChange=${set("score_fn")}>${defaults.score_functions.map((s) => html`<option key=${s} value=${s}>${s}</option>`)}</select><//>
@@ -484,13 +487,12 @@ export function ResultsPage() {
   const tpQ = useApi("/api/results/throughput");
   const gteQ = useApi("/api/results/gte");
   const evQ = useApi("/api/results/evaluations");
-  const figQ = useApi("/api/results/figures");
   const [picked, setPicked] = useLocalStorage("results.sweeps", null);
   const [metric, setMetric] = useState("N");
   const sweeps = (sweepsQ.data && sweepsQ.data.sweeps) || [];
   const selected = useMemo(() => {
     if (picked != null) return picked.filter((k) => sweeps.some((s) => s.key === k));
-    const pref = ["b7b_h21/sweep_theta_ref", "s5/sweep_ring1_dr", "s5/sweep_ring1_heuristic"].filter((k) => sweeps.some((s) => s.key === k));
+    const pref = ["s10/w0/sweep_ring1_dr", "s10/w1/sweep_ring1_dr"].filter((k) => sweeps.some((s) => s.key === k));
     return pref.length ? pref : sweeps.slice(0, 2).map((s) => s.key);
   }, [picked, sweeps]);
   const toggle = (key) => setPicked(selected.includes(key) ? selected.filter((k) => k !== key) : [...selected, key].slice(-4));
@@ -508,13 +510,12 @@ export function ResultsPage() {
   const tp = (tpQ.data && tpQ.data.curves) || [];
   const gte = (gteQ.data && gteQ.data.gte) || [];
   const ev = (evQ.data && evQ.data.tables) || [];
-  const figs = (figQ.data && figQ.data.figures) || [];
   const [showEv, setShowEv] = useState(false);
-  const queries = [sweepsQ, ptQ, tpQ, gteQ, evQ, figQ];
+  const queries = [sweepsQ, ptQ, tpQ, gteQ, evQ];
   return html`<div className="stack">
     ${queries.some((q) => q.error) ? html`<div className="card err" role="alert">Không tải được một phần kết quả: ${queries.filter((q) => q.error).map((q) => q.error).join(" · ")}<button className="btn sm" onClick=${() => queries.forEach((q) => q.reload())}>Thử lại</button></div>` : null}
-    ${queries.some((q) => q.loading) ? html`<div className="note" role="status">Đang tải các bảng kết quả và hình nghiên cứu…</div>` : null}
-    <${ResearchEvidence} sweeps=${sweeps} policies=${pt} throughput=${tp} gte=${gte} figures=${figs} />
+    ${queries.some((q) => q.loading) ? html`<div className="note" role="status">Đang tải các bảng kết quả…</div>` : null}
+    <${ResearchEvidence} sweeps=${sweeps} policies=${pt} throughput=${tp} gte=${gte} />
     <div className="note">Cách đọc: <b>N(π)</b> là chỉ tiêu chính; V(π) là lợi nhuận phụ. <b>± SE</b> là sai số chuẩn, không phải CI 95%. Chỉ so sánh chính sách trong cùng ngân sách, cửa sổ và cấu hình; các đường sweep chồng lên nhau có thể thuộc các kịch bản khác nhau.</div>
     <div className="card">
       <div className="card-head"><h2>Đường N(π<sub>θ</sub>) theo θ: tìm θ* để tắt khuyến mãi</h2><span className="hint">results/theta_sweep.parquet · dải = ± 1 SE theo seed · chấm đậm = argmax</span></div>
@@ -552,7 +553,7 @@ export function ResultsPage() {
           series=${[{ name: "ETA đón trung bình (phút)", color: S(3), y: c.rows.map((r) => r.mean_pickup_eta_min), format: (v) => fmtNum(v, 2) }]} legend=${false} />
         <p className="small muted">Kiểm tra throughput có giảm khi tăng cầu vượt cung trong mô phỏng này hay không; đọc đồng thời ETA và số lượt đặt xe.</p>
       </div>`)}
-      <div className="card">
+      <div className="card" id="evidence-gte">
         <div className="card-head"><h2>GTE = N(all_on) − N(all_off)</h2><span className="hint">không ngân sách, ghép cặp theo seed</span></div>
         <div className="stack">${gte.map((g) => html`<div key=${g.key}>
           <div className="small ink2"><b>runs/${g.key}</b> · ${g.n_seeds} seed</div>
@@ -560,7 +561,6 @@ export function ResultsPage() {
           ${gte.length ? null : html`<div className="empty">không có bảng gte</div>`}</div>
       </div>
     </div>
-    <${FigureGallery} figures=${figs} />
     <div className="card">
       <div className="card-head"><h2>Mọi bảng policy_results trong runs/</h2><button className="btn sm" onClick=${() => setShowEv(!showEv)}>${showEv ? "ẩn" : `hiện ${ev.length} bảng`}</button></div>
       ${showEv ? html`<${Table} maxHeight=${480} rows=${ev.flatMap((t) => t.rows.map((r) => ({ ...r, key: t.key })))} columns=${[{ key: "key", label: "Thư mục" }, { key: "policy", label: "Chính sách" }, { key: "theta", label: "θ", num: true, fmt: (v) => (v == null ? "–" : fmtNum(v, 2)) }, { key: "n_seeds", label: "seed", num: true },

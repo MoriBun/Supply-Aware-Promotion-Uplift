@@ -183,8 +183,5 @@ table.tbl tr.click:hover td { background: var(--surface-2); }
 .kv .v { font-variant-numeric: tabular-nums; text-align: right; }
 .pill-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .pill-list span { background: var(--surface-2); border-radius: 6px; padding: 1px 7px; font-size: 12px; font-variant-numeric: tabular-nums; }
-.figure-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
-.figure-grid img { width: 100%; border-radius: 8px; border: 1px solid var(--border); background: #fff; }
-.figure-grid .cap { font-size: 12px; color: var(--ink-2); margin-top: 4px; }
 .empty { color: var(--muted); padding: 24px; text-align: center; }
 .err { color: var(--critical); }

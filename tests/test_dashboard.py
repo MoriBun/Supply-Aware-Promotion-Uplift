@@ -220,3 +220,22 @@ def test_api_sweep_finds_theta_star(tmp_path: Path) -> None:
     listed = client2.get("/api/runs").json()["runs"][0]
     assert listed["kind"] == "sweep" and listed["sweep_summary"]["argmax_theta"] == agg["argmax_theta"]
     assert len(client2.get(f"/api/runs/{rid}/sweep").json()["rows"]) == 6
+
+
+def test_api_defaults_offer_both_worlds_and_no_figure_endpoint(tmp_path: Path) -> None:
+    """S10 (T-49): W0/W1 presets with existing config layers, scope city accepted, the figure gallery is gone."""
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from dashboard.server import create_app
+
+    client = TestClient(create_app(ROOT, runs_dir=tmp_path))
+    d = client.get("/api/config/defaults").json()
+    presets = {p["key"]: p for p in d["presets"]}
+    assert {"default", "w1", "tiny"} <= set(presets)
+    for p in presets.values():
+        assert all((ROOT / layer).exists() for layer in p["layers"])
+    assert "analysis.uplift:tau_x_dr_all_per_kvnd" in d["score_functions"]
+    ok = client.post("/api/config/validate", json={"overrides": ["policy.threshold.scope=city"], "layers": presets["w1"]["layers"]}).json()
+    assert ok["ok"] and ok["n_cells"] == 61 and ok["fleet_size"] == 1278
+    assert client.get("/api/results/figures").status_code == 404

@@ -31,18 +31,24 @@ from dashboard.trace import EVENT_TYPES
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "static"
 
-# Score functions offered in the form: the built-ins and the analysis ones of docs/log.md (S5).
+# Score functions offered in the form: the built-ins, the S5 baselines and the S9 models per 1.000đ
+# (analysis.uplift, decisions T-45; the ``_w1`` models are fitted on W1 data) and the S9 hour-off rules.
 SCORE_FUNCTIONS: tuple[str, ...] = tuple(BUILTIN_SCORES) + (
     "analysis.score_ties:tau_x_baseline", "analysis.score_ties:tau_per_dollar_baseline",
-    "analysis.uplift:tau_x_dr_all", "analysis.uplift:tau_x_dr_all_per_dollar",
-    "analysis.uplift:tau_xs_dr_all", "analysis.uplift:tau_xs_dr_all_per_dollar",
-    "analysis.uplift:tau_x_dr_per_dollar", "analysis.uplift:tau_xs_dr_per_dollar",
+    "analysis.uplift:tau_x_dr_all_per_kvnd", "analysis.uplift:tau_xs_dr_all_per_kvnd",
+    "analysis.uplift:tau_x_dr_per_kvnd", "analysis.uplift:tau_xs_dr_per_kvnd",
+    "analysis.uplift:tau_x_dr_all", "analysis.uplift:tau_xs_dr_all",
+    "analysis.uplift:tau_x_dr_all_w1_per_kvnd", "analysis.uplift:tau_xs_dr_all_w1_per_kvnd",
+    "analysis.hour_rule:off_hours_dr_w0", "analysis.hour_rule:off_hours_dr_w1",
+    "analysis.hour_rule:off_hours_random_w0", "analysis.hour_rule:off_hours_random_w1",
 )
 
+# Worlds of S8 (decisions T-42, T-43; W1 = config/world_w1.yaml): 61 cells (radius 4, H7.1), Hanoi scale, VND.
 PRESETS: tuple[dict, ...] = (
-    {"key": "default", "label": "Mặc định: 37 ô, 240 xe, 1 ngày", "layers": [], "overrides": []},
-    {"key": "demo4h", "label": "Demo nhanh: 37 ô, 240 xe, cửa sổ 4 giờ", "layers": [],
-     "overrides": ["time.window_min=240"]},
+    {"key": "default", "label": "W0 Hà Nội: 61 ô, 1.150 xe, 1 ngày", "layers": [], "overrides": []},
+    {"key": "w1", "label": "W1 Hà Nội + biến động: 61 ô, 1.278 xe, mưa / sự kiện", "layers": ["config/world_w1.yaml"],
+     "overrides": []},
+    {"key": "demo4h", "label": "Demo nhanh: W0, cửa sổ 4 giờ", "layers": [], "overrides": ["time.window_min=240"]},
     {"key": "tiny", "label": "Tiny (test): 7 ô, 10 xe, 2 giờ", "layers": ["tests/fixtures/tiny.yaml"], "overrides": []},
 )
 
@@ -239,14 +245,6 @@ def create_app(root: Path = ROOT, runs_dir: Path | None = None) -> FastAPI:
     @app.get("/api/results/evaluations")
     def results_evaluations() -> dict:
         return {"tables": res.evaluate_tables(runs_root) if runs_root.exists() else []}
-
-    @app.get("/api/results/figures")
-    def results_figures() -> dict:
-        return {"figures": res.figures(root)}
-
-    fig_dir = root / "docs" / "figures"
-    if fig_dir.exists():
-        app.mount("/figures", StaticFiles(directory=str(fig_dir)), name="figures")
 
     # --- front end -------------------------------------------------------------------
 

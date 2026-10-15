@@ -18,13 +18,13 @@ Thanh ngang "Thực nghiệm đang xem" ở đầu mọi trang chọn lượt ch
 
 ### 0.1. Bài toán trong một đoạn
 
-Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (mặc định 37 ô). Mỗi **phút** (một *tick*), khách mở app (*session*), nhìn giá và thời gian chờ xe, rồi quyết định đặt hay không. Nền tảng có thể tặng **voucher** 20 % cước để kéo khách đặt. Voucher tốn tiền, nên có **ngân sách B** cố định mỗi ngày. Câu hỏi của đề tài: *ở ô nào, giờ nào nên tắt voucher vì thiếu xe?* Tắt bằng một **ngưỡng θ** trên độ dư cung **ŝ**. Dashboard giúp chạy mô phỏng, tìm θ tốt nhất (**θ\***) và nhìn xem chính sách đang cắt ở đâu.
+Simulator mô phỏng một thành phố gồm các **ô lục giác** (mặc định 61 ô, quy mô Hà Nội, H7.1). Mỗi **phút** (một *tick*), khách mở app (*session*), nhìn giá và thời gian chờ xe, rồi quyết định đặt hay không. Nền tảng có thể tặng **voucher** 25 % cước (trần 20.000 đ) để kéo khách đặt. Voucher tốn tiền, nên có **ngân sách B** cố định mỗi ngày. Câu hỏi của đề tài: *ở ô nào, giờ nào nên tắt voucher vì thiếu xe?* Tắt bằng một **ngưỡng θ** trên độ dư cung **ŝ**. Dashboard giúp chạy mô phỏng, tìm θ tốt nhất (**θ\***) và nhìn xem chính sách đang cắt ở đâu.
 
 ### 0.2. Không gian và thời gian
 
 | Thuật ngữ | Nghĩa |
 |---|---|
-| **ô (cell)** | một ô lục giác trên lưới, cạnh 0,75 km. Lưới bán kính 3 có 37 ô, bán kính 2 có 19 ô, bán kính 1 có 7 ô. Ô được đánh số 0, 1, 2… |
+| **ô (cell)** | một ô lục giác trên lưới, cạnh 1,41 km (ô H3 độ phân giải 7, H7.1). Lưới bán kính 4 có 61 ô (mặc định, ≈ 315 km²), bán kính 3 có 37 ô, bán kính 1 có 7 ô (tiny). Ô được đánh số 0, 1, 2… |
 | **torus** | lưới nối biên: xe đi ra khỏi cạnh này sẽ xuất hiện ở cạnh đối diện, để không có "ô rìa" đặc biệt. |
 | **vành (ring)** | các ô cách ô gốc đúng k bước. Vành 1 là 6 ô kề. |
 | **tick** | bước thời gian của mô phỏng, 60 giây. Mọi quyết định xe và khách diễn ra theo tick. |
@@ -59,7 +59,7 @@ Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (m�
 
 | Thuật ngữ | Nghĩa |
 |---|---|
-| **fleet_size (đội xe)** | tổng số xe, mặc định 240. Không phải lúc nào cũng online: mỗi xe có ca làm khoảng 8 giờ. |
+| **fleet_size (đội xe)** | tổng số xe, mặc định 1.150 (W0) và 1.278 (W1). Không phải lúc nào cũng online: mỗi xe có một ca làm trung bình 11,2 giờ, bắt đầu theo bốn khung giờ (5–7,5h, 9–13h, 14–18h, 19–23h; T-42). |
 | **idle (rảnh)** | xe trong ca, đang đứng chờ khách. |
 | **en_route (đang đi đón)** | xe đã nhận chuyến, đang chạy tới khách. |
 | **on_trip (chở khách)** | đang chở khách tới điểm đến. |
@@ -77,7 +77,7 @@ Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (m�
 | **slack** | độ dư cung của một ô trong một slot = **số xe rảnh / số xe đang đi đón** (I / E). Slack 2,5 nghĩa là cứ 1 xe đi đón thì có 2,5 xe đang rảnh, cung dư. Slack dưới 0,5 là căng. Khi không có xe đi đón: +∞ nếu còn xe rảnh, 0 nếu không có xe nào. Trên biểu đồ, ∞ được cắt ở 10 (hoặc 3 trên bản đồ nhiệt) để vẽ được. |
 | **ŝ (s-hat, "ŝ dự báo")** | slack **dự báo** mà chính sách dùng để quyết định đầu slot k. Chính sách không được nhìn slot hiện tại, chỉ được dùng slot trước (**không nhìn trước**). Vì vậy ŝ luôn trễ một slot so với slack thực. |
 | **slack thực (công bố cuối slot)** | slack đo được sau khi slot kết thúc. Dùng để so với ŝ xem dự báo lệch bao nhiêu. |
-| **scope: cell / ring1** | phạm vi đo ŝ. `cell`: slack của chính ô. `ring1`: cộng xe rảnh và xe đi đón của ô và 6 ô kề rồi chia. `ring1` mượt hơn, ít nhiễu hơn. |
+| **scope: cell / ring1 / city** | phạm vi đo ŝ. `cell`: slack của chính ô. `ring1`: cộng xe rảnh và xe đi đón của ô và 6 ô kề rồi chia. `city`: cộng cả thành phố, một ŝ chung cho mọi ô (T-40). `ring1` mượt hơn `cell`; `city` ít bật/tắt nhất. |
 | **forecast: persistence / ar** | cách dự báo ŝ. `persistence`: lấy nguyên slack slot trước. `ar`: 0,7 × slot trước + 0,3 × cùng slot hôm qua. |
 | **slack_cap** | 10. Giá trị thay cho +∞ khi đưa vào dự báo. |
 | **hour_profile** | hệ số cầu theo giờ trong ngày, giờ cao điểm sáng và chiều cao hơn. |
@@ -91,10 +91,10 @@ Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (m�
 | **θ (theta)** | ngưỡng cắt ô. θ = 0: không cắt ô nào. θ càng cao, càng nhiều ô bị tắt. |
 | **θ\* (theta star)** | θ tốt nhất: θ cho N(π_θ) cao nhất khi quét nhiều θ dưới cùng B. |
 | **tập θ\*** | các θ không khác biệt thống kê với θ tốt nhất. Đường N(θ) thường phẳng quanh đỉnh nên báo cả tập thay vì một điểm. Tính bằng so sánh ghép cặp theo seed, hiệu chỉnh Bonferroni, mức α = 0,05. |
-| **θ̂ (theta hat)** | θ **ước lượng từ dữ liệu quan sát** bằng phương pháp phân tích (ví dụ 0,25 với ring1). Đánh dấu để so với θ\* "thật" của simulator. |
+| **θ̂ (theta hat)** | θ **ước lượng từ dữ liệu quan sát** bằng phương pháp phân tích (S9, T-45: θ̂_B = 2,3 với `ring1`, 1,6 với `city` trên W0; 2,15 / 2,1 trên W1). Đánh dấu để so với θ\* "thật" của simulator (S10: θ tốt nhất 1,5 trên W0, 1,25 trên W1). |
 | **hysteresis h (trễ bật lại)** | ô đã tắt chỉ bật lại khi ŝ > θ + h, để tránh bật tắt liên tục. Mặc định 0. |
 | **τ̂ (tau hat, điểm rider)** | điểm ưu tiên của một session, do **hàm điểm** (`score_fn`) tính. Ý nghĩa: ước lượng voucher làm tăng xác suất đặt của khách này bao nhiêu (uplift). Điểm cao thì ưu tiên phát. |
-| **score_fn (hàm điểm)** | `random`: điểm ngẫu nhiên. `heuristic_low_freq`: ưu tiên khách ít dùng app (điểm = −x_freq). `analysis.uplift:tau_x_dr…`: mô hình uplift học từ dữ liệu, trong đó `tau_x` chỉ dùng thuộc tính khách, `tau_xs` dùng cả ŝ, `dr` = doubly robust (phương pháp ước lượng), `per_dollar` / `vnd` = điểm chia cho tiền voucher kỳ vọng, `all` = học trên mọi session, không có `all` = chỉ học trên lát explore. |
+| **score_fn (hàm điểm)** | `random`: điểm ngẫu nhiên. `heuristic_low_freq`: ưu tiên khách ít dùng app (điểm = −x_freq). `analysis.uplift:tau_x_dr…`: mô hình uplift học từ dữ liệu, trong đó `tau_x` chỉ dùng thuộc tính khách, `tau_xs` dùng cả ŝ, `dr` = doubly robust (phương pháp ước lượng), `per_kvnd` = điểm chia cho tiền voucher kỳ vọng, tính trên 1.000 đ (`per_dollar` là bí danh cũ, cùng thứ tự xếp), `all` = học trên mọi session, không có `all` = chỉ học trên lát explore, `_w1` = mô hình học trên dữ liệu W1. `analysis.hour_rule:off_hours_*`: luật tắt cố định ở các giờ voucher có hại (W0: 8h, 17–19h; W1: 18h), tầng rider random hoặc DR. |
 | **κ (kappa, ngưỡng điểm)** | ngưỡng tầng rider: chỉ phát cho session có τ̂ ≥ κ. `κ = −∞` nghĩa là không hạn chế, phát cho mọi session ở ô bật. |
 | **κ auto / pilot** | κ không đặt tay. Chạy một lượt **pilot** (lượt thử, seed riêng) không áp ngân sách, lấy phân bố điểm, rồi chọn κ sao cho tổng chi ≈ B. Lặp lại tối đa 10 lần cho đến khi chi ≤ B. Số lần lặp hiện trong ngoặc, ví dụ "κ 0,412 (3 pilot)". |
 | **all_on** | bật mọi ô, phát mọi session, chịu B. |
@@ -118,7 +118,7 @@ Simulator mô phỏng một thành phố nhỏ gồm các **ô lục giác** (m�
 | **ΔN (delta N)** | chênh lệch N so với chính sách tham chiếu, ghép cặp theo seed. |
 | **GTE (global treatment effect)** | N(all_on) − N(all_off) không ngân sách: voucher toàn hệ đem lại thêm bao nhiêu chuyến. Chuẩn "sự thật" để kiểm các phương pháp ước lượng. |
 | **A1** | tên test nghiệm thu "đường throughput". |
-| **H-xx, T-xx** | mã quyết định trong `docs/decisions.md` (H của Hoàng, T của Tình). Ví dụ H-21 là κ auto lặp, H-25 là scope ring1, H-26 là θ̂ = 0,25, T-31 là tập θ\*. |
+| **H-xx, T-xx** | mã quyết định trong `docs/decisions.md` (H của Hoàng, T của Tình). Ví dụ H-21 là κ auto lặp, H-25 là scope ring1, T-40 là scope city, T-45 là θ̂_B của S9, T-31 là tập θ\*. |
 | **config hash** | mã băm 12 ký tự của toàn bộ config. Hai lượt cùng hash thì cùng mọi tham số. |
 
 ---
@@ -129,7 +129,7 @@ Trang mở đầu. Banner nêu câu hỏi trọng tâm ("khuyến mãi có tạo
 
 ### Khối "Mô phỏng được chọn" / "Quét ngưỡng"
 
-Tên lượt, trạng thái, và các sự kiện chính: chính sách, θ cố định (lượt một θ), phạm vi đo cung (`cell` / `ring1`), đội xe, seed. Nút bên phải mở bản đồ (lượt một θ) hoặc trang quét (lượt quét).
+Tên lượt, trạng thái, và các sự kiện chính: chính sách, θ cố định (lượt một θ), phạm vi đo cung (`cell` / `ring1` / `city`), đội xe, seed. Nút bên phải mở bản đồ (lượt một θ) hoặc trang quét (lượt quét).
 
 ### Bốn ô số chính (lượt một θ đã xong)
 
@@ -184,13 +184,14 @@ Việc chính của đề tài. θ\* không do người đặt: simulator chạy
 
 | Trường | Nghĩa |
 |---|---|
-| Preset | "Nhanh (demo)": 6 θ × 2 seed, cửa sổ 4 giờ, vài phút. "Chuẩn": lưới config × 10 seed, 1 ngày. "Tham chiếu B7b": 16 θ × 30 seed, bộ số liệu chuẩn của báo cáo. |
+| Preset | "Nhanh (demo)": 6 θ × 2 seed, cửa sổ 4 giờ, vài phút. "Chuẩn": lưới config × 10 seed, 1 ngày. "Tham chiếu S10": 16 θ × 30 seed (`config/sweep_reference.yaml`), bộ số liệu chuẩn của báo cáo (≈ 1 giờ với 8 lõi). |
+| Thế giới | W0 (`config/default.yaml`) hoặc W1 (thêm lớp `config/world_w1.yaml`: mưa, sự kiện, cầu theo ngày, tài xế nghỉ; đội xe 1.278). Chọn W1 thì mô hình DR nên dùng bản `_w1`. |
 | Lưới θ | danh sách θ cần thử, phân cách bằng dấu phẩy. |
 | Seed mỗi θ | số lượt chạy lặp cho mỗi θ. Nhiều seed thì SE nhỏ, tập θ\* hẹp. |
 | Tiến trình song song | số lõi CPU dùng cùng lúc. |
 | Phạm vi đo ŝ, Dự báo ŝ, Trễ bật lại h, Hàm điểm τ̂ | xem mục 0.5 và 0.6. |
 | Áp ngân sách B, fraction | B = fraction × chi của all_on. |
-| Voucher = % cước | 0,2 = 20 %. |
+| Voucher = % cước | 0,25 = 25 %; trần `voucher.max_vnd` = 20.000 đ. |
 | Đội xe, Hệ số cầu, Bán kính lưới, Cửa sổ, Warm-up, run_seed đầu | tham số thị trường và thời gian, chung cho mọi θ. |
 | Override thêm | dòng `khóa=giá trị` theo cú pháp `--set`, ghi đè bất kỳ tham số nào trong `config/default.yaml`. |
 | ước tính ≈ … | thời gian dự kiến, gồm pilot B và κ auto. |
@@ -226,6 +227,7 @@ Chạy **một** lượt với θ cố định, có ghi frame từng tick để 
 
 | Trường | Nghĩa |
 |---|---|
+| Thế giới | W0 / W1 / tiny: chọn lớp config (mục 2). |
 | Chính sách voucher | threshold / all_on / all_off / legacy / experiment (mục 0.6). |
 | θ: ngưỡng cắt ô | ŝ < θ thì tắt. |
 | κ: auto / nhập tay | auto chạy pilot; nhập tay bỏ qua pilot. |
@@ -269,6 +271,8 @@ Hoạt hình theo từng phút mô phỏng. Chỉ có với lượt "một θ".
 | hiệu ứng "đặt xe" | lóe khi khách bấm đặt. |
 
 Xe đi qua biên torus hiện ra ở cạnh đối diện.
+
+Với lượt W1, các biến động (mưa: tốc độ ×0,85, 10 % tài xế nghỉ, cầu ×1,25; sự kiện: cầu ×2 hoặc ×20 ở ô địa điểm; cầu theo ngày; tài xế nghỉ) tác động lên xe và khách trên bản đồ nhưng **không được vẽ riêng**; lịch biến động của lượt chạy nằm ở `meta/shocks.parquet` trong thư mục lượt.
 
 ### Thanh thời gian
 
@@ -370,11 +374,11 @@ RQ = research question, ba câu hỏi của đề tài trong `docs/problem_state
 
 | Thẻ | Câu hỏi | Bằng chứng trên trang |
 |---|---|---|
-| RQ1 | Uplift thay đổi theo độ căng cung? | đường throughput (A1), các sweep θ, hình nhóm 04. |
+| RQ1 | Uplift thay đổi theo độ căng cung? | đường throughput (A1), các sweep θ. |
 | RQ2 | Chính sách biết cung tốt hơn bao nhiêu? | bảng N(π) dưới cùng B, ΔN ± SE. |
-| RQ3 | Đánh giá sai lệch do đâu? | GTE, hình nhóm 03 (interference) và 05 (confounding). |
+| RQ3 | Đánh giá sai lệch do đâu? | GTE (phần còn lại — thác nước ba nguồn sai số, burn-in, gây nhiễu — ở notebook 03 và 05, không có trên dashboard). |
 
-"Có dữ liệu" chỉ xác nhận **có bảng hoặc hình đã lưu**, không xác nhận câu hỏi đã được trả lời đủ hay đạt nghiệm thu.
+"Có dữ liệu" chỉ xác nhận **có bảng đã lưu**, không xác nhận câu hỏi đã được trả lời đủ hay đạt nghiệm thu.
 
 ### Dòng "Cách đọc"
 
@@ -382,7 +386,7 @@ RQ = research question, ba câu hỏi của đề tài trong `docs/problem_state
 
 ### Đường N(π_θ) theo θ
 
-Chọn tối đa 4 sweep. Chuyển giữa N(π), V(π), chi voucher. Dải ± 1 SE, chấm đậm là θ\* của từng sweep. Danh sách sweep nhóm theo thư mục `runs/<nhóm>/`, kèm số seed, θ\*, B. Tên thư mục kiểu `b7b_h21`, `s5`, `s6` là mã sprint hoặc bàn giao trong `docs/phan_cong.md`.
+Chọn tối đa 4 sweep. Chuyển giữa N(π), V(π), chi voucher. Dải ± 1 SE, chấm đậm là θ\* của từng sweep. Danh sách sweep nhóm theo thư mục `runs/<nhóm>/`, kèm số seed, θ\*, B. Tên thư mục kiểu `s10/w0`, `s10/w1`, `b7b_h21` là mã sprint và thế giới trong `docs/datasets.md`; hai sweep chuẩn của báo cáo là `s10/w0/sweep_ring1_dr` và `s10/w1/sweep_ring1_dr` (16 θ × 30 seed).
 
 ### N(π) của các chính sách dưới cùng B
 
@@ -390,27 +394,29 @@ Cột ngang ΔN so với chính sách tham chiếu (ΔN = 0), thanh lỗi là SE
 
 | Nhãn | Nghĩa |
 |---|---|
-| `all_off`, `all_on` | không voucher / voucher cho mọi người chịu B. |
-| `random` | phát ngẫu nhiên trong B. |
-| `heuristic` | ưu tiên khách ít dùng app, không cắt ô. |
-| `tau_x_dr_vnd` | điểm uplift học từ dữ liệu, chỉ thuộc tính khách, chia cho tiền voucher (VND), không cắt ô. |
-| `tau_xs_dr_vnd` | như trên nhưng điểm có dùng ŝ. |
-| `pi_theta_0.5_heuristic` | π_θ với θ = 0,5 và điểm heuristic. |
-| `pi_thetahatA_ring1_dr_vnd` | π_θ với θ = θ̂ ước lượng từ dữ liệu (cách A), scope ring1, điểm DR. |
+| `all_off`, `all_on_B` | không voucher / voucher cho mọi người chịu B (mốc). |
+| `random`, `heuristic` | phát ngẫu nhiên trong B / ưu tiên khách ít dùng app, không cắt ô. |
+| `tau_x`, `tau_per_vnd` | bảng nền H4.2: điểm theo chuyến / theo đồng. |
+| `tau_x_dr_all`, `tau_xs_dr_all` | DR-learner theo **chuyến** (không chia tiền), chỉ thuộc tính khách / có cả ŝ. |
+| `tau_x_dr_all_kvnd`, `tau_xs_dr_all_kvnd` | DR-learner theo **1.000 đ** chi kỳ vọng, học trên mọi session; bản `tau_*_dr_kvnd` chỉ học trên lát explore. |
+| `pi_tension_ring1_dr_kvnd` | tầng vùng ring1 với θ̂_tension = 0 (điểm cắt của đường tác dụng theo độ căng, T-45 c) — trùng tầng rider. |
+| `pi_hourB_ring1_dr_kvnd`, `pi_hourB_city_dr_kvnd` | tầng vùng với θ̂_B của S9 (ring1 2,3 / city 1,6 trên W0; 2,15 / 2,1 trên W1) + điểm DR/1.000 đ. |
+| `hour_off_random`, `hour_off_dr_kvnd` | luật tắt cố định theo giờ có hại + tầng rider random / DR. |
+| `oracle` | xếp khách theo τ thật của session (đọc biến ẩn): mốc trên của chính sách theo từng khách. |
 
 ### Đường throughput (A1)
 
-Trục ngang demand_scale (×0,25 … ×4), đội xe cố định luôn online, giờ tham chiếu. Đường "hoàn thành / giờ" tăng rồi **giảm** khi cầu vượt cung: đó là wild goose chase. Biểu đồ dưới: ETA đón trung bình tăng theo cầu. Đây là căn cứ vật lý của việc cắt voucher ở vùng căng.
+Trục ngang demand_scale (×0,25 … ×2,5 trên quy mô Hà Nội, T-43), đội xe cố định luôn online, giờ tham chiếu 18h. Đường "hoàn thành / giờ" tăng rồi **giảm** khi cầu vượt cung: đó là wild goose chase. Biểu đồ dưới: ETA đón trung bình tăng theo cầu. Đây là căn cứ vật lý của việc cắt voucher ở vùng căng.
 
 ### GTE = N(all_on) − N(all_off)
 
 Không ngân sách, ghép cặp theo seed, ± SE. Voucher toàn hệ đem lại thêm bao nhiêu chuyến.
 
-### Hình & phân tích nghiên cứu
+### Thuật ngữ của các phân tích ngoài dashboard (notebook 01–06, `docs/figures/`)
 
-Ảnh từ `docs/figures/`, lọc theo 5 notebook: 01 thị trường & công suất, 02 chính sách & Qini, 03 interference, 04 uplift & ngưỡng, 05 confounding. Tiền tố tên file (`01_`, `02_`…) là số notebook. Mỗi hình có tiêu đề tiếng Việt và tên file gốc.
+Dashboard không lưu hay hiển thị hình thí nghiệm; hình của báo cáo xuất từ notebook vào `docs/figures/`.
 
-- **Qini:** đường đánh giá mô hình uplift ở cấp cá nhân (xếp khách theo điểm, cộng dồn hiệu quả). Hình `02_qini_va_n` cho thấy Qini cao không đồng nghĩa N(π) cao, vì có interference.
+- **Qini:** đường đánh giá mô hình uplift ở cấp cá nhân (xếp khách theo điểm, cộng dồn hiệu quả). Notebook 02 cho thấy Qini xếp ngược với N(π) dưới ngân sách, vì Qini không tính chi phí và không thấy tranh chấp cung.
 - **Interference:** voucher của người này làm thay đổi thị trường (xe, ETA) của người khác, nên thí nghiệm theo khách bị chệch.
 - **Confounding:** trong dữ liệu lịch sử (legacy), ai được voucher phụ thuộc biến ẩn, nên ước lượng ngây thơ bị lệch.
 - **Regret:** N(θ\*) − N(θ̂), mất mát khi dùng ngưỡng ước lượng thay vì ngưỡng tối ưu.
@@ -423,7 +429,7 @@ Bảng gộp mọi `results/policy_results.parquet` trong `runs/` để tra cứ
 
 ## 8. Mấy điểm hay gây nhầm
 
-- **"Bỏ vì chờ lâu" gần 0 không phải lỗi.** Nó chỉ xảy ra khi không có xe rảnh nào trong bán kính 30 phút. Ở cấu hình mặc định cung dư (slack ≈ 2,5), gần như mọi lượt đặt được ghép ngay. Kênh mất khách chính là "không đặt" (khách thấy ETA xấu rồi tắt app) và "hủy khi xe đang đến". Trên đường throughput, bỏ chỉ khác 0 từ demand_scale ≈ 3,75.
+- **"Bỏ vì chờ lâu" gần 0 không phải lỗi.** Nó chỉ xảy ra khi không có xe rảnh nào trong bán kính 30 phút; trên quy mô Hà Nội tỷ lệ này ≈ 0,01 % (T10.6) vì sức chịu chờ 5 phút lớn hơn ETA đón trung bình ≈ 3,6 phút. Kênh mất khách chính là "không đặt" (khách thấy ETA xấu rồi tắt app) và "hủy khi xe đang đến" (≈ 54 % số request thêm do voucher bị mất qua hủy, T-47 c).
 - **θ là một số cho cả hệ, nhưng kết quả cắt khác nhau theo giờ và theo ô.** Vì ŝ mỗi ô mỗi slot khác nhau. Spec cố ý không đặt θ riêng từng ô.
 - **ŝ trễ một slot so với slack thực** vì không được nhìn trước. Đó là giá phải trả của chính sách thực thi được.
 - **Chi / B dưới 100 % là bình thường.** Chỉ voucher của chuyến hoàn thành mới tốn tiền; phần giữ và phần đặt của chuyến hủy được nhả lại.
