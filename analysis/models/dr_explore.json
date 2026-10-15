@@ -2,7 +2,7 @@
   "name": "dr_explore",
   "outcome": "completed",
   "learner": "DR-learner (Kennedy 2023), cross-fitted by rider",
-  "run_id": "generate-56fe64fb463b-legacy-nan-0",
+  "run_id": "generate-62605caf8130-legacy-nan-0",
   "slack_cap": 10.0,
   "x_cols": [
     "x_freq",
@@ -41,11 +41,11 @@
     "seed": 0
   },
   "sample": "explore",
-  "n": 35959,
-  "n_treated": 17858,
-  "ate_dr": 0.06974136154528707,
-  "ate_dr_se": 0.0036561334636826454,
-  "ate_naive": 0.06949742231388417,
-  "mean_paid_per_offer_vnd": 0.8063321759564864,
+  "n": 205624,
+  "n_treated": 100704,
+  "ate_dr": 0.05837146939451083,
+  "ate_dr_se": 0.0014869772705321303,
+  "ate_naive": 0.05564129102979304,
+  "mean_paid_per_offer_vnd": 3010.0641186050207,
   "share_e_clipped": 0.0
 }

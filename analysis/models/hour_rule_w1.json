@@ -1,0 +1,8 @@
+{
+  "world": "w1",
+  "harmful_hours": [
+    18
+  ],
+  "source": "runs\\s9\\w1\\summary.json",
+  "rule": "score NaN (never offered) in harmful_hours; theta = 0 (task H9.4)"
+}

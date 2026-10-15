@@ -133,10 +133,11 @@ def main(argv: list[str]) -> int:
     """``python -m analysis.tension <all_off evaluate dir> [config.yaml]``: print the indicator table."""
     from sim.config import load_config
 
-    if len(argv) not in (2, 3):
-        print("usage: python -m analysis.tension <all_off evaluate dir, --log-level full> [config.yaml]")
+    if len(argv) < 2:
+        print("usage: python -m analysis.tension <all_off evaluate dir, --log-level full> [config.yaml ...]")
         return 2
-    cfg = load_config(argv[2] if len(argv) == 3 else Path(__file__).resolve().parents[1] / "config" / "default.yaml")
+    # Several config layers merge in order (e.g. default.yaml + world_w1.yaml, task H9.2).
+    cfg = load_config(argv[2:] or [Path(__file__).resolve().parents[1] / "config" / "default.yaml"])
     frame = run_frames(Path(argv[1]), cfg)
     share = float(np.mean(frame["cell_persistence"] < cfg.policy.threshold.theta))
     print(f"{len(frame)} in-window sessions, {frame['seed'].nunique()} seeds; flagged share = "

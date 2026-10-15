@@ -303,9 +303,13 @@ def main(argv=None) -> int:
     parser.add_argument("--n-boot", type=int, default=200)
     parser.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
+    from sim.policies.scores import is_oracle
+
     runs = policy_runs(args.table)
     at_zero = runs[(runs["policy"] == "threshold") & (runs["theta"] == 0.0)].groupby("label")
-    scores = dict(at_zero["score_fn"].first())
+    # The oracle reads hidden coefficients and is built only inside the simulator (T-40): it has no
+    # score function to replay on logged sessions, so it is left out of the Qini comparison (S10 T10.4).
+    scores = {label: fn for label, fn in at_zero["score_fn"].first().items() if not is_oracle(fn)}
     data = randomized_sessions(args.data, outcome=args.outcome, explore_only=args.explore_only)
     scored = score_all(data, scores)
     qini, draws = qini_table(data, scores, n_boot=args.n_boot, scored=scored)

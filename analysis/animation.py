@@ -446,14 +446,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--fps", type=float, default=1.0)
     ap.add_argument("--hold", type=float, default=2.0, help="seconds to hold the last frame")
     ap.add_argument("--display-seed", type=int, default=0, help="index (in seed order) of the seed drawn in the slack map")
+    ap.add_argument("--title", default=None, help="subtitle under the frame label (policy pair, seeds, B, 'trong mô phỏng này')")
     a = ap.parse_args(argv)
     pair = load_pairs(a.old, a.new, display_seed_index=a.display_seed)
     totals = check_totals(pair)
     print(totals.to_string(index=False))
+    if not (totals["delta_N"] == totals["delta_from_orders"]).all():
+        raise SystemExit("guide §8: Σ Δ completed over the window must equal N(new) − N(old) of policy_results")
     slots = frame_slots(pair, a.hours[0], a.hours[1], day=a.day)
-    path = animate(pair, slots, a.out, fps=a.fps, hold_s=a.hold)
+    path = animate(pair, slots, a.out, fps=a.fps, hold_s=a.hold, title=a.title)
     w = window_delta(pair)
-    print(f"wrote {path}: {len(slots)} frames, ΔN over the window = {w['mean']:.1f} ± {w['half95']:.1f} ({w['n_seeds']} seeds)")
+    print(f"wrote {path}: {len(slots)} frames, ΔN over the window = {w['mean']:.1f} ± {w['half95']:.1f} ({w['n_seeds']} seeds); "
+          f"ΔN inside the frames = {float(pair.d_done[slots].sum()):.1f}")
     return 0
 
 

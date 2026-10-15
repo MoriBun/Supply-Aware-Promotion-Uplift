@@ -205,14 +205,20 @@ def _predict(name: str, key: str, feats: dict[str, np.ndarray]) -> np.ndarray:
     return boosters[key].predict(X, num_threads=1)
 
 
+KVND = 1000.0   # scores "per 1.000đ" (decisions H-42, S9 H9.1): tau / (expected đồng paid per offer / 1000)
+
+
 def predict_scores(name: str, feats: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-    """``tau_x``, ``tau_xs`` and their per-dollar versions for the given feature columns."""
+    """``tau_x``, ``tau_xs``, their per-1.000đ versions (``*_per_kvnd``) and, for specs written before
+    S9, the plain ratio ``*_per_dollar`` = tau / expected đồng paid (same ranking, 1000x smaller)."""
     meta, _ = load_model(name)
     tau_x, tau_xs = _predict(name, "tau_x", feats), _predict(name, "tau_xs", feats)
     floor = meta["params"]["cost_floor_frac"] * meta["mean_paid_per_offer_vnd"]
-    cost_x = np.maximum(_predict(name, "cost_x", feats), floor)      # expected dollars paid per offer
+    cost_x = np.maximum(_predict(name, "cost_x", feats), floor)      # expected đồng paid per offer
     cost_xs = np.maximum(_predict(name, "cost_xs", feats), floor)
-    return {"tau_x": tau_x, "tau_xs": tau_xs, "tau_x_per_dollar": tau_x / cost_x, "tau_xs_per_dollar": tau_xs / cost_xs}
+    return {"tau_x": tau_x, "tau_xs": tau_xs,
+            "tau_x_per_dollar": tau_x / cost_x, "tau_xs_per_dollar": tau_xs / cost_xs,
+            "tau_x_per_kvnd": KVND * tau_x / cost_x, "tau_xs_per_kvnd": KVND * tau_xs / cost_xs}
 
 
 def _score(batch, s_hat, which: str, name: str) -> np.ndarray:
@@ -220,67 +226,68 @@ def _score(batch, s_hat, which: str, name: str) -> np.ndarray:
     return predict_scores(name, batch_features(batch, s_hat, meta["slack_cap"]))[which].astype(np.float32)
 
 
-# Score functions for ``policy.threshold.score_fn``. ``dr_explore`` is learned on the explore slice
-# only (unbiased); ``dr_all`` on every legacy session (more data, keeps the u_latent confounding).
-def tau_x_dr(batch, s_hat: np.ndarray) -> np.ndarray:
-    """DR effect of a voucher on completion from rider features (explore slice)."""
-    return _score(batch, s_hat, "tau_x", "dr_explore")
+# Score functions for ``policy.threshold.score_fn``, one per (sample, world, unit):
+#   tau_{x|xs}_dr[_all][_w1][_per_dollar|_per_kvnd]
+# ``dr_explore`` is learned on the explore slice only (unbiased); ``dr_all`` on every legacy session
+# (more data, keeps the u_latent confounding). No suffix = world W0 (models ``dr_explore``, ``dr_all``);
+# ``_w1`` = world W1 (models ``dr_explore_w1``, ``dr_all_w1``, task H9.1). The functions are built here
+# at import time so that ``sim.policies.scores.load_score_fn("analysis.uplift:<name>")`` finds them by
+# attribute in a spawned worker too; the eight pre-S9 names are unchanged.
+MODEL_SUFFIXES = {"": "dr_explore", "_all": "dr_all", "_w1": "dr_explore_w1", "_all_w1": "dr_all_w1"}
+UNIT_SUFFIXES = {"": "", "_per_dollar": "_per_dollar", "_per_kvnd": "_per_kvnd"}
 
 
-def tau_xs_dr(batch, s_hat: np.ndarray) -> np.ndarray:
-    """DR effect from rider features and the forecast slack of the pickup cell (explore slice)."""
-    return _score(batch, s_hat, "tau_xs", "dr_explore")
+def _make_score(fname: str, which: str, model: str) -> "callable":
+    def score(batch, s_hat: np.ndarray) -> np.ndarray:
+        return _score(batch, s_hat, which, model)
+
+    feat = "rider features and forecast slack" if which.startswith("tau_xs") else "rider features"
+    unit = {"": "", "_per_dollar": " per expected đồng paid (legacy name)", "_per_kvnd": " per 1.000đ expected paid"}
+    usuf = max((u for u in UNIT_SUFFIXES if fname.endswith(u)), key=len)
+    score.__name__ = score.__qualname__ = fname
+    score.__doc__ = f"DR effect of a voucher on completion from {feat}, model ``{model}``{unit[usuf]}."
+    return score
 
 
-def tau_x_dr_per_dollar(batch, s_hat: np.ndarray) -> np.ndarray:
-    """``tau_x_dr`` per expected voucher dollar."""
-    return _score(batch, s_hat, "tau_x_per_dollar", "dr_explore")
-
-
-def tau_xs_dr_per_dollar(batch, s_hat: np.ndarray) -> np.ndarray:
-    """``tau_xs_dr`` per expected voucher dollar."""
-    return _score(batch, s_hat, "tau_xs_per_dollar", "dr_explore")
-
-
-def tau_x_dr_all(batch, s_hat: np.ndarray) -> np.ndarray:
-    return _score(batch, s_hat, "tau_x", "dr_all")
-
-
-def tau_xs_dr_all(batch, s_hat: np.ndarray) -> np.ndarray:
-    return _score(batch, s_hat, "tau_xs", "dr_all")
-
-
-def tau_x_dr_all_per_dollar(batch, s_hat: np.ndarray) -> np.ndarray:
-    return _score(batch, s_hat, "tau_x_per_dollar", "dr_all")
-
-
-def tau_xs_dr_all_per_dollar(batch, s_hat: np.ndarray) -> np.ndarray:
-    return _score(batch, s_hat, "tau_xs_per_dollar", "dr_all")
-
-
-SCORE_FUNCTIONS = {f.__name__: f for f in (tau_x_dr, tau_xs_dr, tau_x_dr_per_dollar, tau_xs_dr_per_dollar, tau_x_dr_all,
-                                           tau_xs_dr_all, tau_x_dr_all_per_dollar, tau_xs_dr_all_per_dollar)}
+SCORE_FUNCTIONS: dict[str, "callable"] = {}
+for _xx in ("x", "xs"):
+    for _msuf, _model in MODEL_SUFFIXES.items():
+        for _usuf in UNIT_SUFFIXES:
+            _fname = f"tau_{_xx}_dr{_msuf}{_usuf}"
+            _fn = _make_score(_fname, f"tau_{_xx}{_usuf}", _model)
+            globals()[_fname] = _fn
+            SCORE_FUNCTIONS[_fname] = _fn
+del _xx, _msuf, _model, _usuf, _fname, _fn
 
 
 def main(argv: list[str]) -> int:
-    """``python -m analysis.uplift fit <legacy run dir> [config.yaml]``: fit and save ``dr_explore`` and ``dr_all``."""
+    """``python -m analysis.uplift fit <legacy run dir> [config.yaml ...] [--suffix w1]``: fit and save
+    ``dr_explore<suffix>`` and ``dr_all<suffix>`` (suffix ``_w1`` for world W1, task H9.1)."""
     from analysis.io import load_run
     from sim.config import load_config
 
-    if len(argv) not in (3, 4) or argv[1] != "fit":
-        print("usage: python -m analysis.uplift fit <legacy run dir> [config.yaml]")
+    args = list(argv[1:])
+    suffix = ""
+    if "--suffix" in args:
+        i = args.index("--suffix")
+        suffix = "_" + args[i + 1].lstrip("_")
+        del args[i:i + 2]
+    if len(args) < 2 or args[0] != "fit":
+        print("usage: python -m analysis.uplift fit <legacy run dir> [config.yaml ...] [--suffix w1]")
         return 2
-    cfg = load_config(argv[3] if len(argv) == 4 else Path(__file__).resolve().parents[1] / "config" / "default.yaml")
-    run = load_run(Path(argv[2]))
+    configs = args[2:] or [Path(__file__).resolve().parents[1] / "config" / "default.yaml"]
+    cfg = load_config(configs)
+    run = load_run(Path(args[1]))
     run_id = str(run["run_metadata"]["run_id"].iloc[0])
     cap = float(cfg.monitor.slack_cap)
     frame = uplift_frame(run, cap)
     for sample in ("explore", "all"):
         fit = fit_dr(frame, sample=sample)
-        path = save_model(fit, f"dr_{sample}", slack_cap=cap, run_id=run_id)
+        path = save_model(fit, f"dr_{sample}{suffix}", slack_cap=cap, run_id=run_id)
         sm = fit["summary"]
         print(f"saved {path}: n = {sm['n']} ({sm['n_treated']} offered), ATE DR {sm['ate_dr']:.4f} "
-              f"(se {sm['ate_dr_se']:.4f}), naive {sm['ate_naive']:.4f}, e clipped {sm['share_e_clipped']:.1%}")
+              f"(se {sm['ate_dr_se']:.4f}), naive {sm['ate_naive']:.4f}, paid/offer {sm['mean_paid_per_offer_vnd']:.0f}đ, "
+              f"e clipped {sm['share_e_clipped']:.1%}")
     return 0
 
 

@@ -7,6 +7,7 @@
 | `03_interference.ipynb` | Tình | chệch theo thiết kế thí nghiệm, độ nhạy theo `u_latent` |
 | `04_uoc_luong_va_theta.ipynb` | Hoàng | DR-learner, chọn ŝ, tác hại theo giờ, θ̂ so với θ\*, regret |
 | `05_confounding.ipynb` | Hoàng | so thô, DR, lát explore |
+| `06_animation.ipynb` | Tình (T11.1, T-48) | animation chính sách khuyến nghị so với `all_on` có B: W0, W1 và khung có sự kiện; kiểm tổng Δ |
 
 ## Cài đặt
 

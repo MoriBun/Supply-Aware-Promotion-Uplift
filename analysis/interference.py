@@ -23,6 +23,7 @@ so what is left is the bias of ``u_latent`` (decisions T-34).
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from pathlib import Path
@@ -217,6 +218,161 @@ def confounding_markdown(table: pd.DataFrame) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Waterfall of the three error sources (task H9.5, plan v3 §4.4, mentor criterion 4)
+# ---------------------------------------------------------------------------
+
+
+def naive_legacy_effect(run_dir: Path | str, *, outcome: str = "completed", n_boot: int = 500, seed: int = 0) -> dict:
+    """The "raw comparison" of the historical (legacy) data, scaled like a design effect: completion rate of
+    offered minus not-offered sessions outside the explore slice, times in-window sessions per day (T-34 a).
+    Bootstrap by rider."""
+    run = load_run(Path(run_dir))
+    cfg = yaml.safe_load(run["run_metadata"]["config_yaml"].iloc[0])
+    if cfg["policy"]["name"] != "legacy":
+        raise ValueError(f"{run_dir}: not a legacy run")
+    s = run["sessions"]
+    s = s[s["in_window"] & ~s["budget_blocked"]].reset_index(drop=True)
+    y, t = _outcome(s, run["orders"], outcome), s["arm"].to_numpy() == 1
+    used = (s["assign_mechanism"] != "explore").to_numpy()
+    per_day = len(s) / _run_days(run)
+    y, t, unit = y[used], t[used], s["rider_id"].to_numpy(np.int64)[used]
+    effect = _rate_difference(y, t)
+    boot = UnitBootstrap(unit, n_boot, seed)
+    draws = np.array([_rate_difference(y, t, boot[b]) for b in range(n_boot)]) * per_day
+    return {"run": Path(run_dir).name, "outcome": outcome, "n_sessions": int(used.sum()), "sessions_per_day": per_day,
+            "effect_per_session": effect, "per_day": effect * per_day, "ci_lo": float(np.nanquantile(draws, 0.025)),
+            "ci_hi": float(np.nanquantile(draws, 0.975)), "draws": draws}
+
+
+def _design_draws(run_dir: Path | str, *, outcome: str, n_boot: int, seed: int, exclude_burnin: bool = True) -> dict:
+    """:func:`design_effect` plus its bootstrap draws (trips per day)."""
+    run = load_run(Path(run_dir))
+    s = run["sessions"]
+    s = s[s["in_window"]].reset_index(drop=True)
+    y, t = _outcome(s, run["orders"], outcome), s["arm"].to_numpy() == 1
+    switchback = bool((s["cluster_id"] >= 0).all())
+    unit = (s["cluster_id"].to_numpy(np.int64) * 1_000_000 + s["block"].to_numpy(np.int64)) if switchback \
+        else s["rider_id"].to_numpy(np.int64)
+    used = ~s["in_burnin"].to_numpy() if (switchback and exclude_burnin) else np.ones(len(s), dtype=bool)
+    per_day = len(s) / _run_days(run)
+    y, t, unit = y[used], t[used], unit[used]
+    boot = UnitBootstrap(unit, n_boot, seed)
+    draws = np.array([_rate_difference(y, t, boot[b]) for b in range(n_boot)]) * per_day
+    r = design_effect(run_dir, outcome=outcome, exclude_burnin=exclude_burnin, n_boot=n_boot, seed=seed)
+    r["draws"] = draws
+    return r
+
+
+def waterfall(legacy_dir, rider_ab_dir, gte_dir, gte_big_dir, *, outcome: str = "completed", n_boot: int = 500,
+              seed: int = 0) -> pd.DataFrame:
+    """Four levels on one scale (trips per day, every session treated vs none) and the three steps between them:
+
+    1. **raw** — the legacy data compared as is (offered vs not, outside explore): what a naive analyst reports;
+    2. **per-rider** — the rider A/B design, randomised per rider, no hidden confounding, but every rider in the
+       same market (the "level per customer");
+    3. **GTE** — all_on minus all_off, paired by seed, default fleet;
+    4. **GTE, very large fleet** — the same with a fleet so large that no (cell, slot) is tight.
+
+    steps: ``confounding`` = raw − per-rider; ``competition`` (riders competing for the same drivers)
+    = per-rider − GTE; ``capacity`` = GTE − GTE_big (what the fleet cannot absorb). They add up to raw − GTE_big
+    by construction (``sum_check``). Intervals: bootstrap draws for 1–2 (riders / units), normal from the seed SE
+    for 3–4; a step's interval combines the two independent sources."""
+    gen = np.random.default_rng(seed)
+    raw = naive_legacy_effect(legacy_dir, outcome=outcome, n_boot=n_boot, seed=seed)
+    ab = _design_draws(rider_ab_dir, outcome=outcome, n_boot=n_boot, seed=seed)
+    g0, g1 = gte_truth(gte_dir, outcome=outcome), gte_truth(gte_big_dir, outcome=outcome)
+    d_g0 = g0["GTE"] + g0["GTE_se"] * gen.standard_normal(n_boot)
+    d_g1 = g1["GTE"] + g1["GTE_se"] * gen.standard_normal(n_boot)
+    levels = [("raw (legacy, so thô)", raw["per_day"], raw["draws"]), ("per-rider (rider_ab)", ab["per_day"], ab["draws"]),
+              ("GTE (đội xe chuẩn)", g0["GTE"], d_g0), ("GTE (đội xe rất lớn)", g1["GTE"], d_g1)]
+    steps = [("confounding (so thô − mốc không gây nhiễu)", 0, 1), ("competition (tranh chấp xe: mức mỗi khách − GTE)", 1, 2),
+             ("capacity (công suất: GTE − GTE đội xe rất lớn)", 2, 3)]
+    rows = []
+    for name, value, draws in levels:
+        lo, hi = np.nanquantile(draws, [0.025, 0.975])
+        rows.append({"kind": "level", "name": name, "value": float(value), "ci_lo": float(lo), "ci_hi": float(hi)})
+    for name, i, j in steps:
+        diff = levels[i][2] - levels[j][2]
+        lo, hi = np.nanquantile(diff, [0.025, 0.975])
+        rows.append({"kind": "step", "name": name, "value": float(levels[i][1] - levels[j][1]), "ci_lo": float(lo),
+                     "ci_hi": float(hi)})
+    table = pd.DataFrame(rows)
+    raw_v, ab_v, g0_v, g1_v = (lv[1] for lv in levels)
+    steps_v = table.loc[table["kind"] == "step", "value"].to_numpy()
+    # Two readings of "the parts add up": confounding + competition explain raw - GTE (the error of a naive
+    # analyst against the truth); capacity (GTE - GTE_big, negative) is how much of the demand effect the fleet
+    # cannot serve, i.e. the limit of the truth itself. steps_sum = raw - GTE_big by construction.
+    table.attrs["sum_check"] = {"steps_sum": float(steps_v.sum()), "raw_minus_big": float(raw_v - g1_v),
+                                "conf_plus_comp": float(steps_v[0] + steps_v[1]), "raw_minus_gte": float(raw_v - g0_v),
+                                "capacity_kept_share": float(g0_v / g1_v) if g1_v else float("nan")}
+    return table
+
+
+def waterfall_markdown(table: pd.DataFrame) -> str:
+    lines = ["| | Mức / phần | chuyến/ngày | 95% CI |", "|---|---|---|---|"]
+    for r in table.itertuples():
+        lines.append(f"| {r.kind} | {r.name} | {_signed(r.value)} | [{_signed(r.ci_lo)}; {_signed(r.ci_hi)}] |")
+    sc = table.attrs.get("sum_check", {})
+    if sc:
+        if "conf_plus_comp" in sc:
+            ok = abs(sc["conf_plus_comp"] - sc["raw_minus_gte"]) < 1e-6
+            lines.append(f"\nGây nhiễu + tranh chấp xe = {_signed(sc['conf_plus_comp'])} = so thô − GTE "
+                         f"{_signed(sc['raw_minus_gte'])} ({'khớp' if ok else 'KHÔNG khớp'}). "
+                         f"Công suất: đội xe chuẩn giữ được {100 * sc['capacity_kept_share']:.0f}% mức tăng cầu "
+                         f"(GTE / GTE đội xe rất lớn).")
+        else:
+            lines.append(f"\nTổng ba phần {_signed(sc['steps_sum'])} = so thô − GTE đội xe rất lớn {_signed(sc['raw_minus_big'])} "
+                         f"({'khớp' if abs(sc['steps_sum'] - sc['raw_minus_big']) < 1e-6 else 'KHÔNG khớp'}).")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Burn-in bias vs carry-over of the city-wide switchback (task H9.6, plan v3 §4.5)
+# ---------------------------------------------------------------------------
+
+
+def burnin_decomposition(switchback_all_dir, gte_dir, *, outcome: str = "completed", n_boot: int = 500,
+                         seed: int = 0) -> pd.DataFrame:
+    """The city-wide switchback estimate against the GTE, split in two:
+
+    - **burn-in bias** = estimate on every session − estimate without the first ``burnin_min`` minutes of each
+      block (sessions flagged ``in_burnin``, decisions T-15): the part due to the market still carrying the
+      previous block's state right after a switch;
+    - **carry-over** (ảnh hưởng kéo dài) = estimate without burn-in − GTE: what remains because an hour of
+      vouchers moves drivers and riders beyond the first minutes of the next block.
+
+    Rows: the two estimates, the GTE and the two parts (trips per day, intervals from the unit bootstrap; the
+    GTE from its seed SE)."""
+    gen = np.random.default_rng(seed)
+    full = _design_draws(switchback_all_dir, outcome=outcome, n_boot=n_boot, seed=seed, exclude_burnin=False)
+    trimmed = _design_draws(switchback_all_dir, outcome=outcome, n_boot=n_boot, seed=seed, exclude_burnin=True)
+    g = gte_truth(gte_dir, outcome=outcome)
+    d_g = g["GTE"] + g["GTE_se"] * gen.standard_normal(n_boot)
+    rows = []
+    for name, value, draws in (("switchback toàn thành phố, mọi session", full["per_day"], full["draws"]),
+                               ("switchback, bỏ burn-in", trimmed["per_day"], trimmed["draws"]),
+                               ("GTE", g["GTE"], d_g),
+                               ("burn-in bias (mọi session − bỏ burn-in)", full["per_day"] - trimmed["per_day"],
+                                full["draws"] - trimmed["draws"]),
+                               ("carry-over (bỏ burn-in − GTE)", trimmed["per_day"] - g["GTE"], trimmed["draws"] - d_g)):
+        lo, hi = np.nanquantile(draws, [0.025, 0.975])
+        rows.append({"name": name, "value": float(value), "ci_lo": float(lo), "ci_hi": float(hi)})
+    table = pd.DataFrame(rows)
+    table.attrs["n_sessions_full"], table.attrs["n_sessions_trimmed"] = full["n_sessions"], trimmed["n_sessions"]
+    return table
+
+
+def burnin_markdown(table: pd.DataFrame) -> str:
+    lines = ["| | chuyến/ngày | 95% CI |", "|---|---|---|"]
+    for r in table.itertuples():
+        lines.append(f"| {r.name} | {_signed(r.value)} | [{_signed(r.ci_lo)}; {_signed(r.ci_hi)}] |")
+    a = table.attrs
+    if "n_sessions_full" in a:
+        lines.append(f"\nSession dùng: {a['n_sessions_full']:,} (mọi) / {a['n_sessions_trimmed']:,} (bỏ burn-in).")
+    return "\n".join(lines)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="python -m analysis.interference", description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -230,17 +386,40 @@ def main(argv=None) -> int:
     c.add_argument("dirs", nargs="+", type=Path)
     c.add_argument("--n-boot", type=int, default=200)
     c.add_argument("--out", type=Path, default=None)
+    w = sub.add_parser("waterfall", help="three error sources on one scale (H9.5)")
+    w.add_argument("--legacy", type=Path, required=True)
+    w.add_argument("--rider-ab", type=Path, required=True)
+    w.add_argument("--gte", type=Path, required=True)
+    w.add_argument("--gte-big", type=Path, required=True)
+    w.add_argument("--outcome", choices=("completed", "requested"), default="completed")
+    w.add_argument("--n-boot", type=int, default=500)
+    w.add_argument("--out", type=Path, default=None)
+    b = sub.add_parser("burnin", help="burn-in bias vs carry-over of the city-wide switchback (H9.6)")
+    b.add_argument("--switchback-all", type=Path, required=True)
+    b.add_argument("--gte", type=Path, required=True)
+    b.add_argument("--outcome", choices=("completed", "requested"), default="completed")
+    b.add_argument("--n-boot", type=int, default=500)
+    b.add_argument("--out", type=Path, default=None)
     args = parser.parse_args(argv)
     if args.cmd == "designs":
         table = design_table(args.dirs, args.gte, outcome=args.outcome, n_boot=args.n_boot)
         name, text = f"design_bias_{args.outcome}", designs_markdown(table)
-    else:
+    elif args.cmd == "confounding":
         table = confounding_table(args.dirs, n_boot=args.n_boot)
         name, text = "confounding_by_u_latent", confounding_markdown(table)
+    elif args.cmd == "waterfall":
+        table = waterfall(args.legacy, args.rider_ab, args.gte, args.gte_big, outcome=args.outcome, n_boot=args.n_boot)
+        name, text = f"waterfall_{args.outcome}", waterfall_markdown(table)
+    else:
+        table = burnin_decomposition(args.switchback_all, args.gte, outcome=args.outcome, n_boot=args.n_boot)
+        name, text = f"burnin_{args.outcome}", burnin_markdown(table)
     if args.out is not None:
         path = Path(args.out) / "results" / f"{name}.parquet"
         path.parent.mkdir(parents=True, exist_ok=True)
         table.to_parquet(path, index=False)
+        if table.attrs:
+            (path.parent / f"{name}_attrs.json").write_text(json.dumps(table.attrs, indent=2, ensure_ascii=False),
+                                                              encoding="utf-8")
     print(text)
     return 0
 

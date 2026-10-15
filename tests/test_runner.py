@@ -129,7 +129,10 @@ def test_fake_engine_receives_the_throughput_config(default_yaml):
 
 
 def test_throughput_curve_end_to_end(default_yaml, tmp_path):
-    cfg = load_config(default_yaml, ["throughput.n_seeds=2"])
+    # The fake engine peaks at requests = capacity (demand_scale ~ 3.8 on the Hanoi fleet), so this plumbing test
+    # keeps the 16-level grid of T-08 regardless of the city grid in default.yaml (0.25..2.5 since T-43).
+    grid = "[0.25,0.5,0.75,1.0,1.25,1.5,1.75,2.0,2.25,2.5,2.75,3.0,3.25,3.5,3.75,4.0]"
+    cfg = load_config(default_yaml, ["throughput.n_seeds=2", f"throughput.demand_scale_grid={grid}"])
     table = run_throughput_curve(cfg, tmp_path, engine=FAKE, n_procs=1)
     path = tmp_path / "results" / "throughput_curve.parquet"
     assert path.exists()
@@ -138,7 +141,8 @@ def test_throughput_curve_end_to_end(default_yaml, tmp_path):
     assert len(disk) == len(cfg.throughput.demand_scale_grid) * 2 and set(disk["seed"]) == {0, 1}
     assert str(disk["seed"].dtype) == "int32" and str(disk["fleet_size"].dtype) == "int32"
     assert str(disk["run_id"].dtype) == "string" and disk["run_id"].is_unique
-    assert disk["run_id"].str.startswith("throughput_curve-").all() and disk["run_id"].str.endswith("-all_off-nan-0").sum() == 16
+    assert disk["run_id"].str.startswith("throughput_curve-").all()
+    assert disk["run_id"].str.endswith("-all_off-nan-0").sum() == len(cfg.throughput.demand_scale_grid)   # seed 0 once per level
     assert (disk["fleet_size"] == cfg.supply.fleet_size).all()
 
     s = summarize_throughput(table)
@@ -405,3 +409,27 @@ def test_run_mode_dispatch(th_cfg, tiny_layers, tmp_path):
         run_mode("bogus", th_cfg, tmp_path, engine=FAKE)
     assert (tmp_path / "evaluate" / "results" / "policy_results.parquet").exists()
     assert (tmp_path / "sweep_theta" / "results" / "theta_sweep.parquet").exists()
+
+
+def test_full_log_run_dirs_are_self_contained(tmp_path):
+    """T11.1: every per-seed directory of a multi-seed full-log run carries its own one-row results and metadata,
+    matching the table-level files, so animation and check_dataset can read one run at a time."""
+    import pandas as pd
+
+    from analysis.check_dataset import check_run_dir
+    from sim.config import load_config
+    from sim.runner import evaluate
+    from tests.conftest import ROOT as REPO
+
+    cfg = load_config([REPO / "config" / "default.yaml", REPO / "tests" / "fixtures" / "tiny.yaml"],
+                      ["sweep.n_seeds=2", "policy.name=all_on", "budget.enforce=false"])
+    table = evaluate(cfg, tmp_path, log_level="full")
+    run_dirs = sorted((tmp_path / "runs").iterdir())
+    assert len(run_dirs) == 2 == len(table)
+    for d in run_dirs:
+        res = pd.read_parquet(d / "results" / "policy_results.parquet")
+        meta = pd.read_parquet(d / "meta" / "run_metadata.parquet")
+        assert len(res) == len(meta) == 1 and res["run_id"].iloc[0] == meta["run_id"].iloc[0] == d.name
+        assert res["N_completed"].iloc[0] == table.set_index("run_id").loc[d.name, "N_completed"]
+        problems, summary = check_run_dir(d)
+        assert problems == [] and summary["n_runs"] == 1
