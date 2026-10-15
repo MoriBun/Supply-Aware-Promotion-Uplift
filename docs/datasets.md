@@ -427,3 +427,66 @@ $PY -m analysis.b12_check --runs runs/s9
 | H9.7 `b12_check` | OK (12 hàm điểm tất định, 8 file) | | |
 
 Thư mục: `runs/s9/<w>/summary.{md,json}`, `curve_by_tension.parquet`, `thresholds.parquet`, `hour_effects.parquet`, `tension_distribution.parquet`, `results/waterfall_completed.parquet` (+ `_attrs.json`), `results/burnin_completed.parquet`; `runs/s9/tension_w0_w1.txt`, `tension_w1.txt`; `runs/s9/b12_manifest.json`. Commit: `analysis/models/dr_*`, `dr_*_w1`, `hour_rule_w0.json`, `hour_rule_w1.json`.
+
+---
+
+## Dữ liệu Sprint 10 (T10.1–T10.8, đêm 14→15/10/2026, `runs/s10`): thí nghiệm đánh giá trên W0 và W1
+
+Chạy tách rời qua đêm (`runs/s10/times.txt`, log từng lệnh `runs/s10/logs/`), `runner.n_procs = 8`. Mỗi bảng chính sách trả thêm ~25 phút pilot κ-auto chạy tuần tự (một pilot mỗi dòng ngưỡng). Hàm điểm theo 1.000đ và ngưỡng S9 (`policy_table.S9_THRESHOLDS`, T-45); W1 dùng mô hình `_w1`.
+
+```bash
+PY=.venv/Scripts/python.exe; W0="--config config/default.yaml"; W1="$W0 --config config/world_w1.yaml"
+DR0=analysis.uplift:tau_x_dr_all_per_kvnd; DR1=analysis.uplift:tau_x_dr_all_w1_per_kvnd
+# T10.1 — bảng 18 dòng × 30 seed (specs_for_world: tầng rider S5 theo 1.000đ, θ̂_tension ring1, θ̂_B ring1/city, luật giờ, oracle)
+$PY -m analysis.policy_table $W0 --world w0 --n-seeds 30 --out runs/s10/w0/policy_table
+$PY -m analysis.policy_table $W1 --world w1 --n-seeds 30 --out runs/s10/w1/policy_table
+# T10.2 — quét θ 16 mức (sweep_reference.yaml) × 30 seed, ring1 + DR/1.000đ
+$PY -m sim run --mode sweep_theta $W0 --config config/sweep_reference.yaml --set sweep.n_seeds=30 --set policy.threshold.scope=ring1 --set policy.threshold.score_fn=$DR0 --out runs/s10/w0/sweep_ring1_dr
+$PY -m sim run --mode sweep_theta $W1 --config config/sweep_reference.yaml --set sweep.n_seeds=30 --set policy.threshold.scope=ring1 --set policy.threshold.score_fn=$DR1 --out runs/s10/w1/sweep_ring1_dr
+# T10.5 — độ vững W1: B ∈ {0,3; 0,6; 1,0} × đội xe {1.278; 1.061; 856} (100 / 83 / 67%), 3 dòng, 30 seed; và bảng 18 dòng trên 2 world_seed khác
+for frac in 0.3 0.6 1.0; do for fleet in 1278 1061 856; do
+  $PY -m analysis.policy_table $W1 --set budget.fraction=$frac --set supply.fleet_size=$fleet --n-seeds 30 \
+     --spec label=all_on_B,policy=all_on --spec label=tier_dr_kvnd,policy=threshold,theta=0,score_fn=$DR1 \
+     --spec label=pi_hourB_ring1,policy=threshold,theta=2.15,score_fn=$DR1,scope=ring1 --out runs/s10/w1/robust_B${frac}_fleet${fleet}
+done; done
+for ws in 20260931 20260932; do $PY -m analysis.policy_table $W1 --set meta.world_seed=$ws --world w1 --n-seeds 30 --out runs/s10/w1/policy_table_ws$ws; done
+# T10.8 — độ nhạy W0, 10 seed, 5 dòng (all_on_B, random, tầng DR, θ̂_B ring1 2,3, luật giờ DR): hazard hủy ×0,5 / ×2,
+#   dest_decay_rings 1,9 (~5,2 km) / 6,0, hình cầu phẳng hơn kiểu NYC (độ lệch co 50%, xấp xỉ vì không có dữ liệu TLC thô)
+SPECS="--spec label=all_on_B,policy=all_on --spec label=random,policy=threshold,theta=0,score_fn=random --spec label=tier_dr_kvnd,policy=threshold,theta=0,score_fn=$DR0 --spec label=pi_hourB_ring1,policy=threshold,theta=2.3,score_fn=$DR0,scope=ring1 --spec label=hour_off_dr,policy=threshold,theta=0,score_fn=analysis.hour_rule:off_hours_dr_w0"
+$PY -m analysis.policy_table $W0 --n-seeds 10 $SPECS --out runs/s10/w0/sens_base
+$PY -m analysis.policy_table $W0 --set cancel.base_per_min=0.0025 --set cancel.slope_per_min2=0.002 --n-seeds 10 $SPECS --out runs/s10/w0/sens_hazard_0p5
+$PY -m analysis.policy_table $W0 --set cancel.base_per_min=0.01 --set cancel.slope_per_min2=0.008 --n-seeds 10 $SPECS --out runs/s10/w0/sens_hazard_2
+$PY -m analysis.policy_table $W0 --set demand.dest_decay_rings=1.9 --n-seeds 10 $SPECS --out runs/s10/w0/sens_trip_L1p9
+$PY -m analysis.policy_table $W0 --set demand.dest_decay_rings=6.0 --n-seeds 10 $SPECS --out runs/s10/w0/sens_trip_L6
+$PY -m analysis.policy_table $W0 --set "demand.hour_profile=[0.685,0.634,0.609,0.609,0.634,0.736,0.913,1.218,1.370,1.167,1.015,1.015,1.066,1.040,1.015,1.066,1.192,1.395,1.446,1.268,1.116,1.040,0.939,0.812]" --n-seeds 10 $SPECS --out runs/s10/w0/sens_profile_flat
+# T10.7 — gây nhiễu theo u trên dữ liệu mới
+for w in w0 w1; do $PY -m analysis.interference confounding runs/s8/$w/legacy_gu_0_28d runs/s8/$w/legacy_gu_0p5_28d runs/s8/$w/legacy_28d runs/s8/$w/legacy_gu_2_28d --out runs/s10/$w/confounding; done
+# T10.4 — Qini trên A/B theo rider (28 ngày) so với N của bảng T10.1; oracle bỏ qua (2.187–3.372 s mỗi lượt)
+for w in w0 w1; do for oc in completed requested; do $PY -m analysis.qini_vs_value --data runs/s8/$w/rider_ab_28d --table runs/s10/$w/policy_table --outcome $oc --out runs/s10/$w/qini_vs_value; done; done
+# G10 / H2 vế hai — hai chính sách W1 với log đầy đủ (10 seed, cùng B và κ pilot), rồi tách lợi theo slot có mưa / sự kiện (428 s)
+$PY -m analysis.policy_table $W1 --n-seeds 10 --log-level full --spec label=all_on_B,policy=all_on \
+   --spec label=pi_hourB_ring1,policy=threshold,theta=2.15,score_fn=$DR1,scope=ring1 \
+   --spec label=hour_off_dr,policy=threshold,theta=0,score_fn=analysis.hour_rule:off_hours_dr_w1 --out runs/s10/w1/h2_slots_full
+$PY -m analysis.s10_eval shocks --table runs/s10/w1/h2_slots_full --a pi_hourB_ring1 --b hour_off_dr --out runs/s10/w1/eval_h2   # --kinds rain | event
+# A5-HN cho notebook 01 (máy rảnh, 1 tiến trình, 3 seed; 74 s cả pilot)
+$PY -m sim run --mode evaluate $W0 --set policy.name=all_on --set sweep.n_seeds=3 --set runner.n_procs=1 --out runs/s10/w0/a5_evaluate_1proc
+# Đọc kết quả (analysis/s10_eval.py): khoảng cách all_on → oracle đã lấp; regret chọn θ trên nửa seed; số lần bật/tắt; xếp chồng bảng độ vững / độ nhạy
+$PY -m analysis.s10_eval gap --table runs/s10/w0/policy_table;  $PY -m analysis.s10_eval sweep --sweep runs/s10/w0/sweep_ring1_dr --theta-hat 2.3 0
+$PY -m analysis.s10_eval switch --table runs/s10/w0/policy_table; $PY -m analysis.s10_eval stack --dirs "runs/s10/w1/robust_*"
+```
+
+### Kết quả (15/10/2026; thời gian thật ở `runs/s10/times.txt`; chi tiết log T10.1–T10.9, G10; kết luận T-47)
+
+Đêm 14→15/10: T10.1 4.170 s (W0) + 4.139 s (W1); T10.2 3.126 + 3.544 s; T10.5 B × đội xe 9 bảng 568–754 s; `world_seed` 4.864 + 4.800 s; T10.8 6 bảng 691–861 s (tổng ≈ 9,3 giờ máy, phiên bị khởi động lại một lần, chạy tiếp bằng `runs/s10/run_s10_rest.sh`). Sáng 15/10: Qini 4 lượt (≈ 2,9 giờ, 2 lượt song song), `h2_slots_full` 428 s, A5 74 s. Tóm tắt dạng Markdown: `runs/s10/t10_1_t10_3_summary.md`, `t10_1_pairs.md`, `t10_2_t10_5_summary.md`, `t10_5_robust_summary.md`, `t10_5_worldseed_summary.md`, `w0/t10_8_summary.md`, `<w>/qini_<outcome>.log`, `w1/eval_h2/*.json`.
+
+| Thí nghiệm | Thư mục | Kết quả chính (N − `all_on_B` ± SE, ghép cặp theo seed) |
+|---|---|---|
+| T10.1 bảng 18 dòng × 30 seed | `w0/policy_table`, `w1/policy_table` | W0 (B 113,76 triệu): tầng rider DR/1.000đ +1.190 / +1.298 (x / xs); oracle +1.279; tầng vùng `ring1` θ̂_B 2,3 +1.351; `city` 1,6 **+1.469 ± 13**; luật giờ + DR +1.447. W1 (B 116,13 triệu): +1.037 / +1.217; oracle +1.135; `ring1` 2,15 **+1.249 ± 29**; `city` 2,1 +1.251; luật giờ + DR +1.107. H1: `city` − luật giờ +22 ± 11 (W0). H2 vế một: `ring1` − luật giờ +142 ± 16 (W1) |
+| T10.2 quét θ 16 mức × 30 seed | `<w>/sweep_ring1_dr`, `<w>/eval` | đỉnh θ = 1,5 (W0, +281 so với θ = 0) / 1,25 (W1, +311); tập θ\* {1,25; 1,5} / {0,8…1,5}; chọn trên nửa seed → regret 0–14; θ̂_B S9 lấy lại 44% / 62% |
+| T10.3 bật/tắt | `<w>/eval/switch.parquet` | `ring1` θ̂_B 23,7 lần/ô/ngày (W0), 21,1 (W1); `city` 13,4 / 19,5; đề xuất giữ ≥ 180 phút |
+| T10.4 Qini | `<w>/qini_vs_value` | Spearman(Qini, N) −0,48 / −0,55; (chuyến thêm / 100.000đ, N) 0,80 / 0,86; phần do cung (xs − x, cùng /1.000đ) +108 ± 10 / +180 ± 17 |
+| T10.5 độ vững | `w1/robust_B*_fleet*`, `w1/policy_table_ws*` | B = 0,3: tầng vùng thắng tầng rider ở 3 cỡ đội xe (+212 / +69 / +56); B = 0,6: thua (−418 / −389 / −24); B = 1,0: −952 / −383 / +386. Ba `world_seed`: `ring1` − luật giờ +142 / +86 / +110 (SE 16) |
+| T10.6, T10.7 | `<w>/confounding` | chệch sau điều chỉnh theo X +0,048 so với so thô +0,035 (g_u = 1); tỷ lệ bỏ chờ 0,01%; tác hại 7–8h trước/sau sửa lịch ca (log 14/10) |
+| T10.8 độ nhạy (W0, 10 seed) | `w0/sens_*` | tầng vùng − tầng rider: gốc +159; hazard ×0,5 +259; ×2 +140; quãng 1,9 vành +226; 6,0 vành +152; hình cầu phẳng **−237**; luật giờ + DR cao nhất ở cả 6 |
+| G10 H2 vế hai | `w1/h2_slots_full`, `w1/eval_h2` | lợi ở slot mưa / sự kiện −24 ± 17, slot yên +165 ± 54; hiệu mỗi slot −5,9 ± 3,3 (CI [−14,9; +3,2]) → không dồn vào slot có biến động |
+| A5-HN (notebook 01) | `w0/a5_evaluate_1proc` | 18,5 / 18,0 / 16,8 s mỗi ngày mô phỏng, 1 tiến trình (ngưỡng 60) |

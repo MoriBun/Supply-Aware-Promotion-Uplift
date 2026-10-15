@@ -18,7 +18,7 @@ Mẫu:
 
 ## 1. Tình
 
-**Đang làm:** S8 xong (gate G8 đạt; T-43 chờ xác nhận). **S9 xong (T-44: Tình làm; H9.1–H9.7, gate G9 đạt, B12 giao, chờ Hoàng review)**. Chưa commit trên `develop1`: S8 (T8.1–T8.6, T-43), T10.6 lịch ca, T-44, toàn bộ S9 (`analysis/uplift.py`, `tension.py`, `tension_curve.py`, `hour_rule.py`, `interference.py`, `policy_table.py`, `b12_check.py`, mô hình và JSON trong `analysis/models`, test, T-45, T-46). Tiếp: commit, PR S8+S9 → `develop`, rồi S10 (T10.1 bảng chính sách W0/W1 với `specs_for_world`, 30 seed; T10.2 quét θ; T10.5 độ vững; T10.8 độ nhạy; chạy đêm). B10: Hoàng chưa ghi gate G7/giao chính thức. Gate P6 (T-31) vẫn chờ mentor.
+**Đang làm:** **S10 xong** (T10.1–T10.10, gate G10 đạt, B13 giao, T-47; H2 chỉ đúng vế một). S8, S9 đã commit (`cc3e106`, PR S8+S9 → `develop` chờ Hoàng review; T-43, T-44 chờ xác nhận). Chưa commit trên `develop1`: S10 (`analysis/s10_eval.py` + test, `policy_table.py --log-level`, `qini_vs_value.py` bỏ oracle, `figures.py` nhãn S10, notebook 01–05, `docs/figures`, `datasets.md` S10, T-47, log). Tiếp: commit, PR S10 → `develop` (B13), nhắn Hoàng; S11 (Hoàng) có thể bắt đầu từ `runs/s10` + notebook. Gate P6 (T-31) vẫn chờ mentor; `nbformat`/`nbclient` chưa có trong `.venv` (notebook chạy bằng script hoặc "Restart & Run All" trong VS Code).
 
 ### 2026-09-30 · P0 · khung dự án · xong
 - Nhánh/PR: commit `c1eca8a` thẳng vào `develop1` (chưa có quy trình PR)
@@ -561,6 +561,84 @@ Mẫu:
 ### 2026-10-14 · G9 · kiểm tra cuối S9 · gate G9 đạt (chờ Hoàng review PR S9)
 - Có đường tác dụng theo độ căng với CI (`runs/s9/<w>/curve_by_tension.parquet`, `summary.md`) và ngưỡng có CI (θ̂_tension, θ̂_A, θ̂_B): đạt. Thác nước cộng khớp ở hai thế giới; bảng burn-in có CI: đạt. Test code phân tích mới: `test_uplift` 35, `test_tension_curve` 6, `test_hour_rule` 5, `test_interference_s9` 4, `test_policy_eval` (spec) 2 — pass; toàn bộ `pytest -q` ở mục dưới. B12 giao.
 - Lưu ý cho S10/S11: trên hai thế giới này voucher không âm theo bin độ căng mà âm theo giờ (T-45 c); W1 làm CI rộng gấp 5–10 lần W0 (cần 30 seed ở T10.1/T10.2); luật giờ W1 chỉ tắt 18h.
+
+### 2026-10-14 · S10 · chạy thử bảng chính sách và khởi động đêm máy (T10.1, T10.2, T10.5, T10.8) · dở (đang chạy)
+- Nhánh/PR: `develop1`.
+- Đã làm: chạy thử `policy_table --world w0 --n-seeds 2` (18 dòng, `runs/s10/smoke_w0`): mọi dòng chạy trọn, kể cả oracle, luật giờ, `city`; 27 phút vì pilot κ-auto của 16 dòng ngưỡng chạy tuần tự trong tiến trình cha (chi phí cố định ~25 phút/bảng, ghi để tính ngân sách máy). Số 2 seed chỉ để kiểm đường ống, không dùng: ví dụ `hour_off_dr_kvnd` +1.456, `pi_hourB_city` +1.514, oracle +1.282 so với `all_on_B`.
+- Đêm 14→15/10 chạy tách rời (`runs/s10/times.txt`, log `runs/s10/logs`): T10.1 bảng 18 dòng × 30 seed W0, W1; T10.2 quét θ 16 mức × 30 seed, `ring1` + DR/1.000đ, W0, W1 (`sweep_reference.yaml`); T10.5 W1: B ∈ {0,3; 0,6; 1,0} × đội xe {1.278; 1.061; 856} với 3 dòng (all_on_B, tầng rider DR, θ̂_B `ring1`), và bảng 18 dòng trên `world_seed` 20260931, 20260932; T10.8 W0 10 seed, 5 dòng: hazard hủy ×0,5 / ×2, `dest_decay_rings` 1,9 / 6,0, hình cầu phẳng hơn kiểu NYC (độ lệch co 50%: 18h 1,45; 8h 1,37; TLC 1,41; 1,20 — xấp xỉ vì dữ liệu TLC thô không có trên máy). Ước 6,8 giờ máy.
+- Song song (1 lõi): T10.7 `interference confounding` trên 4 mức `target_g_u` của W0 và W1.
+- Lệch spec / quyết định mới: hình cầu NYC thay bằng xấp xỉ co 50% (ghi rõ ở `datasets.md`); `max_idle_min` không thêm vì điều chuyển 11,8% < 15%.
+- Còn lại / bước tiếp: sáng 15/10 đọc kết quả, T10.3, T10.4, T10.6 còn lại, T10.9 notebook, G10, B13.
+
+### 2026-10-15 · T10.7 + T10.6 (ý 1, 2) · gây nhiễu và độ nhạy theo `u` trên dữ liệu mới; điều chỉnh theo đặc trưng trên đúng mốc; tỷ lệ bỏ chờ · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S10). Lệnh ở `datasets.md` mục S10; kết quả `runs/s10/<w>/confounding/results/confounding_by_u_latent.parquet`.
+- Số đo (hiệu ứng lên tỷ lệ hoàn thành; mốc không gây nhiễu = lát explore, T-34): **W0**, `target_g_u` = 0 / 0,5 / 1 / 2: so thô +0,0503 / +0,0732 / +0,0909 / +0,1126; mốc explore (mọi ô) +0,0577 / +0,0586 / +0,0556 / +0,0535; **chệch thô −0,0074 [−0,0101; −0,0042] / +0,0145 / +0,0352 [+0,0321; +0,0385] / +0,0592**; điều chỉnh theo X +0,0617 / +0,0876 / +0,1065 / +0,1259 so với mốc explore ô bật +0,0608 / +0,0622 / +0,0581 / +0,0562 → **chệch sau điều chỉnh +0,0010 / +0,0254 / +0,0484 [+0,0445; +0,0525] / +0,0697**. **W1** trùng trong sai số (chệch thô ở g_u = 1: +0,0357; sau điều chỉnh +0,0450). Tỷ lệ phát ngoài explore 20–21%.
+- Đọc (T10.6 ý 1): trên đúng mốc của mỗi ước lượng, điều chỉnh theo đặc trưng vẫn **chệch hơn** so thô (+0,048 so với +0,035 ở g_u = 1), như S5 (+0,043 so với +0,036 trên dữ liệu cũ); khi không nhắm theo `u` (g_u = 0) cả hai gần 0 → nguồn chệch là `u_latent`, không phải đặc trưng quan sát được. Chệch tăng gần tuyến tính theo g_u.
+- T10.6 ý 2: tỷ lệ bỏ chờ trên thế giới mới = 0,01% (`all_off`, 5 seed, log T8.1/T8.3: `abandon_rate` 0,0001 W0, 0,0000 W1); vẫn gần 0 vì `max_wait` 5 phút > ETA đón TB 3,6 phút. Ý 3 (tác hại 7–8h trước/sau sửa lịch ca) đã làm 14/10.
+- Lệch spec / quyết định mới: không.
+- Còn lại / bước tiếp: đọc kết quả đêm máy.
+
+### 2026-10-15 · T10.1 · bảng chính sách mở rộng W0 và W1 (18 dòng × 30 seed, cùng B) · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S10). `analysis/s10_eval.py` (+ `tests/test_s10_eval.py`, 4 test): khoảng cách `all_on` → oracle đã lấp, regret chọn θ trên nửa seed, số lần bật/tắt, xếp chồng bảng. Kết quả `runs/s10/<w>/policy_table`, `eval/`, tóm tắt `runs/s10/t10_1_t10_3_summary.md`, `t10_1_pairs.md`. Thời gian 4.170 s / 4.139 s (gồm ~25 phút pilot κ tuần tự).
+- **W0** (B = 113,76 triệu đ/kỳ; N − `all_on_B` ± SE, ghép cặp seed): `all_off` −998; `random` +407; `heuristic` +621; bảng nền `tau_per_vnd` +1.173; tầng rider DR theo 1.000đ `tau_x_dr_all_kvnd` **+1.190**, `tau_xs_dr_all_kvnd` **+1.298**; điểm DR theo chuyến (không chia tiền) chỉ +163 / +387; oracle **+1.279**; tầng vùng θ̂_tension `ring1` = 0 trùng tầng rider (+1.190); **θ̂_B `ring1` 2,3: +1.351; θ̂_B `city` 1,6: +1.469 ± 13** (tắt 51% / 35% (ô, slot)); luật giờ cố định + DR **+1.447**; luật giờ + random +730. Khoảng cách `all_on` → oracle đã lấp: tầng rider 93–101%, tầng vùng `city` **115%**, luật giờ 113% (oracle chỉ là mốc trên của chính sách theo từng khách, KN 3.1).
+- **W1** (B = 116,13 triệu): tầng rider +1.037 / +1.217; oracle +1.135; **θ̂_B `ring1` 2,15: +1.249 ± 29; `city` 2,1: +1.251**; luật giờ + DR +1.107; luật giờ + random +357; `all_off` −1.090. Đã lấp: tầng vùng 110%, luật giờ 97%.
+- Hiệu ghép cặp then chốt (30 seed): **W0** tầng vùng `city` − luật giờ **+22 ± 11** (≈ 0), `ring1` − luật giờ −96 ± 10, tầng vùng `city` − tầng rider `xs` +172 ± 10, − oracle +191 ± 17; luật giờ − `random` +323 ± 9. **W1** tầng vùng `ring1` − luật giờ **+142 ± 16**, − tầng rider `x` +212 ± 16, − tầng rider `xs` +33 ± 25, − oracle +115 ± 19; luật giờ − `random` chỉ +69 ± 7. → **H1 (W0: độ căng ngang luật giờ) và H2 (W1: độ căng thắng, CI không chứa 0) đều đúng**; chi tiết G10.
+- Lệch spec / quyết định mới: T-47 (ghi ở G10).
+- Còn lại / bước tiếp: T10.2.
+
+### 2026-10-15 · T10.2 · quét θ 16 mức × 30 seed, `ring1` + DR/1.000đ, W0 và W1; regret chọn θ trên nửa seed · xong
+- Kết quả `runs/s10/<w>/sweep_ring1_dr`, `eval/`; tóm tắt `runs/s10/t10_2_t10_5_summary.md`. Thời gian 3.126 s / 3.544 s.
+- **W0**: N(θ) tăng từ 21.546 (θ = 0) tới đỉnh **21.827 ở θ = 1,5** (tập θ\* {1,25; 1,5}), rồi giảm (θ = 3: 21.455; θ = 5: 20.553, chi chỉ 57% B). Lợi ích tối đa của tầng vùng **+281 chuyến/ngày (+1,3%)**. Chọn θ trên nửa seed, đo trên nửa kia: chọn 1,5 → regret 0,0 ± 12,5 (lấy lại 100%); chọn 1,25 → 13,7 ± 12,0 (95%). θ̂ cố định: θ̂_B `ring1` 2,3 → regret 156 ± 7 (lấy lại 44%); θ̂_tension 0 → 281 (0%); 1,6 → 12,7 ± 1,6 (95%).
+- **W1**: đỉnh **21.616 ở θ = 1,25** (tập θ\* {0,8; 1,0; 1,25; 1,5}); lợi ích tối đa **+311 (+1,5%)**; chọn trên nửa seed → regret 0 cả hai chiều (100%); θ̂_B 2,15 → regret 119 ± 15 (62%); 2,1 → 103 (67%).
+- Đọc: θ̂_B của phương pháp theo giờ (S9) cắt hơi quá (2,2 so với 1,25–1,5 tốt nhất) nhưng vẫn lấy lại 44–62% lợi ích tối đa; θ̂_tension = 0 không lấy lại gì vì trên hai thế giới này voucher không âm theo bin độ căng (T-45 c). Lưới θ 0–30 (T-31) vẫn cho đủ ba đoạn tăng–phẳng–giảm.
+- Còn lại / bước tiếp: T10.3.
+
+### 2026-10-15 · T10.3 · số lần bật/tắt của chính sách khuyến nghị; thời gian giữ trạng thái · xong
+- `analysis.s10_eval switch`: θ̂_B `ring1` 2,3 (W0) **23,7 lần/ô/ngày** (trung vị 23,8; p90 24,6; tắt 51% (ô, slot)); `city` 1,6: 13,4 (p90 16,0); W1: 21,1 / 19,5. Mọi dòng θ = 0 (tầng rider, luật giờ) không bật/tắt.
+- Đề xuất vận hành: với slot 15 phút, 24 lần/ngày tức đổi trạng thái gần mỗi giờ; giữ trạng thái tối thiểu **180 phút** (≤ 8 lần/ngày) hoặc 360 phút (≤ 4 lần/ngày); hoặc dùng `city` (ít hơn ~45% số lần). Chưa đo N dưới ràng buộc giữ trạng thái (ngoài phạm vi S10; ghi hạn chế).
+- Còn lại / bước tiếp: T10.5.
+
+### 2026-10-15 · T10.5 · độ vững trên W1: B × đội xe (xong), 2 `world_seed` (đang chạy) · dở
+- 9 bảng `runs/s10/w1/robust_B{0.3,0.6,1.0}_fleet{1278,1061,856}` (3 dòng × 30 seed; 568–754 s mỗi bảng); tóm tắt `runs/s10/t10_5_robust_summary.md`.
+- N − `all_on_B` (tầng rider DR / tầng vùng θ̂_B `ring1` 2,15): **B = 0,3**: đội xe 1.278: +1.037 / **+1.249**; 1.061: +860 / **+929**; 856: +582 / **+638** → tầng vùng thắng tầng rider ở mọi cỡ đội xe (+56…+212). **B = 0,6**: +304 / **−114**; +163 / **−226**; +53 / +29. **B = 1,0**: 0 / **−952**; 0 / **−383**; 0 / +386 (ở B = 1,0 tầng rider = `all_on`).
+- Đọc: **ngưỡng học cho B = 0,3 không chuyển sang B lớn**: khi ngân sách đủ phát cho mọi người, cắt (ô, slot) theo độ căng chỉ bớt chuyến (trừ đội xe nhỏ 856 xe, nơi vẫn thiếu xe). θ̂_B vốn phụ thuộc B (T-45 c), nên chính sách khuyến nghị phải kèm B của nó; ghi hạn chế và nêu rõ trong báo cáo (T-47).
+- Còn lại / bước tiếp: bảng 18 dòng trên `world_seed` 20260931, 20260932 (đang chạy); T10.8.
+
+### 2026-10-15 · T10.4 · Qini và N dưới B trên A/B theo rider, W0 và W1 · xong
+- Nhánh/PR: `develop1`; chưa commit (PR S10). `analysis/qini_vs_value.py` bỏ dòng `oracle` (không chấm được trên dữ liệu quan sát); kết quả `runs/s10/<w>/qini_vs_value` (4 lượt, 2.187–3.372 s mỗi lượt, 4,2 triệu session, 200 bootstrap theo rider).
+- Số đo (hoàn thành chuyến; 13 hàm điểm): Spearman(Qini, N dưới B) **−0,48** (W0) / **−0,55** (W1); Spearman(chuyến thêm / 100.000đ ở mức cá nhân, N) **0,80 / 0,86**. Ba hàm Qini cao nhất (τ̂(x, s) DR 9.555, τ̂(x) DR 7.846, τ̂(x) nền 7.129 trên W0) nằm cuối bảng N (q₀ 0,14–0,22 so với 0,06–0,08 của nhóm /1.000đ: trả tiền cho chuyến đằng nào cũng có). Nhóm /1.000đ có Qini ≈ 0 hoặc âm, voucher mỗi lượt phát 17.945–17.961đ (cỡ voucher không phải nguyên nhân). Cặp đảo thứ tự: 29 / 78 (W0), 34 / 78 (W1) với CI tách 0; trong nhóm /1.000đ: `tau_xs_dr_kvnd` Qini hơn `tau_x_dr_all_kvnd` +2.522 [1.912; 3.136] nhưng N −220 ± 7 (W0); W1 +1.588 [916; 2.218], −207 ± 10 — vẫn do chi phí (q₀ 0,067 so với 0,062). Tương quan Qini–N trong nhóm /1.000đ 0,31 (cả hai thế giới).
+- Ví dụ "lệch nhau do cung" (W1): τ̂(x, s)/1.000đ so với τ̂(x)/1.000đ: chuyến thêm / 100.000đ ở mức cá nhân **thấp hơn** (2,98 so với 3,01) nhưng N dưới B **cao hơn +180 ± 17** (W0: 2,99 so với 3,01; +108 ± 10). Phần này không chỉ số cá nhân nào đo được; W1 gấp 1,7 lần W0.
+- Kết luận cho việc chọn hàm điểm: Qini có tính chi phí (chuyến thêm / 100.000đ) là chỉ số sàng lọc; phần do cung phải đo bằng mô phỏng dưới B. Chọn theo Qini thuần mất 911 chuyến/ngày (4,2%) trên W0, 903 trên W1.
+- Lệch spec / quyết định mới: T-47 (g).
+- Còn lại / bước tiếp: T10.5 (world_seed), T10.8.
+
+### 2026-10-15 · T10.5 · bảng 18 dòng trên `world_seed` 20260931, 20260932 (W1) · xong
+- Phiên bị khởi động lại lúc 08:39 làm đêm máy dừng giữa bảng 20260932; chạy lại bằng `nohup bash runs/s10/run_s10_rest.sh` (4.864 s + 4.800 s). Tóm tắt `runs/s10/t10_5_worldseed_summary.md` (`s10_eval stack`).
+- Số đo (N − `all_on_B`; ws 20260930 / 931 / 932): tầng vùng `ring1` θ̂_B 2,15 **+1.249 / +1.248 / +1.190**; `city` +1.251 / +1.203 / +1.136; luật giờ + DR +1.107 / +1.162 / +1.080; oracle +1.135 / +1.181 / +1.110; tầng rider `x` +1.037 / +1.105 / +1.014, `xs` +1.217 / +1.279 / +1.158. Hiệu ghép cặp `ring1` − luật giờ **+142 ± 16 / +86 ± 16 / +110 ± 16**; `city` − luật giờ +143 ± 19 / +41 ± 28 / +55 ± 18; `ring1` − oracle +114 / +67 / +80 (SE 19–21).
+- Đọc: thứ tự giữ nguyên trên ba thế giới ngẫu nhiên; vế một của H2 (CI không chứa 0) đúng cả ba lần. Kết luận B × đội xe ở mục T10.5 trước (ngưỡng học ở B = 0,3 thua khi B ≥ 0,6).
+- Lệch spec / quyết định mới: T-47 (b, f).
+- Còn lại / bước tiếp: T10.8.
+
+### 2026-10-15 · T10.8 · độ nhạy theo giả định thiếu số liệu Hà Nội (W0, 10 seed, 5 dòng) · xong
+- Sáu bảng `runs/s10/w0/sens_{base,hazard_0p5,hazard_2,trip_L1p9,trip_L6,profile_flat}` (691–861 s mỗi bảng); tóm tắt `runs/s10/w0/t10_8_summary.md`. Không có biến thể `max_idle_min = 20` vì S8 báo điều chuyển dưới 15% giờ-xe.
+- Số đo (N − `all_on_B`: tầng rider DR/1.000đ / tầng vùng `ring1` θ̂_B 2,3 / luật giờ + DR): gốc +1.212 / +1.370 / **+1.447**; hazard ×0,5 +1.237 / +1.496 / +1.595; ×2 +1.050 / +1.189 / +1.250; quãng 1,9 vành (~5 km) +1.235 / +1.460 / +1.558; 6,0 vành +925 / +1.077 / +1.126; hình cầu phẳng kiểu NYC +1.628 / **+1.392** / +1.658 (SE 15–34). Tầng vùng − tầng rider: +159 / +259 / +140 / +226 / +152 / **−237**.
+- Đọc: thứ tự giữ ở 5/6 biến thể; θ̂_B = 2,3 học trên hình cầu hai đỉnh tắt 70% (ô, slot) khi hình cầu phẳng và thua tầng rider — ngưỡng là của thế giới đã học. Luật giờ + DR ≥ tầng vùng ở cả 6 biến thể W0 (như H1). P1: lợi của luật giờ so với tầng rider luôn là *bớt hủy* (−317 hủy, −82 request, +235 chuyến ở gốc; `all_on_B` − `all_off`: +2.159 request → +1.160 hủy, 54% mất qua hủy) nhưng không tăng theo hazard (+357 / +235 / +200 với ×0,5 / ×1 / ×2).
+- Lệch spec / quyết định mới: T-47 (c, f).
+- Còn lại / bước tiếp: T10.9.
+
+### 2026-10-15 · T10.9 · notebook 01–05 trên dữ liệu S8–S10 (VND, thác nước, burn-in, mốc không gây nhiễu) · xong
+- Đã làm: viết lại 5 notebook (JSON, output xóa) đọc `runs/s8`, `runs/s9`, `runs/s10`: 01 (A1 lưới T-43, CAL 9/9, A2 (b) 0,31, A3 14–24 lần/ô/ngày, A4, A5-HN `runs/s10/w0/a5_evaluate_1proc`: 18,5 / 18,0 / 16,8 s, trung vị 18,0 s ≤ 60); 02 (bảng 18 dòng W0/W1, bậc thang, H1/H2, quét θ + regret nửa seed, bật/tắt, Qini, độ vững, độ nhạy, kiểm H2 vế hai); 03 (thêm mục 3b thác nước, hình `03_thac_nuoc`); 04 (per 1.000đ, tác dụng theo độ căng `04_tac_dung_theo_do_cang`, burn-in); 05 (mốc không gây nhiễu thay "hiệu ứng thật"). `analysis/figures.py`: nhãn và nhóm /đồng cho 18 nhãn S10. Hình mới trong `docs/figures/` (`02_n_duoi_b_w0/w1`, `02_qini_va_n_w0/w1`, `02_n_theo_theta`, …).
+- Test: 5 notebook chạy sạch bằng script thực thi tuần tự các ô code (không có `nbclient` trong `.venv`; 01: 40 s, 02: 10 s, 03: 532 s, 04: 23 s, 05: 499 s); hình xuất vào `docs/figures/`. `pytest -q tests/test_figures.py tests/test_s10_eval.py tests/test_policy_eval.py` pass (xem G10).
+- Lệch spec / quyết định mới: không. Câu hỏi cho Hoàng: thêm `nbformat`, `nbclient` vào extras `[analysis]` (file chung) hay giữ "Restart & Run All" thủ công.
+- Còn lại / bước tiếp: G10.
+
+### 2026-10-15 · G10 · kiểm tra cuối S10; H2 vế hai (slot có biến động) · gate G10 đạt · giao B13
+- Nhánh/PR: `develop1`; chưa commit (PR S10 → `develop`, Hoàng review = B13).
+- Đã làm: `analysis/policy_table.py --log-level full` (giữ bảng session/order từng lượt); `analysis/s10_eval.py` thêm `shock_split_table`, `shock_split_summary`, CLI `shocks` (+3 test); chạy lại hai chính sách W1 (`ring1` θ̂_B 2,15 và luật giờ + DR) 10 seed log đầy đủ: `runs/s10/w1/h2_slots_full` (428 s), tách N(a) − N(b) theo slot yêu cầu chồng lên mưa / sự kiện của `meta/shocks`.
+- Số đo H2 vế hai: hiệu tổng +141 ± 43 (10 seed; bảng 30 seed +142); 5/10 ngày có mưa hoặc sự kiện trong cửa sổ, 5,3% số slot. Lợi ở slot có biến động **−24 ± 17**, ở slot yên **+165 ± 54**; lợi mỗi slot −3,0 ± 2,7 so với +1,8 ± 0,6; hiệu ghép cặp theo seed −5,9 ± 3,3, CI 95% [−14,9; +3,2] (mưa: −1,3 so với +1,6; sự kiện: −10,3 so với +1,6). Lợi theo seed không tương quan với hệ số cầu ngày (r = −0,04), tương quan âm nhẹ với số xe nghỉ (r = −0,41, n = 10). → **H2 vế hai không đúng**: lợi ích nằm ở slot thường; theo H-35, H2 chưa được xác nhận dù vế một đúng trên ba `world_seed`. Ghi T-47.
+- Kiểm G10: mọi bảng trong `runs/s10` có lệnh ở `datasets.md` (đạt); 5 notebook chạy sạch, hình vào `docs/figures/` (đạt); mọi chênh lệch ghép cặp có SE / CI (đạt); animation chạy trên dữ liệu nhỏ (`tests/test_animation.py`, đạt); H1/H2/P1–P3 và độ nhạy ghi `decisions.md` T-47 (đạt). Test: `pytest -q` → **651 passed**, 12 deselected (chậm), 330 s (py3.11, máy có 1 tiến trình notebook chạy song song).
+- Bàn giao: **giao B13** (bảng chính sách, quét θ, độ vững, độ nhạy, Qini, notebook 01–05, animation). Người nhận kiểm tra: số trong `runs/s10/*summary.md` khớp notebook 02; notebook "Restart & Run All" sạch; `pytest -q` pass.
+- Còn lại / bước tiếp: commit, PR S10 → `develop`; S11 của Hoàng dùng `runs/s10` và notebook 01–05; hạn chế để báo cáo: dao động 24 lần/ô/ngày chưa đo N dưới ràng buộc giữ trạng thái; H2 vế hai chỉ 10 seed × 1 ngày.
 
 ## 2. Hoàng
 

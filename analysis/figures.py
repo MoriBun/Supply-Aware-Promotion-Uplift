@@ -36,11 +36,24 @@ NAMES = {
     "pi_theta_0.5_heuristic": r"$\pi_\theta$, θ = 0,5, heuristic",
     "pi_thetahatA_ring1_dr_vnd": r"$\pi_{\hat\theta}$ (A) ring1 + $\hat\tau(x)$/đ DR",
     "pi_thetahatB_ring1_dr_vnd": r"$\pi_{\hat\theta}$ (B) ring1 + $\hat\tau(x)$/đ DR",
+    # S10 (analysis.policy_table.specs_for_world, T10.1): scores per 1.000đ, S9 thresholds, hour rule, oracle.
+    "tau_x_dr_all_kvnd": r"$\hat\tau(x)$/1.000đ DR",
+    "tau_xs_dr_all_kvnd": r"$\hat\tau(x,s)$/1.000đ DR",
+    "tau_x_dr_kvnd": r"$\hat\tau(x)$/1.000đ DR (lát explore)",
+    "tau_xs_dr_kvnd": r"$\hat\tau(x,s)$/1.000đ DR (lát explore)",
+    "pi_tension_ring1_dr_kvnd": r"$\pi_{\hat\theta}$ độ căng ring1 (θ̂ = 0) + $\hat\tau(x)$/1.000đ",
+    "pi_hourB_ring1_dr_kvnd": r"$\pi_{\hat\theta_B}$ ring1 + $\hat\tau(x)$/1.000đ",
+    "pi_hourB_city_dr_kvnd": r"$\pi_{\hat\theta_B}$ city + $\hat\tau(x)$/1.000đ",
+    "hour_off_random": "luật tắt theo giờ + điểm random",
+    "hour_off_dr_kvnd": r"luật tắt theo giờ + $\hat\tau(x)$/1.000đ",
+    "oracle": "oracle (τ thật mỗi khách)",
 }
 DR_TITLE = r"$\hat\tau(x)$/đ học bằng DR"     # panel title of the sweeps with the learned score (H-22 ii)
-# Rider layer ranked by effect per đồng (a score of this set, or a pi_theta_hat built on one).
+# Rider layer ranked by effect per đồng (a score of this set, or a pi_theta_hat / hour rule built on one).
 PER_VND = {"tau_per_vnd", "tau_x_dr_all_vnd", "tau_xs_dr_all_vnd", "tau_x_dr_vnd", "tau_xs_dr_vnd",
-           "pi_thetahatA_ring1_dr_vnd", "pi_thetahatB_ring1_dr_vnd"}
+           "pi_thetahatA_ring1_dr_vnd", "pi_thetahatB_ring1_dr_vnd",
+           "tau_x_dr_all_kvnd", "tau_xs_dr_all_kvnd", "tau_x_dr_kvnd", "tau_xs_dr_kvnd",
+           "pi_tension_ring1_dr_kvnd", "pi_hourB_ring1_dr_kvnd", "pi_hourB_city_dr_kvnd", "hour_off_dr_kvnd"}
 BASELINE = {"random", "heuristic"}
 DESIGN_NAMES = {"rider_ab": "A/B theo rider", "cluster_switchback cụm 1": "switchback cụm 1 ô",
                 "cluster_switchback cụm 7": "switchback cụm 7 ô", "cluster_switchback cụm all": "switchback toàn hệ"}
@@ -187,8 +200,9 @@ def qini_vs_n_figure(qini: pd.DataFrame, efficiency: pd.DataFrame):
         ax_e.plot(df["extra_trips_per_100k_vnd"][m], df["N_mean"][m], "o", color=SLOT[g], markersize=8,
                   markeredgecolor=SURFACE, markeredgewidth=1.5)
     # Points that sit almost on top of each other get their label on the left or lower side.
-    left = {"right": {"tau_x", "tau_x_dr_all_vnd"}, "left": {"tau_per_vnd"}}
-    below = {"right": {"tau_xs_dr_vnd", "tau_per_vnd", "tau_x_dr_all_vnd"}, "left": {"tau_xs_dr_vnd", "tau_x_dr_all_vnd"}}
+    left = {"right": {"tau_x", "tau_x_dr_all_vnd", "tau_x_dr_all_kvnd"}, "left": {"tau_per_vnd"}}
+    below = {"right": {"tau_xs_dr_vnd", "tau_per_vnd", "tau_x_dr_all_vnd", "tau_x_dr_all_kvnd"},
+             "left": {"tau_xs_dr_vnd", "tau_x_dr_all_vnd", "tau_x_dr_all_kvnd", "pi_tension_ring1_dr_kvnd"}}
     for label, r in df.iterrows():
         name = NAMES.get(label, label)
         for side, ax, x in (("left", ax_q, r["qini_coef"]), ("right", ax_e, r["extra_trips_per_100k_vnd"])):

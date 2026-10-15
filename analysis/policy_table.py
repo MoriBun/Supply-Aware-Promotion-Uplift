@@ -32,7 +32,7 @@ from sim.config import Config, load_config
 from sim.logger import write_metadata, write_results
 from sim.runner import (
     DEFAULT_ENGINE, Job, KappaAuto, budget_and_pilot, metadata_table, policy_results_table, resolve_kappas, run_jobs,
-    run_id, seeds_for, with_policy,
+    run_id, seeds_for, with_policy, write_full_runs,
 )
 
 NAN = float("nan")
@@ -145,8 +145,13 @@ def configure(cfg: Config, spec: PolicySpec) -> Config:
 
 
 def run_policy_table(cfg: Config, specs, out_dir: Path, *, n_seeds: int | None = None,
-                     engine: str = DEFAULT_ENGINE, reference: str = REFERENCE) -> pd.DataFrame:
-    """Run every spec on the same seeds under the same B; write the tables and return the summary."""
+                     engine: str = DEFAULT_ENGINE, reference: str = REFERENCE,
+                     log_level: str = "minimal") -> pd.DataFrame:
+    """Run every spec on the same seeds under the same B; write the tables and return the summary.
+
+    ``log_level = "full"`` also keeps the session and order tables of every run under
+    ``out_dir/runs/<run_id>`` (like ``sim run --log-level full``), for per-slot analyses (S10 G10, H2).
+    """
     specs = list(specs)
     labels = [s.label for s in specs]
     if len(set(labels)) != len(labels):
@@ -167,13 +172,14 @@ def run_policy_table(cfg: Config, specs, out_dir: Path, *, n_seeds: int | None =
         ka = KappaAuto(kappa=NAN) if found is None else found[0]
         for s in seeds:
             jobs.append(Job(cfg=c, seed=s, theta=theta, kappa=None if found is None else ka.kappa, budget_vnd=b,
-                            enforce_budget=b is not None, kappa_pilots=ka.n_pilots,
+                            enforce_budget=b is not None, kappa_pilots=ka.n_pilots, log_level=log_level,
                             **(bp.job_fields if spec.budget else {})))
             job_labels.append(spec.label)
     results = run_jobs(jobs, engine=engine)
     runs = policy_results_table(MODE, jobs, results)
     write_results(out_dir, "policy_results", runs)
     write_metadata(out_dir, metadata_table(MODE, jobs, results))
+    write_full_runs(out_dir, MODE, jobs, results)
     labels_table = pd.DataFrame({
         "run_id": [run_id(MODE, j.cfg, r.policy, j.theta, j.seed) for j, r in zip(jobs, results)],
         "label": job_labels,
@@ -271,11 +277,14 @@ def main(argv=None) -> int:
     parser.add_argument("--n-seeds", type=int, default=None, help="default: sweep.n_seeds (decisions T-22)")
     parser.add_argument("--world", choices=sorted(S9_THRESHOLDS), default="w0",
                         help="default spec list of this world (score models, S9 thresholds, hour rule); ignored with --spec")
+    parser.add_argument("--log-level", choices=("minimal", "full"), default="minimal",
+                        help="full also keeps the session and order tables of every run (out/runs/<run_id>)")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
     cfg = load_config(args.config, args.overrides)
     specs = [parse_spec(s) for s in args.spec] if args.spec else list(specs_for_world(args.world))
-    summary = run_policy_table(cfg, specs, args.out, n_seeds=args.n_seeds, reference=args.reference)
+    summary = run_policy_table(cfg, specs, args.out, n_seeds=args.n_seeds, reference=args.reference,
+                               log_level=args.log_level)
     print(f"B = {summary['budget_B_vnd'].dropna().max():,.0f} VND per period; {int(summary['n_seeds'].iloc[0])} seeds")
     print(markdown(summary))
     return 0
